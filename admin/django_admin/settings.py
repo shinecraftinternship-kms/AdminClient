@@ -12,6 +12,17 @@ ALLOWED_HOSTS = ["*"] if ALLOWED_HOSTS_RAW.strip() == "*" else ALLOWED_HOSTS_RAW
 
 IS_VERCEL = os.getenv("VERCEL", "0") == "1"
 
+if IS_VERCEL:
+    _API = "AdminClient.admin.scanner_api"
+    _MON = "AdminClient.admin.monitoring"
+    _MNT = "AdminClient.admin.maintenance"
+    _INT = "AdminClient.admin.intelligence"
+else:
+    _API = "scanner_api"
+    _MON = "monitoring"
+    _MNT = "maintenance"
+    _INT = "intelligence"
+
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -20,10 +31,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
-    "scanner_api",
-    "monitoring",
-    "maintenance",
-    "intelligence",
+    _API,
+    _MON,
+    _MNT,
+    _INT,
 ]
 
 if not IS_VERCEL:
@@ -38,8 +49,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "scanner_api.middleware.SessionTimeoutMiddleware",
-    "scanner_api.middleware.SecurityHeadersMiddleware",
+    f"{_API}.middleware.SessionTimeoutMiddleware",
+    f"{_API}.middleware.SecurityHeadersMiddleware",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -172,5 +183,7 @@ LOGGING = {
         "monitoring": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "channels": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "daphne": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "AdminClient.admin.scanner_api": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "AdminClient.admin.monitoring": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

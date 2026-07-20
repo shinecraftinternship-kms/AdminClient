@@ -1,12 +1,15 @@
+import os
 import logging
 from django.apps import AppConfig
 
+IS_VERCEL = os.getenv("VERCEL", "0") == "1"
 logger = logging.getLogger("monitoring")
 
 
 class MonitoringConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "monitoring"
+    name = "AdminClient.admin.monitoring" if IS_VERCEL else "monitoring"
+    label = "monitoring"
     verbose_name = "Inventory & Monitoring"
 
     def ready(self):
