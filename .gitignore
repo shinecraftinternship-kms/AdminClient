@@ -12,3 +12,6 @@ client/scans/
 # *.spec files are now tracked (needed for builds)
 # build/*.spec
 .blackboxcli/
+
+.vercel
+.env*
