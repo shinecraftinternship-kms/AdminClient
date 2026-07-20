@@ -1,6 +1,7 @@
 {
-  "framework": null,
-  "buildCommand": "echo 'Skipping collectstatic'",
+  "outputDirectory": ".",
+  "installCommand": "pip install -r requirements.txt",
+  "buildCommand": "echo done",
   "routes": [
     {
       "src": "/static/(.*)",
