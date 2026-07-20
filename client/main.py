@@ -13,7 +13,7 @@ logger = logging.getLogger("client.main")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.shared.runtime import is_frozen, get_client_data_dir
+from AdminClient.client.runtime import is_frozen, get_client_data_dir
 from AdminClient.client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
 from AdminClient.client.config import prompt_admin_url, discover_admin, load_config, save_config
 from AdminClient.client.communicator import Communicator, WebSocketClient

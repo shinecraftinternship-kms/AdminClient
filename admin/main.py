@@ -9,7 +9,7 @@ from pathlib import Path
 from django.core.management import call_command
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.shared.runtime import is_frozen, get_app_data_dir, get_resources_dir
+from AdminClient.admin.runtime import is_frozen, get_app_data_dir, get_resources_dir
 
 DATA_DIR = get_app_data_dir()
 RESOURCES_DIR = get_resources_dir()

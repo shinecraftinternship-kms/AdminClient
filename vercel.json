@@ -1,6 +1,7 @@
 {
   "outputDirectory": ".",
   "buildCommand": "echo done",
+  "installCommand": "pip install -r requirements.txt",
   "routes": [
     {
       "src": "/static/(.*)",

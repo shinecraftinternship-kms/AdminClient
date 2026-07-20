@@ -6,7 +6,7 @@ import string
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.shared.runtime import is_frozen, get_client_data_dir
+from AdminClient.client.runtime import is_frozen, get_client_data_dir
 
 CLIENT_DATA_DIR = get_client_data_dir()
 KEY_FILE = os.path.join(CLIENT_DATA_DIR, "client_key.json")
