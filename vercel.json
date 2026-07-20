@@ -1,4 +1,6 @@
 {
+  "framework": null,
+  "buildCommand": "echo 'Skipping collectstatic'",
   "routes": [
     {
       "src": "/static/(.*)",
