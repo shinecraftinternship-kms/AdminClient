@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="bi bi-bell"></i> Notification Center</h2>
+        <button class="btn btn-outline-primary btn-sm" onclick="markAllRead()"><i class="bi bi-check-all"></i> Mark All Read</button>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <select class="form-select form-select-sm" id="statusFilter">
+                <option value="">All</option>
+                <option value="unread">Unread</option>
+                <option value="read">Read</option>
+                <option value="archived">Archived</option>
+            </select>
+        </div>
+        <div class="col">
+            <select class="form-select form-select-sm" id="severityFilter">
+                <option value="">All Severity</option>
+                <option value="information">Information</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+                <option value="emergency">Emergency</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card"><div class="list-group list-group-flush" id="notificationsList"></div></div>
+    <div class="mt-2 text-muted small" id="notificationsCount"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadNotifications() {
+    const status = document.getElementById('statusFilter').value;
+    const severity = document.getElementById('severityFilter').value;
+    const params = new URLSearchParams({ limit: 200 });
+    if (status) params.set('status', status);
+    if (severity) params.set('severity', severity);
+
+    const resp = await fetch('/api/intelligence/notifications?' + params.toString());
+    const data = await resp.json();
+    document.getElementById('notificationsCount').textContent = `${data.total} notifications (${data.unread_count} unread)`;
+    const list = document.getElementById('notificationsList');
+    list.innerHTML = (data.results || []).map(n => `<div class="list-group-item list-group-item-action ${n.status==='unread'?'fw-bold':''}">
+        <div class="d-flex justify-content-between">
+            <span class="badge bg-${n.severity==='critical'?'danger':n.severity==='warning'?'warning text-dark':'info'} me-2">${n.severity}</span>
+            <small class="text-muted">${new Date(n.created_time).toLocaleString()}</small>
+        </div>
+        <div class="mt-1">${n.title}</div>
+        ${n.message ? '<div class="small text-muted">' + n.message + '</div>' : ''}
+        <div class="mt-1">
+            ${n.status==='unread' ? `<button class="btn btn-sm btn-outline-primary" onclick="markRead('${n.id}')">Read</button>` : ''}
+            ${n.status!=='archived' ? `<button class="btn btn-sm btn-outline-secondary" onclick="archive('${n.id}')">Archive</button>` : ''}
+        </div>
+    </div>`).join('');
+}
+async function markRead(id) {
+    await fetch('/api/intelligence/notifications/' + id + '/action', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action:'read'}),
+    });
+    loadNotifications();
+}
+async function archive(id) {
+    await fetch('/api/intelligence/notifications/' + id + '/action', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action:'archive'}),
+    });
+    loadNotifications();
+}
+async function markAllRead() {
+    await fetch('/api/intelligence/notifications/mark-all-read', {method:'POST'});
+    loadNotifications();
+}
+document.getElementById('statusFilter').addEventListener('change', loadNotifications);
+document.getElementById('severityFilter').addEventListener('change', loadNotifications);
+loadNotifications();
+</script>
+{% endblock %}

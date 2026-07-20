@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Management - ITAMS{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-wrench me-2"></i>Maintenance Management</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg me-1"></i>New Maintenance</button>
+        <button class="btn btn-outline-secondary" onclick="loadDashboard()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+        <button class="btn btn-outline-success" onclick="exportData()"><i class="bi bi-download me-1"></i>Export</button>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row mb-3">
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card bg-gradient">
+            <div class="card-body py-2">
+                <div class="stat-label">Total</div>
+                <div class="stat-value text-white" id="kpiTotal">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body py-2">
+                <div class="stat-label">Upcoming</div>
+                <div class="stat-value text-white" id="kpiUpcoming">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">
+            <div class="card-body py-2">
+                <div class="stat-label">Overdue</div>
+                <div class="stat-value text-white" id="kpiOverdue">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+            <div class="card-body py-2">
+                <div class="stat-label">In Progress</div>
+                <div class="stat-value text-white" id="kpiInProgress">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card bg-gradient-success">
+            <div class="card-body py-2">
+                <div class="stat-label">Monthly Cost</div>
+                <div class="stat-value text-white" id="kpiCost">$0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">
+            <div class="card-body py-2">
+                <div class="stat-label">Warranty Expiring</div>
+                <div class="stat-value text-white" id="kpiWarranty">0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-3">
+    <div class="col-md-6 mb-2">
+        <div class="card">
+            <div class="card-header py-2"><strong>Maintenance by Type</strong></div>
+            <div class="card-body"><canvas id="chartType" height="120"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-2">
+        <div class="card">
+            <div class="card-header py-2"><strong>Maintenance by Status</strong></div>
+            <div class="card-body"><canvas id="chartStatus" height="120"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search..." onkeyup="loadRecords()">
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterType" onchange="loadRecords()">
+                    <option value="">All Types</option>
+                    <option value="Preventive">Preventive</option>
+                    <option value="Corrective">Corrective</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Inspection">Inspection</option>
+                    <option value="Upgrade">Upgrade</option>
+                    <option value="Repair">Repair</option>
+                    <option value="Replacement">Replacement</option>
+                    <option value="Calibration">Calibration</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterStatus" onchange="loadRecords()">
+                    <option value="">All Statuses</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Pending Approval">Pending Approval</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Waiting Parts">Waiting Parts</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Overdue">Overdue</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterPriority" onchange="loadRecords()">
+                    <option value="">All Priorities</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control form-control-sm" id="filterDateFrom" onchange="loadRecords()" placeholder="From">
+            </div>
+            <div class="col-md-2">
+                <input type="date" class="form-control form-control-sm" id="filterDateTo" onchange="loadRecords()" placeholder="To">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Records Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Asset</th>
+                        <th>Type</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Scheduled</th>
+                        <th>Due</th>
+                        <th>Vendor</th>
+                        <th>Est. Cost</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="recordsTable"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="recordCount">0 records</small>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal fade" id="maintModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="maintModalTitle">New Maintenance Record</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="maintForm">
+                    <input type="hidden" id="formId">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Asset *</label>
+                            <select class="form-select" id="formAsset" required></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Maintenance Type *</label>
+                            <select class="form-select" id="formType" required>
+                                <option value="Preventive">Preventive</option>
+                                <option value="Corrective">Corrective</option>
+                                <option value="Emergency">Emergency</option>
+                                <option value="Inspection">Inspection</option>
+                                <option value="Upgrade">Upgrade</option>
+                                <option value="Repair">Repair</option>
+                                <option value="Replacement">Replacement</option>
+                                <option value="Calibration">Calibration</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Priority</label>
+                            <select class="form-select" id="formPriority">
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
+                                <option value="Critical">Critical</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Vendor</label>
+                            <input type="text" class="form-control" id="formVendor">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Technician</label>
+                            <input type="text" class="form-control" id="formTechnician">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Scheduled Date</label>
+                            <input type="date" class="form-control" id="formScheduledDate">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Due Date</label>
+                            <input type="date" class="form-control" id="formDueDate">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Est. Cost ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="formEstCost">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" id="formDescription" rows="2"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-control" id="formNotes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveRecord()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Maintenance Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/maintenance';
+let currentPage = 1;
+let assetsList = [];
+
+async function api(url, opts = {}) {
+    const resp = await fetch(url, { headers: {'Content-Type': 'application/json', ...opts.headers}, ...opts });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || err.detail || 'Request failed');
+    }
+    return resp.json();
+}
+
+async function loadAssets() {
+    try {
+        const data = await api('/api/assets?page_size=500');
+        assetsList = data.results || data;
+        const sel = document.getElementById('formAsset');
+        sel.innerHTML = '<option value="">Select Asset</option>';
+        assetsList.forEach(a => {
+            sel.innerHTML += `<option value="${a.id}">${a.asset_name} (${a.asset_tag})</option>`;
+        });
+    } catch(e) { console.error('Failed to load assets', e); }
+}
+
+async function loadDashboard() {
+    try {
+        const data = await api(`${API}/dashboard`);
+        document.getElementById('kpiTotal').textContent = data.total_maintenance || 0;
+        document.getElementById('kpiUpcoming').textContent = data.upcoming_maintenance || 0;
+        document.getElementById('kpiOverdue').textContent = data.overdue_maintenance || 0;
+        document.getElementById('kpiInProgress').textContent = data.in_progress_maintenance || 0;
+        document.getElementById('kpiCost').textContent = '$' + (data.monthly_maintenance_cost || 0).toLocaleString();
+        document.getElementById('kpiWarranty').textContent = data.warranty_expiring || 0;
+        renderChart('chartType', data.by_type, ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16']);
+        renderChart('chartStatus', data.by_status, ['#6b7280','#f59e0b','#22c55e','#3b82f6','#ef4444','#8b5cf6','#06b6d4','#f97316','#dc2626']);
+    } catch(e) { console.error('Dashboard error:', e); }
+}
+
+let charts = {};
+function renderChart(id, data, colors) {
+    const ctx = document.getElementById(id);
+    if (!ctx) return;
+    if (charts[id]) charts[id].destroy();
+    const labels = Object.keys(data || {});
+    const values = Object.values(data || {});
+    charts[id] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length) }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } } } }
+    });
+}
+
+async function loadRecords() {
+    const params = new URLSearchParams();
+    params.set('page', currentPage);
+    params.set('page_size', 20);
+    const search = document.getElementById('searchInput').value;
+    const type = document.getElementById('filterType').value;
+    const status = document.getElementById('filterStatus').value;
+    const priority = document.getElementById('filterPriority').value;
+    const dateFrom = document.getElementById('filterDateFrom').value;
+    const dateTo = document.getElementById('filterDateTo').value;
+    if (search) params.set('search', search);
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+    if (priority) params.set('priority', priority);
+    if (dateFrom) params.set('date_from', dateFrom);
+    if (dateTo) params.set('date_to', dateTo);
+
+    try {
+        const data = await api(`${API}?${params}`);
+        renderTable(data.results || []);
+        document.getElementById('recordCount').textContent = `${data.total || 0} records`;
+        renderPagination(data.pages || 1);
+    } catch(e) { console.error(e); }
+}
+
+function renderTable(records) {
+    const tbody = document.getElementById('recordsTable');
+    if (!records.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">No maintenance records found</td></tr>';
+        return;
+    }
+    const priorityBadge = p => {
+        const cls = {Low:'secondary',Medium:'primary',High:'warning',Critical:'danger'}[p] || 'secondary';
+        return `<span class="badge bg-${cls}">${p}</span>`;
+    };
+    const statusBadge = s => {
+        const cls = {Draft:'secondary','Pending Approval':'warning',Approved:'info',Scheduled:'primary','In Progress':'warning','Waiting Parts':'danger',Completed:'success',Cancelled:'secondary',Overdue:'danger'}[s] || 'secondary';
+        return `<span class="badge bg-${cls}">${s}</span>`;
+    };
+    tbody.innerHTML = records.map(r => `
+        <tr>
+            <td><code>${r.maintenance_id}</code></td>
+            <td>${r.asset_name || ''} <small class="text-muted">${r.asset_tag || ''}</small></td>
+            <td>${r.maintenance_type}</td>
+            <td>${priorityBadge(r.priority)}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>${r.scheduled_date || '-'}</td>
+            <td>${r.due_date || '-'}</td>
+            <td>${r.vendor_name || '-'}</td>
+            <td>${r.estimated_cost ? '$' + Number(r.estimated_cost).toLocaleString() : '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-info" onclick="viewDetail('${r.id}')" title="View"><i class="bi bi-eye"></i></button>
+                <button class="btn btn-sm btn-outline-primary" onclick="editRecord('${r.id}')" title="Edit"><i class="bi bi-pencil"></i></button>
+                ${r.status === 'Draft' || r.status === 'Pending Approval' ?
+                    `<button class="btn btn-sm btn-outline-success" onclick="changeStatus('${r.id}','Approved')" title="Approve"><i class="bi bi-check-lg"></i></button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderPagination(pages) {
+    const ul = document.getElementById('pagination');
+    ul.innerHTML = '';
+    for (let i = 1; i <= pages; i++) {
+        ul.innerHTML += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="goPage(${i})">${i}</a></li>`;
+    }
+}
+
+function goPage(p) { currentPage = p; loadRecords(); }
+
+function openCreateModal() {
+    document.getElementById('maintModalTitle').textContent = 'New Maintenance Record';
+    document.getElementById('formId').value = '';
+    document.getElementById('maintForm').reset();
+    new bootstrap.Modal(document.getElementById('maintModal')).show();
+}
+
+async function editRecord(id) {
+    try {
+        const r = await api(`${API}/${id}`);
+        document.getElementById('maintModalTitle').textContent = 'Edit Maintenance Record';
+        document.getElementById('formId').value = r.id;
+        document.getElementById('formAsset').value = r.asset;
+        document.getElementById('formType').value = r.maintenance_type;
+        document.getElementById('formPriority').value = r.priority;
+        document.getElementById('formVendor').value = r.vendor_name || '';
+        document.getElementById('formTechnician').value = r.technician || '';
+        document.getElementById('formScheduledDate').value = r.scheduled_date || '';
+        document.getElementById('formDueDate').value = r.due_date || '';
+        document.getElementById('formEstCost').value = r.estimated_cost || '';
+        document.getElementById('formDescription').value = r.description || '';
+        document.getElementById('formNotes').value = r.notes || '';
+        new bootstrap.Modal(document.getElementById('maintModal')).show();
+    } catch(e) { alert(e.message); }
+}
+
+async function saveRecord() {
+    const id = document.getElementById('formId').value;
+    const body = {
+        asset: document.getElementById('formAsset').value,
+        maintenance_type: document.getElementById('formType').value,
+        priority: document.getElementById('formPriority').value,
+        vendor_name: document.getElementById('formVendor').value,
+        technician: document.getElementById('formTechnician').value,
+        scheduled_date: document.getElementById('formScheduledDate').value || null,
+        due_date: document.getElementById('formDueDate').value || null,
+        estimated_cost: document.getElementById('formEstCost').value || null,
+        description: document.getElementById('formDescription').value,
+        notes: document.getElementById('formNotes').value,
+    };
+    if (!body.asset) { alert('Asset is required'); return; }
+    try {
+        if (id) {
+            await api(`${API}/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+        } else {
+            await api(API, { method: 'POST', body: JSON.stringify(body) });
+        }
+        bootstrap.Modal.getInstance(document.getElementById('maintModal')).hide();
+        loadRecords();
+        loadDashboard();
+    } catch(e) { alert(e.message); }
+}
+
+async function changeStatus(id, status) {
+    if (!confirm(`Set status to ${status}?`)) return;
+    try {
+        await api(`${API}/${id}/status`, { method: 'POST', body: JSON.stringify({ status, notes: `Changed to ${status}` }) });
+        loadRecords();
+        loadDashboard();
+    } catch(e) { alert(e.message); }
+}
+
+async function viewDetail(id) {
+    try {
+        const r = await api(`${API}/${id}`);
+        let html = `
+            <div class="row g-3">
+                <div class="col-md-6"><strong>Maintenance ID:</strong> <code>${r.maintenance_id}</code></div>
+                <div class="col-md-6"><strong>Status:</strong> <span class="badge bg-info">${r.status}</span></div>
+                <div class="col-md-6"><strong>Asset:</strong> ${r.asset_name} (${r.asset_tag})</div>
+                <div class="col-md-6"><strong>Type:</strong> ${r.maintenance_type}</div>
+                <div class="col-md-6"><strong>Priority:</strong> ${r.priority}</div>
+                <div class="col-md-6"><strong>Approval:</strong> ${r.approval_status}</div>
+                <div class="col-md-6"><strong>Vendor:</strong> ${r.vendor_name || '-'}</div>
+                <div class="col-md-6"><strong>Technician:</strong> ${r.technician || '-'}</div>
+                <div class="col-md-6"><strong>Scheduled:</strong> ${r.scheduled_date || '-'}</div>
+                <div class="col-md-6"><strong>Due:</strong> ${r.due_date || '-'}</div>
+                <div class="col-md-6"><strong>Start:</strong> ${r.start_date || '-'}</div>
+                <div class="col-md-6"><strong>Completion:</strong> ${r.completion_date || '-'}</div>
+                <div class="col-md-6"><strong>Est. Cost:</strong> ${r.estimated_cost ? '$'+Number(r.estimated_cost).toLocaleString() : '-'}</div>
+                <div class="col-md-6"><strong>Actual Cost:</strong> ${r.actual_cost ? '$'+Number(r.actual_cost).toLocaleString() : '-'}</div>
+                <div class="col-md-12"><strong>Description:</strong> ${r.description || '-'}</div>
+                <div class="col-md-12"><strong>Notes:</strong> ${r.notes || '-'}</div>
+            </div>`;
+        if (r.history && r.history.length) {
+            html += '<hr><h6>Maintenance History</h6><ul class="list-group list-group-flush">';
+            r.history.forEach(h => {
+                html += `<li class="list-group-item"><small class="text-muted">${h.timestamp}</small> - ${h.action}: ${h.description}</li>`;
+            });
+            html += '</ul>';
+        }
+        document.getElementById('detailContent').innerHTML = html;
+        new bootstrap.Modal(document.getElementById('detailModal')).show();
+    } catch(e) { alert(e.message); }
+}
+
+function exportData() {
+    const params = new URLSearchParams({ format: 'csv' });
+    const search = document.getElementById('searchInput').value;
+    if (search) params.set('search', search);
+    window.open(`${API}/export?${params}`, '_blank');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadAssets();
+    loadDashboard();
+    loadRecords();
+});
+</script>
+{% endblock %}

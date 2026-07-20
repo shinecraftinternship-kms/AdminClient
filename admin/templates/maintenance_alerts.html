@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Maintenance Alerts - Scanner Pro{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="bi bi-bell me-2"></i>Maintenance Alerts</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" id="filterCategory" style="width:160px">
+            <option value="">All Categories</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="warranty">Warranty</option>
+            <option value="license">License</option>
+            <option value="security">Security</option>
+            <option value="performance">Performance</option>
+        </select>
+        <select class="form-select form-select-sm" id="filterStatus" style="width:150px">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+            <option value="dismissed">Dismissed</option>
+        </select>
+        <select class="form-select form-select-sm" id="filterSeverity" style="width:150px">
+            <option value="">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadAlerts()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+</div>
+
+<div class="card bg-dark border-secondary">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Description</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="alertsTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-dark border-secondary d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="paginationInfo">Showing 0 of 0</small>
+        <nav><ul class="pagination pagination-sm mb-0" id="paginationControls"></ul></nav>
+    </div>
+</div>
+
+<div class="modal fade" id="notesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title" id="notesModalTitle"><i class="bi bi-pencil me-2"></i>Add Notes</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="notesAlertId">
+                <input type="hidden" id="notesActionType">
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control bg-dark text-white border-secondary" id="notesText" rows="4" placeholder="Add notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="notesSubmitBtn" onclick="submitNotes()">Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+const pageSize = 20;
+
+function severityBadge(severity) {
+    const map = {critical:'danger',high:'danger',medium:'warning',low:'info'};
+    return `<span class="badge bg-${map[severity]||'secondary'}">${escapeHtml(severity||'unknown')}</span>`;
+}
+
+function alertStatusBadge(status) {
+    const map = {active:'danger',acknowledged:'warning',resolved:'success',dismissed:'secondary'};
+    return `<span class="badge bg-${map[status]||'secondary'}">${escapeHtml(status||'unknown')}</span>`;
+}
+
+async function loadAlerts(page) {
+    currentPage = page || 1;
+    const params = new URLSearchParams({ page: currentPage, page_size: pageSize });
+    const category = document.getElementById('filterCategory').value;
+    const status = document.getElementById('filterStatus').value;
+    const severity = document.getElementById('filterSeverity').value;
+    if (category) params.set('category', category);
+    if (status) params.set('status', status);
+    if (severity) params.set('severity', severity);
+
+    try {
+        const res = await fetch(`/api/maintenance/alerts?${params}`);
+        const data = await res.json();
+        const items = data.results || data;
+        const total = data.total || items.length;
+        const totalPages = data.pages || Math.ceil(total / pageSize);
+        const tbody = document.getElementById('alertsTableBody');
+
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No alerts found</td></tr>';
+        } else {
+            tbody.innerHTML = items.map(a => `
+                <tr>
+                    <td>${escapeHtml(a.title || '-')}</td>
+                    <td><span class="badge bg-dark border border-secondary">${escapeHtml((a.category||'-').replace(/_/g,' '))}</span></td>
+                    <td>${severityBadge(a.severity)}</td>
+                    <td>${alertStatusBadge(a.status)}</td>
+                    <td class="text-truncate" style="max-width:250px" title="${escapeHtml(a.description||'')}">${escapeHtml(a.description||'-')}</td>
+                    <td class="text-nowrap">${a.created_at ? timeAgo(a.created_at) : '-'}</td>
+                    <td class="text-nowrap">
+                        ${a.status === 'active' ? `
+                            <button class="btn btn-sm btn-outline-warning me-1" onclick="acknowledgeAlert(${a.id})" title="Acknowledge"><i class="bi bi-check-lg"></i></button>
+                            <button class="btn btn-sm btn-outline-success me-1" onclick="openNotesModal(${a.id},'resolve')" title="Resolve"><i class="bi bi-check-circle"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="dismissAlert(${a.id})" title="Dismiss"><i class="bi bi-x-lg"></i></button>
+                        ` : a.status === 'acknowledged' ? `
+                            <button class="btn btn-sm btn-outline-success me-1" onclick="openNotesModal(${a.id},'resolve')" title="Resolve"><i class="bi bi-check-circle"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="dismissAlert(${a.id})" title="Dismiss"><i class="bi bi-x-lg"></i></button>
+                        ` : `<span class="text-muted">-</span>`}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('paginationInfo').textContent = `Showing ${items.length ? (currentPage-1)*pageSize+1 : 0}-${Math.min(currentPage*pageSize,total)} of ${total}`;
+        renderPagination(totalPages);
+    } catch { showToast('Failed to load alerts', 'danger'); }
+}
+
+function renderPagination(totalPages) {
+    const ul = document.getElementById('paginationControls');
+    ul.innerHTML = '';
+    if (totalPages <= 1) return;
+    const addPage = (p, label, disabled) => {
+        ul.innerHTML += `<li class="page-item ${disabled?'disabled':''}"><a class="page-link bg-dark border-secondary text-white" href="#" onclick="loadAlerts(${p});return false;">${label}</a></li>`;
+    };
+    addPage(currentPage - 1, '&laquo;', currentPage <= 1);
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            ul.innerHTML += `<li class="page-item ${i===currentPage?'active':''}"><a class="page-link bg-dark border-secondary text-white" href="#" onclick="loadAlerts(${i});return false;">${i}</a></li>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            ul.innerHTML += `<li class="page-item disabled"><span class="page-link bg-dark border-secondary text-white">...</span></li>`;
+        }
+    }
+    addPage(currentPage + 1, '&raquo;', currentPage >= totalPages);
+}
+
+async function acknowledgeAlert(id) {
+    try {
+        const res = await fetch(`/api/maintenance/alerts/${id}/action`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'acknowledge' })
+        });
+        if (!res.ok) throw new Error();
+        showToast('Alert acknowledged', 'success');
+        loadAlerts(currentPage);
+    } catch { showToast('Failed to acknowledge alert', 'danger'); }
+}
+
+async function dismissAlert(id) {
+    if (!confirm('Dismiss this alert?')) return;
+    try {
+        const res = await fetch(`/api/maintenance/alerts/${id}/action`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'dismiss' })
+        });
+        if (!res.ok) throw new Error();
+        showToast('Alert dismissed', 'success');
+        loadAlerts(currentPage);
+    } catch { showToast('Failed to dismiss alert', 'danger'); }
+}
+
+function openNotesModal(id, action) {
+    document.getElementById('notesAlertId').value = id;
+    document.getElementById('notesActionType').value = action;
+    document.getElementById('notesText').value = '';
+    document.getElementById('notesModalTitle').innerHTML = `<i class="bi bi-pencil me-2"></i>Resolve Alert`;
+    document.getElementById('notesSubmitBtn').textContent = 'Resolve';
+    new bootstrap.Modal(document.getElementById('notesModal')).show();
+}
+
+async function submitNotes() {
+    const id = document.getElementById('notesAlertId').value;
+    const action = document.getElementById('notesActionType').value;
+    const notes = document.getElementById('notesText').value;
+    try {
+        const res = await fetch(`/api/maintenance/alerts/${id}/action`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: action, notes: notes })
+        });
+        if (!res.ok) throw new Error();
+        bootstrap.Modal.getInstance(document.getElementById('notesModal')).hide();
+        showToast(`Alert ${action}d`, 'success');
+        loadAlerts(currentPage);
+    } catch { showToast(`Failed to ${action} alert`, 'danger'); }
+}
+
+document.getElementById('filterCategory').addEventListener('change', () => loadAlerts(1));
+document.getElementById('filterStatus').addEventListener('change', () => loadAlerts(1));
+document.getElementById('filterSeverity').addEventListener('change', () => loadAlerts(1));
+
+loadAlerts(1);
+</script>
+{% endblock %}

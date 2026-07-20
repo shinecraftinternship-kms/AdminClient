@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Intelligence Alerts - Scanner Pro{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h4 class="mb-0"><i class="bi bi-bell-fill me-2"></i>Alerts</h4>
+        <div class="d-flex gap-2 flex-wrap">
+            <select class="form-select form-select-sm" id="severityFilter" style="width:auto;" onchange="loadAlerts()">
+                <option value="">All Severity</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+                <option value="informational">Informational</option>
+            </select>
+            <select class="form-select form-select-sm" id="categoryFilter" style="width:auto;" onchange="loadAlerts()">
+                <option value="">All Categories</option>
+            </select>
+            <select class="form-select form-select-sm" id="statusFilter" style="width:auto;" onchange="loadAlerts()">
+                <option value="">All Status</option>
+                <option value="open">Open</option>
+                <option value="acknowledged">Acknowledged</option>
+                <option value="resolved">Resolved</option>
+                <option value="dismissed">Dismissed</option>
+            </select>
+            <button class="btn btn-sm btn-outline-primary" onclick="runChecks()"><i class="bi bi-play-circle me-1"></i>Run Checks</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportAlerts()"><i class="bi bi-download me-1"></i>Export</button>
+            <button class="btn btn-sm btn-outline-info" onclick="loadAlerts()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Severity</th>
+                            <th>Category</th>
+                            <th>Module</th>
+                            <th>Status</th>
+                            <th>Assigned</th>
+                            <th>Generated</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsBody"><tr><td colspan="8" class="text-center text-secondary">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-secondary" id="alertsCount">0 alerts</small>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <span class="small text-secondary" id="pageInfo">Page 1</span>
+            <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="alertDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Alert Detail</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="alertDetailBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-warning btn-sm" onclick="actionAlert('acknowledge')"><i class="bi bi-check-circle me-1"></i>Acknowledge</button>
+                <button class="btn btn-success btn-sm" onclick="actionAlert('resolve')"><i class="bi bi-check-all me-1"></i>Resolve</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentAlertId = null;
+let currentPage = 0;
+const PAGE_SIZE = 25;
+
+function severityBadgeColor(severity) {
+    const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', informational: 'secondary' };
+    return map[severity] || 'secondary';
+}
+
+function statusBadgeColor(status) {
+    const map = { open: 'danger', acknowledged: 'warning', resolved: 'success', dismissed: 'secondary' };
+    return map[status] || 'secondary';
+}
+
+async function loadAlerts() {
+    try {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE });
+        const severity = document.getElementById('severityFilter').value;
+        const category = document.getElementById('categoryFilter').value;
+        const status = document.getElementById('statusFilter').value;
+        if (severity) params.set('severity', severity);
+        if (category) params.set('category', category);
+        if (status) params.set('status', status);
+
+        const resp = await fetch('/api/intelligence/alerts?' + params.toString());
+        const data = await resp.json();
+        const results = data.results || data.alerts || [];
+        const total = data.total || 0;
+
+        const tbody = document.getElementById('alertsBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No alerts found</td></tr>';
+        } else {
+            tbody.innerHTML = results.map(a => '<tr>' +
+                '<td class="small">' + escapeHtml(a.title) + '</td>' +
+                '<td><span class="badge bg-' + severityBadgeColor(a.severity) + '">' + escapeHtml(a.severity) + '</span></td>' +
+                '<td class="small">' + escapeHtml(a.category || '-') + '</td>' +
+                '<td class="small">' + escapeHtml(a.module || '-') + '</td>' +
+                '<td><span class="badge bg-' + statusBadgeColor(a.status) + '">' + escapeHtml(a.status) + '</span></td>' +
+                '<td class="small">' + escapeHtml(a.assigned_user || '-') + '</td>' +
+                '<td class="small text-secondary">' + timeAgo(a.generated_time) + '</td>' +
+                '<td>' +
+                    '<div class="dropdown">' +
+                        '<button class="btn btn-sm btn-outline-light dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>' +
+                        '<ul class="dropdown-menu dropdown-menu-dark">' +
+                            '<li><a class="dropdown-item" href="#" onclick="showAlertDetail(\'' + a.id + '\')"><i class="bi bi-eye me-1"></i>View</a></li>' +
+                            (a.status === 'open' ? '<li><a class="dropdown-item" href="#" onclick="actionAlertById(\'' + a.id + '\', \'acknowledge\')"><i class="bi bi-check-circle me-1"></i>Acknowledge</a></li>' : '') +
+                            (a.status !== 'resolved' ? '<li><a class="dropdown-item" href="#" onclick="actionAlertById(\'' + a.id + '\', \'resolve\')"><i class="bi bi-check-all me-1"></i>Resolve</a></li>' : '') +
+                            '<li><a class="dropdown-item" href="#" onclick="assignAlert(\'' + a.id + '\')"><i class="bi bi-person-plus me-1"></i>Assign</a></li>' +
+                        '</ul>' +
+                    '</div>' +
+                '</td>' +
+                '</tr>').join('');
+        }
+
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        document.getElementById('alertsCount').textContent = total + ' alerts';
+        document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + (totalPages > 0 ? ' of ' + totalPages : '');
+        document.getElementById('prevPage').disabled = currentPage === 0;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages - 1 || totalPages === 0;
+    } catch (e) {
+        showToast('Failed to load alerts', 'danger');
+    }
+}
+
+async function showAlertDetail(id) {
+    try {
+        currentAlertId = id;
+        const resp = await fetch('/api/intelligence/alerts/' + id);
+        const a = await resp.json();
+        document.getElementById('alertDetailBody').innerHTML =
+            '<p><strong>Title:</strong> ' + escapeHtml(a.title) + '</p>' +
+            '<p><strong>Description:</strong> ' + escapeHtml(a.description || 'N/A') + '</p>' +
+            '<p><strong>Severity:</strong> <span class="badge bg-' + severityBadgeColor(a.severity) + '">' + escapeHtml(a.severity) + '</span>' +
+            ' &nbsp; <strong>Status:</strong> <span class="badge bg-' + statusBadgeColor(a.status) + '">' + escapeHtml(a.status) + '</span></p>' +
+            '<p><strong>Module:</strong> ' + escapeHtml(a.module || '-') + ' &nbsp; <strong>Category:</strong> ' + escapeHtml(a.category || '-') + '</p>' +
+            '<p><strong>Assigned:</strong> ' + escapeHtml(a.assigned_user || 'Unassigned') + '</p>' +
+            '<p><strong>Generated:</strong> ' + escapeHtml(a.generated_time || '-') + '</p>';
+        new bootstrap.Modal(document.getElementById('alertDetailModal')).show();
+    } catch (e) {
+        showToast('Failed to load alert detail', 'danger');
+    }
+}
+
+async function actionAlertById(id, action) {
+    try {
+        await fetch('/api/intelligence/alerts/' + id + '/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        showToast('Alert ' + action + 'd', 'success');
+        loadAlerts();
+    } catch (e) {
+        showToast('Failed to ' + action + ' alert', 'danger');
+    }
+}
+
+async function actionAlert(action) {
+    if (!currentAlertId) return;
+    await actionAlertById(currentAlertId, action);
+    bootstrap.Modal.getInstance(document.getElementById('alertDetailModal')).hide();
+}
+
+async function assignAlert(id) {
+    const user = prompt('Enter username to assign:');
+    if (!user) return;
+    try {
+        await fetch('/api/intelligence/alerts/' + id + '/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'assign', assigned_user: user })
+        });
+        showToast('Alert assigned', 'success');
+        loadAlerts();
+    } catch (e) {
+        showToast('Failed to assign alert', 'danger');
+    }
+}
+
+async function runChecks() {
+    try {
+        await fetch('/api/intelligence/alerts/run-checks', { method: 'POST' });
+        showToast('Checks started', 'success');
+        setTimeout(loadAlerts, 1500);
+    } catch (e) {
+        showToast('Failed to run checks', 'danger');
+    }
+}
+
+function exportAlerts() {
+    const params = new URLSearchParams();
+    const severity = document.getElementById('severityFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    if (severity) params.set('severity', severity);
+    if (category) params.set('category', category);
+    if (status) params.set('status', status);
+    window.open('/api/intelligence/alerts/export?' + params.toString());
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 0) currentPage = 0;
+    loadAlerts();
+}
+
+loadAlerts();
+</script>
+{% endblock %}

@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Executive Dashboard{% endblock %}
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <h4 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Executive Dashboard</h4>
+        <div class="d-flex gap-2">
+            <div class="btn-group btn-group-sm" id="timeRangeFilter">
+                <button class="btn btn-outline-secondary active" data-value="7d">7D</button>
+                <button class="btn btn-outline-secondary" data-value="30d">30D</button>
+                <button class="btn btn-outline-secondary" data-value="90d">90D</button>
+                <button class="btn btn-outline-secondary" data-value="1y">1Y</button>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="refreshDashboard()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+    <div class="row mb-2">
+        <div class="col-12"><small class="text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;letter-spacing:1px;">Asset Management</small></div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Total Assets</div><div class="stat-value text-white" id="kpi-total-assets">--</div></div>
+                        <i class="bi bi-box-seam fs-2"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Assigned</div><div class="stat-value text-white" id="kpi-assigned-assets">--</div></div>
+                        <i class="bi bi-person-check fs-2" style="color:#22c55e;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Available</div><div class="stat-value text-white" id="kpi-available-assets">--</div></div>
+                        <i class="bi bi-check-circle fs-2" style="color:#4f8cff;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Maintenance</div><div class="stat-value text-white" id="kpi-maintenance-assets">--</div></div>
+                        <i class="bi bi-tools fs-2" style="color:#f97316;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Warranty Expiring</div><div class="stat-value text-white" id="kpi-warranty-expiring">--</div></div>
+                        <i class="bi bi-exclamation-triangle fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-2">
+        <div class="col-12"><small class="text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;letter-spacing:1px;">Monitoring</small></div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Online</div><div class="stat-value text-white" id="kpi-online-devices">--</div></div>
+                        <i class="bi bi-wifi fs-2" style="color:#22c55e;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Offline</div><div class="stat-value text-white" id="kpi-offline-devices">--</div></div>
+                        <i class="bi bi-wifi-off fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Not Reporting</div><div class="stat-value text-white" id="kpi-not-reporting">--</div></div>
+                        <i class="bi bi-question-circle fs-2" style="color:#a78bfa;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Critical</div><div class="stat-value text-white" id="kpi-critical-devices">--</div></div>
+                        <i class="bi bi-heartbreak fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Health Score</div><div class="stat-value text-white" id="kpi-avg-health">--</div></div>
+                        <i class="bi bi-heart-pulse fs-2" style="color:#4f8cff;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-2">
+        <div class="col-12"><small class="text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;letter-spacing:1px;">Maintenance & Licenses</small></div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Upcoming Maintenance</div><div class="stat-value text-white" id="kpi-upcoming-mnt">--</div></div>
+                        <i class="bi bi-calendar-event fs-2" style="color:#eab308;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Overdue</div><div class="stat-value text-white" id="kpi-overdue-mnt">--</div></div>
+                        <i class="bi bi-exclamation-octagon fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Total Licenses</div><div class="stat-value text-white" id="kpi-total-licenses">--</div></div>
+                        <i class="bi bi-key fs-2" style="color:#4f8cff;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Expiring</div><div class="stat-value text-white" id="kpi-expiring-licenses">--</div></div>
+                        <i class="bi bi-clock fs-2" style="color:#f97316;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">License Compliance</div><div class="stat-value text-white" id="kpi-license-compliance">--</div></div>
+                        <i class="bi bi-shield-check fs-2" style="color:#22c55e;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-2">
+        <div class="col-12"><small class="text-secondary text-uppercase fw-semibold" style="font-size:0.65rem;letter-spacing:1px;">Security</small></div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Open Alerts</div><div class="stat-value text-white" id="kpi-open-alerts">--</div></div>
+                        <i class="bi bi-bell fs-2" style="color:#eab308;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Critical Alerts</div><div class="stat-value text-white" id="kpi-critical-alerts">--</div></div>
+                        <i class="bi bi-bell-fill fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100" style="background:var(--gradient-3);">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Security Violations</div><div class="stat-value text-white" id="kpi-security-violations">--</div></div>
+                        <i class="bi bi-shield-exclamation fs-2" style="color:#ef4444;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Audit Events Today</div><div class="stat-value text-white" id="kpi-audit-today">--</div></div>
+                        <i class="bi bi-journal-text fs-2" style="color:#4f8cff;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3 col-xl mb-2">
+            <div class="card stat-card h-100">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><div class="stat-label">Employees / Depts / Locs</div><div class="stat-value text-white" id="kpi-org-stats">--</div></div>
+                        <i class="bi bi-people fs-2"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-lg-8 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-graph-up me-1"></i>Asset Growth Trend</small></div>
+                <div class="card-body"><canvas id="growthChart" height="200"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-pie-chart me-1"></i>Lifecycle Distribution</small></div>
+                <div class="card-body"><canvas id="lifecycleChart" height="200"></canvas></div>
+            </div>
+        </div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-boxes me-1"></i>By Category</small></div>
+                <div class="card-body"><canvas id="categoryChart" height="200"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-diagram-3 me-1"></i>By Department</small></div>
+                <div class="card-body"><canvas id="deptChart" height="200"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-shield me-1"></i>Security Trend (7d)</small></div>
+                <div class="card-body"><canvas id="securityChart" height="200"></canvas></div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-8 mb-3">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                    <small class="fw-semibold"><i class="bi bi-activity me-1"></i>Recent Activities</small>
+                    <span class="badge bg-secondary" id="activityCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" id="recentActivitiesList">
+                        <div class="list-group-item text-center text-secondary small py-3">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header py-2"><small class="fw-semibold"><i class="bi bi-lightning me-1"></i>Quick Actions</small></div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/assets/" class="btn btn-outline-primary btn-sm text-start"><i class="bi bi-plus-circle me-2"></i>Add Asset</a>
+                        <a href="/assets/" class="btn btn-outline-success btn-sm text-start"><i class="bi bi-person-check me-2"></i>Assign Asset</a>
+                        <a href="/maintenance/" class="btn btn-outline-warning btn-sm text-start"><i class="bi bi-calendar-plus me-2"></i>Schedule Maintenance</a>
+                        <a href="/intelligence/reports/" class="btn btn-outline-info btn-sm text-start"><i class="bi bi-file-earmark-bar-graph me-2"></i>Generate Report</a>
+                        <a href="/intelligence/alerts/" class="btn btn-outline-danger btn-sm text-start"><i class="bi bi-bell me-2"></i>View Alerts</a>
+                        <a href="/monitoring/" class="btn btn-outline-secondary btn-sm text-start"><i class="bi bi-heart-pulse me-2"></i>Open Monitoring</a>
+                        <a href="/intelligence/notifications/" class="btn btn-outline-primary btn-sm text-start"><i class="bi bi-envelope me-2"></i>Notifications</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/executive-dashboard.js"></script>
+{% endblock %}

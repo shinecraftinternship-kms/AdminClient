@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Employees - Scanner Pro{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-people me-2"></i>Employee Directory</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#employeeModal" onclick="openAddEmployee()">
+            <i class="bi bi-person-plus"></i> Add Employee
+        </button>
+        <button class="btn btn-outline-info" onclick="openImportModal()" title="Import">
+            <i class="bi bi-upload"></i> Import
+        </button>
+        <button class="btn btn-outline-info" onclick="exportCSV()" title="Export CSV">
+            <i class="bi bi-download"></i> Export CSV
+        </button>
+        <button class="btn btn-outline-secondary" onclick="exportPDF()" title="Export PDF">
+            <i class="bi bi-file-earmark-pdf"></i> Export PDF
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4 mb-2 mb-md-0">
+        <div class="input-group">
+            <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-secondary"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Search by name, code, or email..." oninput="filterEmployees()">
+        </div>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="deptFilter" onchange="filterEmployees()">
+            <option value="all">All Departments</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="locFilter" onchange="filterEmployees()">
+            <option value="all">All Locations</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="statusFilter" onchange="filterEmployees()">
+            <option value="all">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Resigned">Resigned</option>
+            <option value="On Leave">On Leave</option>
+            <option value="Terminated">Terminated</option>
+            <option value="Retired">Retired</option>
+        </select>
+    </div>
+    <div class="col-md-2 text-md-end text-secondary small align-self-center" id="filterCount"></div>
+</div>
+
+<div class="row mb-4" id="statsRow">
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Total Employees</div>
+                        <div class="stat-value text-white" id="totalEmployees">0</div>
+                    </div>
+                    <i class="bi bi-people fs-1 text-secondary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Active</div>
+                        <div class="stat-value text-white" id="activeEmployees">0</div>
+                    </div>
+                    <i class="bi bi-person-check fs-1" style="color:#22c55e;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">On Leave</div>
+                        <div class="stat-value text-white" id="onLeaveEmployees">0</div>
+                    </div>
+                    <i class="bi bi-person-dash fs-1" style="color:#eab308;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Assigned Assets</div>
+                        <div class="stat-value text-white" id="assignedAssets">0</div>
+                    </div>
+                    <i class="bi bi-laptop fs-1" style="color:#4f8cff;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Department</th>
+                        <th>Location</th>
+                        <th>Designation</th>
+                        <th>Status</th>
+                        <th>Assets</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="employeeTableBody">
+                    <tr><td colspan="8" class="text-center text-secondary">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Employee Modal -->
+<div class="modal fade" id="employeeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="employeeModalTitle"><i class="bi bi-person-plus me-2"></i>Add Employee</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="employeeForm">
+                    <input type="hidden" id="editEmployeeId" value="">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Employee Code</label>
+                            <input type="text" class="form-control" id="empCode" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-control" id="empName" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="empEmail" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" id="empPhone">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Department</label>
+                            <select class="form-select" id="empDepartment">
+                                <option value="">Select Department</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Designation</label>
+                            <input type="text" class="form-control" id="empDesignation">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Manager Name</label>
+                            <input type="text" class="form-control" id="empManager">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Reports To</label>
+                            <select class="form-select" id="empReportsTo">
+                                <option value="">Select Manager</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Location</label>
+                            <select class="form-select" id="empLocation">
+                                <option value="">Select Location</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Joining Date</label>
+                            <input type="date" class="form-control" id="empJoiningDate">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" id="empStatus">
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                                <option value="Resigned">Resigned</option>
+                                <option value="On Leave">On Leave</option>
+                                <option value="Terminated">Terminated</option>
+                                <option value="Retired">Retired</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Profile Image</label>
+                            <input type="file" class="form-control" id="empProfileImage" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="empNotes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveEmployee()">
+                    <i class="bi bi-check-lg"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile View Modal -->
+<div class="modal fade" id="profileModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="profileModalTitle"><i class="bi bi-person me-2"></i>Employee Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="profileContent">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Import Employees</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary small">Upload a CSV or Excel file with employee data.</p>
+                <div class="mb-3">
+                    <label class="form-label">File</label>
+                    <input type="file" class="form-control" id="importFile" accept=".csv,.xlsx">
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="dryRunCheck">
+                    <label class="form-check-label">Dry run (validate without saving)</label>
+                </div>
+                <button class="btn btn-primary" onclick="importEmployees()">
+                    <i class="bi bi-upload"></i> Import
+                </button>
+                <div class="mt-3" id="importResults"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmMessage">
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/employees.js"></script>
+{% endblock %}

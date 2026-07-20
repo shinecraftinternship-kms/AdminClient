@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Notifications - Scanner Pro{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <h4 class="mb-0"><i class="bi bi-envelope me-2"></i>Notifications</h4>
+            <span class="badge bg-danger rounded-pill" id="unreadBadge" style="display:none;">0</span>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="statusFilter" style="width:auto;" onchange="loadNotifications()">
+                <option value="">All Status</option>
+                <option value="unread">Unread</option>
+                <option value="read">Read</option>
+                <option value="archived">Archived</option>
+            </select>
+            <button class="btn btn-sm btn-outline-primary" onclick="markAllRead()"><i class="bi bi-check-all me-1"></i>Mark All Read</button>
+            <button class="btn btn-sm btn-outline-info" onclick="loadNotifications()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Message</th>
+                            <th>Severity</th>
+                            <th>Module</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notifBody"><tr><td colspan="7" class="text-center text-secondary">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-secondary" id="notifCount">0 notifications</small>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <span class="small text-secondary" id="pageInfo">Page 1</span>
+            <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 25;
+
+function severityBadgeColor(severity) {
+    const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', informational: 'secondary' };
+    return map[severity] || 'secondary';
+}
+
+async function loadNotifications() {
+    try {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE });
+        const status = document.getElementById('statusFilter').value;
+        if (status) params.set('status', status);
+
+        const resp = await fetch('/api/intelligence/notifications?' + params.toString());
+        const data = await resp.json();
+        const results = data.results || data.notifications || [];
+        const total = data.total || 0;
+        const unreadCount = data.unread_count || 0;
+
+        const badge = document.getElementById('unreadBadge');
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount;
+            badge.style.display = 'inline';
+        } else {
+            badge.style.display = 'none';
+        }
+
+        const tbody = document.getElementById('notifBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No notifications found</td></tr>';
+        } else {
+            tbody.innerHTML = results.map(n => '<tr class="' + (n.status === 'unread' ? 'table-active' : '') + '">' +
+                '<td class="small fw-bold">' + escapeHtml(n.title) + '</td>' +
+                '<td class="small text-secondary">' + escapeHtml(n.message || '-') + '</td>' +
+                '<td><span class="badge bg-' + severityBadgeColor(n.severity) + '">' + escapeHtml(n.severity) + '</span></td>' +
+                '<td class="small">' + escapeHtml(n.module || '-') + '</td>' +
+                '<td><span class="badge bg-' + (n.status === 'unread' ? 'danger' : n.status === 'archived' ? 'secondary' : 'success') + '">' + escapeHtml(n.status) + '</span></td>' +
+                '<td class="small text-secondary">' + timeAgo(n.created_time) + '</td>' +
+                '<td>' +
+                    (n.status === 'unread' ? '<button class="btn btn-sm btn-outline-primary me-1" onclick="markRead(\'' + n.id + '\')"><i class="bi bi-check"></i></button>' : '') +
+                    (n.status !== 'archived' ? '<button class="btn btn-sm btn-outline-secondary" onclick="archiveNotif(\'' + n.id + '\')"><i class="bi bi-archive"></i></button>' : '') +
+                '</td>' +
+                '</tr>').join('');
+        }
+
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        document.getElementById('notifCount').textContent = total + ' notifications (' + unreadCount + ' unread)';
+        document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + (totalPages > 0 ? ' of ' + totalPages : '');
+        document.getElementById('prevPage').disabled = currentPage === 0;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages - 1 || totalPages === 0;
+    } catch (e) {
+        showToast('Failed to load notifications', 'danger');
+    }
+}
+
+async function markRead(id) {
+    try {
+        await fetch('/api/intelligence/notifications/' + id + '/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'read' })
+        });
+        loadNotifications();
+    } catch (e) {
+        showToast('Failed to mark as read', 'danger');
+    }
+}
+
+async function archiveNotif(id) {
+    try {
+        await fetch('/api/intelligence/notifications/' + id + '/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'archive' })
+        });
+        loadNotifications();
+    } catch (e) {
+        showToast('Failed to archive notification', 'danger');
+    }
+}
+
+async function markAllRead() {
+    try {
+        await fetch('/api/intelligence/notifications/mark-all-read', { method: 'POST' });
+        showToast('All notifications marked as read', 'success');
+        loadNotifications();
+    } catch (e) {
+        showToast('Failed to mark all as read', 'danger');
+    }
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 0) currentPage = 0;
+    loadNotifications();
+}
+
+loadNotifications();
+</script>
+{% endblock %}

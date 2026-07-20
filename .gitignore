@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.exe
+admin/data/
+client_config.json
+client_key.json
+.env
+# *.spec files are now tracked (needed for builds)
+# build/*.spec
+.blackboxcli/

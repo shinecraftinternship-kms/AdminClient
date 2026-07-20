@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}Maintenance Alerts - ITAMS{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-bell me-2"></i>Maintenance & License Alerts</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" onclick="runAlertCheck()"><i class="bi bi-arrow-clockwise me-1"></i>Run Alert Check</button>
+        <button class="btn btn-outline-secondary" onclick="loadAll()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">
+            <div class="card-body py-2">
+                <div class="stat-label">Active Alerts</div>
+                <div class="stat-value text-white" id="kpiActive">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
+            <div class="card-body py-2">
+                <div class="stat-label">Critical</div>
+                <div class="stat-value text-white" id="kpiCritical">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-warning">
+            <div class="card-body py-2">
+                <div class="stat-label">Warning</div>
+                <div class="stat-value text-white" id="kpiWarning">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body py-2">
+                <div class="stat-label">Info</div>
+                <div class="stat-value text-white" id="kpiInfo">0</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <select class="form-select form-select-sm" id="filterCategory" onchange="loadAlerts()">
+                    <option value="">All Categories</option>
+                    <option value="maintenance_due">Maintenance Due</option>
+                    <option value="maintenance_overdue">Maintenance Overdue</option>
+                    <option value="warranty_expiring">Warranty Expiring</option>
+                    <option value="warranty_expired">Warranty Expired</option>
+                    <option value="license_expiration">License Expiration</option>
+                    <option value="license_seat_exhaustion">License Seat Exhaustion</option>
+                    <option value="compliance_violation">Compliance Violation</option>
+                    <option value="vendor_sla_violation">Vendor SLA Violation</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterSeverity" onchange="loadAlerts()">
+                    <option value="">All Severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="warning">Warning</option>
+                    <option value="info">Info</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select form-select-sm" id="filterStatus" onchange="loadAlerts()">
+                    <option value="">All Statuses</option>
+                    <option value="active" selected>Active</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="dismissed">Dismissed</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearFilters()">Clear Filters</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alerts Table -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Category</th>
+                        <th>Title</th>
+                        <th>Asset / License</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="alertsTable"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted" id="alertCount">0 alerts</small>
+    </div>
+</div>
+
+<!-- Compliance Section -->
+<div class="card mt-4">
+    <div class="card-header"><strong><i class="bi bi-shield-exclamation me-2"></i>Compliance Issues</strong></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Category</th>
+                        <th>Title</th>
+                        <th>Software</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="complianceTable"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const API = '/api/maintenance';
+
+async function api(url, opts = {}) {
+    const resp = await fetch(url, { headers: {'Content-Type': 'application/json', ...opts.headers}, ...opts });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.message || err.detail || 'Request failed');
+    }
+    return resp.json();
+}
+
+async function loadAlerts() {
+    const params = new URLSearchParams();
+    const category = document.getElementById('filterCategory').value;
+    const severity = document.getElementById('filterSeverity').value;
+    const s = document.getElementById('filterStatus').value;
+    if (category) params.set('category', category);
+    if (severity) params.set('severity', severity);
+    if (s) params.set('status', s);
+    params.set('limit', 200);
+
+    try {
+        const data = await api(`${API}/alerts?${params}`);
+        renderAlerts(data || []);
+        updateKPIs(data || []);
+    } catch(e) { console.error(e); }
+}
+
+async function loadCompliance() {
+    try {
+        const data = await api(`${API}/compliance?limit=100`);
+        renderCompliance(data || []);
+    } catch(e) { console.error(e); }
+}
+
+function updateKPIs(alerts) {
+    const active = alerts.filter(a => a.status === 'active');
+    document.getElementById('kpiActive').textContent = active.length;
+    document.getElementById('kpiCritical').textContent = active.filter(a => a.severity === 'critical').length;
+    document.getElementById('kpiWarning').textContent = active.filter(a => a.severity === 'warning').length;
+    document.getElementById('kpiInfo').textContent = active.filter(a => a.severity === 'info').length;
+}
+
+function renderAlerts(alerts) {
+    const tbody = document.getElementById('alertsTable');
+    if (!alerts.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No alerts found</td></tr>';
+        document.getElementById('alertCount').textContent = '0 alerts';
+        return;
+    }
+    document.getElementById('alertCount').textContent = `${alerts.length} alerts`;
+    const severityBadge = s => {
+        const cls = {critical:'danger',warning:'warning',info:'info'}[s] || 'secondary';
+        return `<span class="badge bg-${cls}">${s}</span>`;
+    };
+    const statusBadge = s => {
+        const cls = {active:'danger',acknowledged:'warning',resolved:'success',dismissed:'secondary'}[s] || 'secondary';
+        return `<span class="badge bg-${cls}">${s}</span>`;
+    };
+    const categoryLabel = c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    tbody.innerHTML = alerts.map(a => `
+        <tr>
+            <td>${severityBadge(a.severity)}</td>
+            <td><small>${categoryLabel(a.category)}</small></td>
+            <td>${a.title}<br><small class="text-muted">${a.message || ''}</small></td>
+            <td>${a.asset_name || a.license_software_name || '-'}</td>
+            <td>${statusBadge(a.status)}</td>
+            <td><small>${new Date(a.created_at).toLocaleDateString()}</small></td>
+            <td>
+                ${a.status === 'active' ? `
+                    <button class="btn btn-sm btn-outline-warning" onclick="alertAction('${a.id}','acknowledge')" title="Acknowledge"><i class="bi bi-check2"></i></button>
+                    <button class="btn btn-sm btn-outline-success" onclick="alertAction('${a.id}','resolve')" title="Resolve"><i class="bi bi-check2-all"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="alertAction('${a.id}','dismiss')" title="Dismiss"><i class="bi bi-x-lg"></i></button>
+                ` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderCompliance(records) {
+    const tbody = document.getElementById('complianceTable');
+    if (!records.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No compliance issues</td></tr>';
+        return;
+    }
+    const severityBadge = s => {
+        const cls = {critical:'danger',warning:'warning',info:'info'}[s] || 'secondary';
+        return `<span class="badge bg-${cls}">${s}</span>`;
+    };
+    const statusBadge = s => {
+        const cls = {active:'danger',acknowledged:'warning',resolved:'success',dismissed:'secondary'}[s] || 'secondary';
+        return `<span class="badge bg-${cls}">${s}</span>`;
+    };
+    tbody.innerHTML = records.map(r => `
+        <tr>
+            <td>${severityBadge(r.severity)}</td>
+            <td><small>${r.category.replace(/_/g, ' ')}</small></td>
+            <td>${r.title}</td>
+            <td>${r.license_software_name || '-'}</td>
+            <td>${statusBadge(r.status)}</td>
+            <td>
+                ${r.status === 'active' ? `
+                    <button class="btn btn-sm btn-outline-success" onclick="complianceAction('${r.id}','resolve')">Resolve</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="complianceAction('${r.id}','dismiss')">Dismiss</button>
+                ` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function alertAction(id, action) {
+    try {
+        await api(`${API}/alerts/${id}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+        loadAlerts();
+    } catch(e) { alert(e.message); }
+}
+
+async function complianceAction(id, action) {
+    try {
+        await api(`${API}/compliance/${id}/action`, { method: 'POST', body: JSON.stringify({ action }) });
+        loadCompliance();
+    } catch(e) { alert(e.message); }
+}
+
+async function runAlertCheck() {
+    try {
+        const result = await api(`${API}/alerts/check`, { method: 'POST' });
+        alert(`Alert check complete. ${result.alerts_created || 0} new alerts generated.`);
+        loadAll();
+    } catch(e) { alert(e.message); }
+}
+
+function clearFilters() {
+    document.getElementById('filterCategory').value = '';
+    document.getElementById('filterSeverity').value = '';
+    document.getElementById('filterStatus').value = 'active';
+    loadAlerts();
+}
+
+function loadAll() {
+    loadAlerts();
+    loadCompliance();
+}
+
+document.addEventListener('DOMContentLoaded', loadAll);
+</script>
+{% endblock %}

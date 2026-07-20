@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Reports - Scanner Pro{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h4 class="mb-0"><i class="bi bi-clock-history me-2"></i>Scheduled Reports</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-circle me-1"></i>Create</button>
+            <button class="btn btn-sm btn-outline-info" onclick="loadScheduled()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Report Type</th>
+                            <th>Schedule</th>
+                            <th>Format</th>
+                            <th>Last Run</th>
+                            <th>Next Run</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedBody"><tr><td colspan="8" class="text-center text-secondary">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <small class="text-secondary d-block mt-3" id="schedCount">0 scheduled reports</small>
+</div>
+
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-plus-circle me-1"></i>Create Scheduled Report</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control" id="schedName" placeholder="Report name...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Report Type</label>
+                    <select class="form-select" id="schedReportType"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Schedule (Cron or Frequency)</label>
+                    <input type="text" class="form-control" id="schedCron" placeholder="e.g. 0 8 * * 1 (weekly Mon 8am)">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Format</label>
+                    <select class="form-select" id="schedFormat">
+                        <option value="csv">CSV</option>
+                        <option value="excel">Excel</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="createScheduled()"><i class="bi bi-check-circle me-1"></i>Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil me-1"></i>Edit Scheduled Report</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control" id="editName">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Schedule (Cron or Frequency)</label>
+                    <input type="text" class="form-control" id="editCron">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Format</label>
+                    <select class="form-select" id="editFormat">
+                        <option value="csv">CSV</option>
+                        <option value="excel">Excel</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary btn-sm" onclick="saveEdit()"><i class="bi bi-check-circle me-1"></i>Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editingId = null;
+
+async function loadReportTypes() {
+    try {
+        const resp = await fetch('/api/intelligence/reports/types');
+        const types = await resp.json();
+        const sel = document.getElementById('schedReportType');
+        const entries = typeof types === 'object' ? Object.entries(types) : [];
+        for (const [k, v] of entries) {
+            sel.innerHTML += '<option value="' + escapeHtml(k) + '">' + escapeHtml(v) + '</option>';
+        }
+    } catch (e) {
+        showToast('Failed to load report types', 'danger');
+    }
+}
+
+async function loadScheduled() {
+    try {
+        const resp = await fetch('/api/intelligence/scheduled-reports');
+        const data = await resp.json();
+        const results = Array.isArray(data) ? data : (data.results || []);
+
+        const tbody = document.getElementById('schedBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No scheduled reports found</td></tr>';
+        } else {
+            tbody.innerHTML = results.map(s => {
+                const schedule = s.cron_expression || s.schedule || s.interval_minutes + ' min' || '-';
+                return '<tr class="small">' +
+                    '<td>' + escapeHtml(s.name) + '</td>' +
+                    '<td>' + escapeHtml(s.report_type) + '</td>' +
+                    '<td><code>' + escapeHtml(schedule) + '</code></td>' +
+                    '<td>' + escapeHtml(s.format || '-') + '</td>' +
+                    '<td class="text-secondary">' + (s.last_run ? timeAgo(s.last_run) : '-') + '</td>' +
+                    '<td class="text-secondary">' + (s.next_run ? escapeHtml(new Date(s.next_run).toLocaleString()) : '-') + '</td>' +
+                    '<td><span class="badge bg-' + (s.is_active !== false ? 'success' : 'secondary') + '">' + (s.is_active !== false ? 'Active' : 'Paused') + '</span></td>' +
+                    '<td>' +
+                        '<button class="btn btn-sm btn-outline-primary me-1" onclick="editScheduled(\'' + s.id + '\')" title="Edit"><i class="bi bi-pencil"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-warning me-1" onclick="toggleScheduled(\'' + s.id + '\', ' + (s.is_active === false) + ')" title="Toggle"><i class="bi bi-' + (s.is_active !== false ? 'pause' : 'play') + '-circle"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-danger" onclick="deleteScheduled(\'' + s.id + '\')" title="Delete"><i class="bi bi-trash"></i></button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        document.getElementById('schedCount').textContent = results.length + ' scheduled reports';
+    } catch (e) {
+        showToast('Failed to load scheduled reports', 'danger');
+    }
+}
+
+async function createScheduled() {
+    const name = document.getElementById('schedName').value.trim();
+    const reportType = document.getElementById('schedReportType').value;
+    const cron = document.getElementById('schedCron').value.trim();
+    const format = document.getElementById('schedFormat').value;
+    if (!name || !reportType) {
+        showToast('Name and report type are required', 'warning');
+        return;
+    }
+    try {
+        await fetch('/api/intelligence/scheduled-reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, report_type: reportType, cron_expression: cron, format: format })
+        });
+        bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+        showToast('Scheduled report created', 'success');
+        loadScheduled();
+    } catch (e) {
+        showToast('Failed to create scheduled report', 'danger');
+    }
+}
+
+async function editScheduled(id) {
+    try {
+        editingId = id;
+        const resp = await fetch('/api/intelligence/scheduled-reports/' + id);
+        const s = await resp.json();
+        document.getElementById('editName').value = s.name || '';
+        document.getElementById('editCron').value = s.cron_expression || s.schedule || '';
+        document.getElementById('editFormat').value = s.format || 'csv';
+        new bootstrap.Modal(document.getElementById('editModal')).show();
+    } catch (e) {
+        showToast('Failed to load scheduled report', 'danger');
+    }
+}
+
+async function saveEdit() {
+    if (!editingId) return;
+    try {
+        await fetch('/api/intelligence/scheduled-reports/' + editingId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: document.getElementById('editName').value.trim(),
+                cron_expression: document.getElementById('editCron').value.trim(),
+                format: document.getElementById('editFormat').value
+            })
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+        showToast('Scheduled report updated', 'success');
+        loadScheduled();
+    } catch (e) {
+        showToast('Failed to update scheduled report', 'danger');
+    }
+}
+
+async function toggleScheduled(id, activate) {
+    try {
+        await fetch('/api/intelligence/scheduled-reports/' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: activate })
+        });
+        showToast('Scheduled report ' + (activate ? 'activated' : 'paused'), 'success');
+        loadScheduled();
+    } catch (e) {
+        showToast('Failed to toggle scheduled report', 'danger');
+    }
+}
+
+async function deleteScheduled(id) {
+    if (!confirm('Delete this scheduled report?')) return;
+    try {
+        await fetch('/api/intelligence/scheduled-reports/' + id, { method: 'DELETE' });
+        showToast('Scheduled report deleted', 'success');
+        loadScheduled();
+    } catch (e) {
+        showToast('Failed to delete scheduled report', 'danger');
+    }
+}
+
+loadReportTypes();
+loadScheduled();
+</script>
+{% endblock %}

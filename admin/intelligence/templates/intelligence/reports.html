@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="bi bi-file-earmark-bar-graph"></i> Report Engine</h2>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#generateModal"><i class="bi bi-plus"></i> Generate Report</button>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <select class="form-select form-select-sm" id="typeFilter">
+                <option value="">All Types</option>
+            </select>
+        </div>
+        <div class="col">
+            <select class="form-select form-select-sm" id="statusFilter">
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead><tr><th>Name</th><th>Type</th><th>Format</th><th>Rows</th><th>Status</th><th>Generated</th><th>Actions</th></tr></thead>
+                <tbody id="reportsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="generateModal" tabindex="-1"><div class="modal-dialog">
+    <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Generate Report</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label class="form-label">Report Type</label>
+                <select class="form-select" id="reportType"></select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Format</label>
+                <select class="form-select" id="reportFormat">
+                    <option value="csv">CSV</option>
+                    <option value="excel">Excel</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="generateReport()">Generate</button>
+        </div>
+    </div>
+</div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadReportTypes() {
+    const resp = await fetch('/api/intelligence/reports/types');
+    const types = await resp.json();
+    const sel = document.getElementById('reportType');
+    const filter = document.getElementById('typeFilter');
+    for (const [k,v] of Object.entries(types)) {
+        sel.innerHTML += `<option value="${k}">${v}</option>`;
+        filter.innerHTML += `<option value="${k}">${v}</option>`;
+    }
+}
+async function loadReports() {
+    const type = document.getElementById('typeFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    const params = new URLSearchParams({ limit: 100 });
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+
+    const resp = await fetch('/api/intelligence/reports?' + params.toString());
+    const data = await resp.json();
+    document.getElementById('reportsBody').innerHTML = (data || []).map(r => `<tr>
+        <td class="small">${r.name}</td>
+        <td class="small">${r.report_type}</td>
+        <td>${r.format}</td>
+        <td>${r.row_count}</td>
+        <td><span class="badge bg-${r.status==='completed'?'success':r.status==='failed'?'danger':'warning'}">${r.status}</span></td>
+        <td class="small">${new Date(r.generated_at).toLocaleString()}</td>
+        <td>
+            ${r.file_data ? `<button class="btn btn-sm btn-outline-primary" onclick="downloadReport('${r.id}')"><i class="bi bi-download"></i></button>` : ''}
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteReport('${r.id}')"><i class="bi bi-trash"></i></button>
+        </td>
+    </tr>`).join('');
+}
+async function generateReport() {
+    const type = document.getElementById('reportType').value;
+    const fmt = document.getElementById('reportFormat').value;
+    await fetch('/api/intelligence/reports/generate', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({report_type: type, format: fmt}),
+    });
+    bootstrap.Modal.getInstance(document.getElementById('generateModal')).hide();
+    loadReports();
+}
+async function downloadReport(id) {
+    const resp = await fetch('/api/intelligence/reports/' + id + '/export');
+    const data = await resp.json();
+    const byteChars = atob(data.file_data);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([bytes], {type: data.format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = data.name + '.' + data.format;
+    a.click();
+}
+async function deleteReport(id) {
+    if (!confirm('Delete this report?')) return;
+    await fetch('/api/intelligence/reports/' + id, {method:'DELETE'});
+    loadReports();
+}
+document.getElementById('typeFilter').addEventListener('change', loadReports);
+document.getElementById('statusFilter').addEventListener('change', loadReports);
+loadReportTypes();
+loadReports();
+</script>
+{% endblock %}

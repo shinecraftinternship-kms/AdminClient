@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Audit Log - Scanner Pro{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Audit Log</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" id="eventTypeFilter" style="width: auto;" onchange="loadAuditLogs()">
+            <option value="">All Events</option>
+            <option value="login_success">Login Success</option>
+            <option value="login_failure">Login Failure</option>
+            <option value="logout">Logout</option>
+            <option value="password_changed">Password Changed</option>
+            <option value="profile_updated">Profile Updated</option>
+            <option value="settings_updated">Settings Updated</option>
+            <option value="account_locked">Account Locked</option>
+            <option value="account_unlocked">Account Unlocked</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="loadAuditLogs()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="exportAuditLogs()"><i class="bi bi-download me-1"></i> Export</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>User</th>
+                        <th>IP Address</th>
+                        <th>Browser</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogsBody">
+                    <tr><td colspan="7" class="text-center text-secondary">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <small class="text-secondary" id="auditLogCount">0 entries</small>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+                <span class="small text-secondary align-self-center" id="pageInfo">Page 1</span>
+                <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)"><i class="bi bi-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 50;
+
+function loadAuditLogs() {
+    const eventType = document.getElementById('eventTypeFilter').value;
+    let url = '/api/auth/audit-logs?limit=' + PAGE_SIZE + '&offset=' + (currentPage * PAGE_SIZE);
+    if (eventType) url += '&event_type=' + encodeURIComponent(eventType);
+
+    fetch(url).then(r => r.json()).then(data => {
+        const tbody = document.getElementById('auditLogsBody');
+        if (!data.entries || data.entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No audit log entries found</td></tr>';
+            document.getElementById('auditLogCount').textContent = '0 entries';
+            document.getElementById('pageInfo').textContent = 'Page 1';
+            return;
+        }
+
+        tbody.innerHTML = data.entries.map(e => '<tr>' +
+            '<td class="small text-secondary">' + timeAgo(e.created_at) + '</td>' +
+            '<td><span class="badge ' + getEventBadge(e.event_type) + '">' + escapeHtml(e.event_type.replace(/_/g, ' ')) + '</span></td>' +
+            '<td>' + escapeHtml(e.username || 'System') + '</td>' +
+            '<td class="small">' + escapeHtml(e.ip_address || 'N/A') + '</td>' +
+            '<td class="small">' + escapeHtml(e.device_info ? (e.device_info.browser || '') : '') + '</td>' +
+            '<td class="small">' + escapeHtml(e.details || '') + '</td>' +
+            '<td>' + (e.success ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<i class="bi bi-x-circle-fill text-danger"></i>') + '</td>' +
+            '</tr>').join('');
+
+        const totalPages = Math.ceil(data.total / PAGE_SIZE);
+        document.getElementById('auditLogCount').textContent = data.total + ' entries';
+        document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + (totalPages > 0 ? ' of ' + totalPages : '');
+        document.getElementById('prevPage').disabled = currentPage === 0;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages - 1;
+    }).catch(() => {
+        showToast('Failed to load audit logs', 'danger');
+    });
+}
+
+function getEventBadge(eventType) {
+    const map = {
+        'login_success': 'bg-success',
+        'login_failure': 'bg-danger',
+        'logout': 'bg-secondary',
+        'password_changed': 'bg-info',
+        'profile_updated': 'bg-info',
+        'settings_updated': 'bg-warning text-dark',
+        'account_locked': 'bg-danger',
+        'account_unlocked': 'bg-success',
+        'session_expired': 'bg-warning text-dark',
+    };
+    return map[eventType] || 'bg-secondary';
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 0) currentPage = 0;
+    loadAuditLogs();
+}
+
+function exportAuditLogs() {
+    fetch('/api/auth/audit-logs?limit=1000').then(r => r.json()).then(data => {
+        if (!data.entries || data.entries.length === 0) {
+            showToast('No data to export', 'warning');
+            return;
+        }
+        let csv = 'Time,Event,User,IP,Details,Status\n';
+        data.entries.forEach(e => {
+            csv += '"' + (e.created_at || '') + '","' + (e.event_type || '') + '","' + (e.username || '') + '","' + (e.ip_address || '') + '","' + (e.details || '').replace(/"/g, '""') + '","' + (e.success ? 'Success' : 'Failure') + '"\n';
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'audit_log_' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Audit log exported!', 'success');
+    });
+}
+
+loadAuditLogs();
+</script>
+{% endblock %}

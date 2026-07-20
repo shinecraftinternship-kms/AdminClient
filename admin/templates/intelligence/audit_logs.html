@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs - Scanner Pro{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Audit Logs</h4>
+        <div class="d-flex gap-2">
+            <input class="form-control form-control-sm" id="searchInput" placeholder="Search..." style="width:200px;" oninput="debounceSearch()">
+            <select class="form-select form-select-sm" id="moduleFilter" style="width:auto;" onchange="loadAuditLogs()">
+                <option value="">All Modules</option>
+            </select>
+            <select class="form-select form-select-sm" id="severityFilter" style="width:auto;" onchange="loadAuditLogs()">
+                <option value="">All Severity</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportAuditLogs()"><i class="bi bi-download me-1"></i>Export</button>
+            <button class="btn btn-sm btn-outline-info" onclick="loadAuditLogs()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Username</th>
+                            <th>Module</th>
+                            <th>Action</th>
+                            <th>Object Type</th>
+                            <th>Object</th>
+                            <th>Severity</th>
+                            <th>IP</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditBody"><tr><td colspan="9" class="text-center text-secondary">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-secondary" id="auditCount">0 entries</small>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <span class="small text-secondary" id="pageInfo">Page 1</span>
+            <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 50;
+let searchTimeout = null;
+
+function severityBadgeColor(severity) {
+    const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', informational: 'secondary' };
+    return map[severity] || 'secondary';
+}
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(loadAuditLogs, 400);
+}
+
+async function loadModules() {
+    try {
+        const resp = await fetch('/api/intelligence/audit-logs/modules');
+        const modules = await resp.json();
+        const sel = document.getElementById('moduleFilter');
+        if (Array.isArray(modules)) {
+            modules.forEach(m => {
+                sel.innerHTML += '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>';
+            });
+        } else if (typeof modules === 'object') {
+            Object.entries(modules).forEach(([k, v]) => {
+                sel.innerHTML += '<option value="' + escapeHtml(k) + '">' + escapeHtml(v) + '</option>';
+            });
+        }
+    } catch (e) {
+        showToast('Failed to load modules', 'danger');
+    }
+}
+
+async function loadAuditLogs() {
+    try {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE });
+        const module = document.getElementById('moduleFilter').value;
+        const severity = document.getElementById('severityFilter').value;
+        const search = document.getElementById('searchInput').value;
+        if (module) params.set('module', module);
+        if (severity) params.set('severity', severity);
+        if (search) params.set('search', search);
+
+        const resp = await fetch('/api/intelligence/audit-logs?' + params.toString());
+        const data = await resp.json();
+        const results = data.results || data.entries || [];
+        const total = data.total || 0;
+
+        const tbody = document.getElementById('auditBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-secondary">No audit log entries found</td></tr>';
+        } else {
+            tbody.innerHTML = results.map(e => '<tr class="small">' +
+                '<td class="text-nowrap text-secondary">' + timeAgo(e.timestamp) + '</td>' +
+                '<td>' + escapeHtml(e.username || '-') + '</td>' +
+                '<td><span class="badge bg-secondary">' + escapeHtml(e.module || '-') + '</span></td>' +
+                '<td><span class="badge bg-info">' + escapeHtml(e.action || '-') + '</span></td>' +
+                '<td class="small">' + escapeHtml(e.object_type || '-') + '</td>' +
+                '<td class="small">' + escapeHtml(e.object_repr || e.object || '-') + '</td>' +
+                '<td><span class="badge bg-' + severityBadgeColor(e.severity) + '">' + escapeHtml(e.severity || '-') + '</span></td>' +
+                '<td class="small">' + escapeHtml(e.ip_address || '-') + '</td>' +
+                '<td class="small">' + escapeHtml(e.description || '-') + '</td>' +
+                '</tr>').join('');
+        }
+
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        document.getElementById('auditCount').textContent = total + ' entries';
+        document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + (totalPages > 0 ? ' of ' + totalPages : '');
+        document.getElementById('prevPage').disabled = currentPage === 0;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages - 1 || totalPages === 0;
+    } catch (e) {
+        showToast('Failed to load audit logs', 'danger');
+    }
+}
+
+function exportAuditLogs() {
+    const params = new URLSearchParams();
+    const module = document.getElementById('moduleFilter').value;
+    const severity = document.getElementById('severityFilter').value;
+    const search = document.getElementById('searchInput').value;
+    if (module) params.set('module', module);
+    if (severity) params.set('severity', severity);
+    if (search) params.set('search', search);
+    window.open('/api/intelligence/audit-logs/export?' + params.toString());
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 0) currentPage = 0;
+    loadAuditLogs();
+}
+
+loadModules();
+loadAuditLogs();
+</script>
+{% endblock %}

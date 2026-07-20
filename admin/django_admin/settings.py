@@ -1,0 +1,157 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me-in-production")
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
+ALLOWED_HOSTS_RAW = os.getenv("DJANGO_ALLOWED_HOSTS", "*")
+ALLOWED_HOSTS = ["*"] if ALLOWED_HOSTS_RAW.strip() == "*" else ALLOWED_HOSTS_RAW.split(",")
+
+INSTALLED_APPS = [
+    "daphne",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "channels",
+    "rest_framework",
+    "corsheaders",
+    "scanner_api",
+    "monitoring",
+    "maintenance",
+    "intelligence",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "scanner_api.middleware.SessionTimeoutMiddleware",
+    "scanner_api.middleware.SecurityHeadersMiddleware",
+]
+
+CORS_ALLOW_ALL_ORIGINS = True
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": [],
+    "DEFAULT_PAGINATION_CLASS": None,
+}
+
+ROOT_URLCONF = "django_admin.urls"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
+
+WSGI_APPLICATION = "django_admin.wsgi.application"
+ASGI_APPLICATION = "django_admin.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+        "CONFIG": {
+            "capacity": 1000,
+        },
+    },
+}
+
+# Channel layers config for production (uncomment to use Redis):
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [("127.0.0.1", 6379)],
+#         },
+#     },
+# }
+
+# WebSocket Configuration
+WS_HEARTBEAT_INTERVAL = 30
+WS_AGENT_GROUP_PREFIX = "agent"
+WS_DASHBOARD_GROUP = "dashboard"
+
+# Monitoring thresholds (seconds)
+MONITORING_HEARTBEAT_INTERVAL = 30
+MONITORING_WARNING_SECONDS = 300
+MONITORING_OFFLINE_SECONDS = 900
+MONITORING_CRITICAL_SECONDS = 1800
+
+# APScheduler Configuration
+SCHEDULER_CONFIG = {
+    "job_defaults": {
+        "coalesce": True,
+        "max_instances": 1,
+        "misfire_grace_time": 300,
+    },
+}
+
+# JWT Configuration
+JWT_SECRET = SECRET_KEY
+JWT_ALGORITHM = "HS256"
+JWT_ACCESS_EXPIRY_MINUTES = 60
+JWT_REFRESH_EXPIRY_DAYS = 7
+JWT_ISSUER = "system-scanner-pro"
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": os.path.join(os.environ.get("SCANNER_DATA_DIR", str(BASE_DIR / "data")), "scanner.db"),
+    }
+}
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_TZ = True
+
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "[{asctime}] {levelname} {message}", "style": "{", "datefmt": "%Y-%m-%d %H:%M:%S"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "simple"},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "scanner_api": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "monitoring": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "channels": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "daphne": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}

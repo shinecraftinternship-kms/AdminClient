@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="bi bi-journal-text"></i> Audit Logs</h2>
+        <button class="btn btn-outline-secondary btn-sm" onclick="exportAudit()"><i class="bi bi-download"></i> Export</button>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <select class="form-select form-select-sm" id="moduleFilter"></select>
+        </div>
+        <div class="col">
+            <select class="form-select form-select-sm" id="actionFilter"></select>
+        </div>
+        <div class="col">
+            <input class="form-control form-control-sm" id="userFilter" placeholder="Search by user...">
+        </div>
+        <div class="col">
+            <input class="form-control form-control-sm" id="dateFrom" type="date">
+        </div>
+        <div class="col">
+            <input class="form-control form-control-sm" id="dateTo" type="date">
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead><tr><th>Timestamp</th><th>User</th><th>Module</th><th>Action</th><th>Description</th><th>IP</th><th>Details</th></tr></thead>
+                <tbody id="auditBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="mt-2 text-muted small" id="auditCount"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadEnums() {
+    const [modResp, actResp] = await Promise.all([
+        fetch('/api/intelligence/audit-logs/modules'),
+        fetch('/api/intelligence/audit-logs/actions'),
+    ]);
+    const modules = await modResp.json();
+    const actions = await actResp.json();
+    const mSel = document.getElementById('moduleFilter');
+    mSel.innerHTML = '<option value="">All Modules</option>' + modules.map(m => `<option value="${m}">${m}</option>`).join('');
+    const aSel = document.getElementById('actionFilter');
+    aSel.innerHTML = '<option value="">All Actions</option>' + actions.map(a => `<option value="${a}">${a}</option>`).join('');
+}
+async function loadAudit() {
+    const params = new URLSearchParams({ limit: 100 });
+    const module = document.getElementById('moduleFilter').value;
+    const action = document.getElementById('actionFilter').value;
+    const user = document.getElementById('userFilter').value;
+    const from = document.getElementById('dateFrom').value;
+    const to = document.getElementById('dateTo').value;
+    if (module) params.set('module', module);
+    if (action) params.set('action', action);
+    if (user) params.set('user', user);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+
+    const resp = await fetch('/api/intelligence/audit-logs?' + params.toString());
+    const data = await resp.json();
+    document.getElementById('auditCount').textContent = data.total + ' entries';
+    document.getElementById('auditBody').innerHTML = (data.results || []).map(e => `<tr class="small">
+        <td class="text-nowrap">${new Date(e.timestamp).toLocaleString()}</td>
+        <td>${e.username}</td>
+        <td><span class="badge bg-secondary">${e.module}</span></td>
+        <td><span class="badge bg-info">${e.action}</span></td>
+        <td>${e.description}</td>
+        <td>${e.ip_address || '-'}</td>
+        <td><button class="btn btn-sm btn-outline-info" onclick="showDetail('${e.id}')"><i class="bi bi-info-circle"></i></button></td>
+    </tr>`).join('');
+}
+async function showDetail(id) {
+    const resp = await fetch('/api/intelligence/audit-logs/' + id);
+    const e = await resp.json();
+    alert(JSON.stringify(e.details || {}, null, 2));
+}
+function exportAudit() {
+    const params = new URLSearchParams();
+    const module = document.getElementById('moduleFilter').value;
+    const action = document.getElementById('actionFilter').value;
+    if (module) params.set('module', module);
+    if (action) params.set('action', action);
+    window.open('/api/intelligence/audit-logs/export?' + params.toString());
+}
+document.getElementById('moduleFilter').addEventListener('change', loadAudit);
+document.getElementById('actionFilter').addEventListener('change', loadAudit);
+document.getElementById('userFilter').addEventListener('input', loadAudit);
+document.getElementById('dateFrom').addEventListener('change', loadAudit);
+document.getElementById('dateTo').addEventListener('change', loadAudit);
+loadEnums();
+loadAudit();
+</script>
+{% endblock %}

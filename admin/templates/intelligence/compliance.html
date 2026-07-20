@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Compliance - Scanner Pro{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h4 class="mb-0"><i class="bi bi-shield-check me-2"></i>Compliance</h4>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="frameworkFilter" style="width:auto;" onchange="loadCompliance()">
+                <option value="">All Frameworks</option>
+            </select>
+            <select class="form-select form-select-sm" id="statusFilter" style="width:auto;" onchange="loadCompliance()">
+                <option value="">All Status</option>
+                <option value="compliant">Compliant</option>
+                <option value="non_compliant">Non-Compliant</option>
+                <option value="pending">Pending</option>
+                <option value="dismissed">Dismissed</option>
+            </select>
+            <select class="form-select form-select-sm" id="severityFilter" style="width:auto;" onchange="loadCompliance()">
+                <option value="">All Severity</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+            <button class="btn btn-sm btn-outline-info" onclick="loadAll()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md">
+            <div class="card bg-gradient-primary border-0">
+                <div class="card-body text-center">
+                    <i class="bi bi-clipboard-data fs-4 text-primary"></i>
+                    <h3 class="mt-2 mb-0" id="totalAudits">-</h3>
+                    <small class="text-muted">Total Audits</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md">
+            <div class="card bg-gradient-success border-0">
+                <div class="card-body text-center">
+                    <i class="bi bi-check-circle fs-4 text-success"></i>
+                    <h3 class="mt-2 mb-0" id="compliantCount">-</h3>
+                    <small class="text-muted">Compliant</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md">
+            <div class="card bg-gradient-danger border-0">
+                <div class="card-body text-center">
+                    <i class="bi bi-x-circle fs-4 text-danger"></i>
+                    <h3 class="mt-2 mb-0" id="nonCompliantCount">-</h3>
+                    <small class="text-muted">Non-Compliant</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md">
+            <div class="card bg-gradient-warning border-0">
+                <div class="card-body text-center">
+                    <i class="bi bi-percent fs-4 text-warning"></i>
+                    <h3 class="mt-2 mb-0" id="complianceRate">-</h3>
+                    <small class="text-muted">Compliance Rate</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Framework</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Severity</th>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="complianceBody"><tr><td colspan="8" class="text-center text-secondary">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-secondary" id="complianceCount">0 entries</small>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" id="prevPage" onclick="changePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <span class="small text-secondary" id="pageInfo">Page 1</span>
+            <button class="btn btn-sm btn-outline-secondary" id="nextPage" onclick="changePage(1)"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 0;
+const PAGE_SIZE = 25;
+
+function severityBadgeColor(severity) {
+    const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', informational: 'secondary' };
+    return map[severity] || 'secondary';
+}
+
+function statusBadgeColor(status) {
+    const map = { compliant: 'success', non_compliant: 'danger', pending: 'warning', dismissed: 'secondary' };
+    return map[status] || 'secondary';
+}
+
+async function loadDashboard() {
+    try {
+        const resp = await fetch('/api/intelligence/compliance/dashboard');
+        const d = await resp.json();
+        document.getElementById('totalAudits').textContent = d.total_audits ?? d.total_checks ?? '-';
+        document.getElementById('compliantCount').textContent = d.compliant ?? d.pass_count ?? '-';
+        document.getElementById('nonCompliantCount').textContent = d.non_compliant ?? d.fail_count ?? '-';
+        document.getElementById('complianceRate').textContent = (d.compliance_rate != null ? d.compliance_rate + '%' : '-');
+    } catch (e) {
+        showToast('Failed to load compliance dashboard', 'danger');
+    }
+}
+
+async function loadFrameworks() {
+    try {
+        const resp = await fetch('/api/intelligence/compliance/frameworks');
+        const frameworks = await resp.json();
+        const sel = document.getElementById('frameworkFilter');
+        if (Array.isArray(frameworks)) {
+            frameworks.forEach(f => {
+                sel.innerHTML += '<option value="' + escapeHtml(f) + '">' + escapeHtml(f) + '</option>';
+            });
+        } else if (typeof frameworks === 'object') {
+            Object.entries(frameworks).forEach(([k, v]) => {
+                sel.innerHTML += '<option value="' + escapeHtml(k) + '">' + escapeHtml(v) + '</option>';
+            });
+        }
+    } catch (e) {
+        // frameworks endpoint may not exist, ignore
+    }
+}
+
+async function loadCompliance() {
+    try {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE });
+        const framework = document.getElementById('frameworkFilter').value;
+        const status = document.getElementById('statusFilter').value;
+        const severity = document.getElementById('severityFilter').value;
+        if (framework) params.set('framework', framework);
+        if (status) params.set('status', status);
+        if (severity) params.set('severity', severity);
+
+        const resp = await fetch('/api/intelligence/compliance?' + params.toString());
+        const data = await resp.json();
+        const results = data.results || data.audits || [];
+        const total = data.total || 0;
+
+        const tbody = document.getElementById('complianceBody');
+        if (!results.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No compliance entries found</td></tr>';
+        } else {
+            tbody.innerHTML = results.map(c => '<tr class="small">' +
+                '<td class="text-nowrap">' + escapeHtml(c.framework || '-') + '</td>' +
+                '<td>' + escapeHtml(c.category || '-') + '</td>' +
+                '<td><span class="badge bg-' + statusBadgeColor(c.status) + '">' + escapeHtml(c.status) + '</span></td>' +
+                '<td><span class="badge bg-' + severityBadgeColor(c.severity) + '">' + escapeHtml(c.severity) + '</span></td>' +
+                '<td>' + escapeHtml(c.title || c.check_name || '-') + '</td>' +
+                '<td class="text-secondary">' + escapeHtml(c.description || '-') + '</td>' +
+                '<td class="text-nowrap text-secondary">' + timeAgo(c.created_at || c.checked_at) + '</td>' +
+                '<td>' +
+                    (c.status !== 'resolved' && c.status !== 'dismissed' ?
+                        '<button class="btn btn-sm btn-outline-warning me-1" onclick="actionCompliance(\'' + c.id + '\', \'acknowledge\')" title="Acknowledge"><i class="bi bi-check-circle"></i></button>' +
+                        '<button class="btn btn-sm btn-outline-success" onclick="actionCompliance(\'' + c.id + '\', \'resolve\')" title="Resolve"><i class="bi bi-check-all"></i></button>'
+                    : '-') +
+                '</td>' +
+                '</tr>').join('');
+        }
+
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+        document.getElementById('complianceCount').textContent = total + ' entries';
+        document.getElementById('pageInfo').textContent = 'Page ' + (currentPage + 1) + (totalPages > 0 ? ' of ' + totalPages : '');
+        document.getElementById('prevPage').disabled = currentPage === 0;
+        document.getElementById('nextPage').disabled = currentPage >= totalPages - 1 || totalPages === 0;
+    } catch (e) {
+        showToast('Failed to load compliance data', 'danger');
+    }
+}
+
+async function actionCompliance(id, action) {
+    try {
+        await fetch('/api/intelligence/compliance/' + id + '/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        showToast('Compliance entry ' + action + 'd', 'success');
+        loadCompliance();
+        loadDashboard();
+    } catch (e) {
+        showToast('Failed to ' + action + ' compliance entry', 'danger');
+    }
+}
+
+function changePage(delta) {
+    currentPage += delta;
+    if (currentPage < 0) currentPage = 0;
+    loadCompliance();
+}
+
+function loadAll() {
+    loadDashboard();
+    loadCompliance();
+}
+
+loadFrameworks();
+loadAll();
+</script>
+{% endblock %}

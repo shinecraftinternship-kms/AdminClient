@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Monitoring Dashboard - ITAMS{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>Monitoring Dashboard</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
+        <button class="btn btn-outline-secondary" onclick="loadDashboard()" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+    </div>
+</div>
+
+<div id="toastContainer" style="position:fixed;top:70px;right:20px;z-index:9999;width:380px;"></div>
+
+<!-- KPI Row 1 -->
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Total Devices</div>
+                        <div class="stat-value text-white" id="kpiTotal">0</div>
+                    </div>
+                    <i class="bi bi-pc-display-horizontal fs-1 text-secondary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Online</div>
+                        <div class="stat-value text-white" id="kpiOnline">0</div>
+                    </div>
+                    <i class="bi bi-wifi fs-1" style="color:#22c55e;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Offline</div>
+                        <div class="stat-value text-white" id="kpiOffline">0</div>
+                    </div>
+                    <i class="bi bi-wifi-off fs-1" style="color:#ef4444;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Avg Health</div>
+                        <div class="stat-value text-white" id="kpiHealth">0</div>
+                    </div>
+                    <i class="bi bi-heart-pulse fs-1" style="color:#60a5fa;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KPI Row 2 -->
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #334155, #475569);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Pending Approval</div>
+                        <div class="stat-value text-white" id="kpiPending">0</div>
+                    </div>
+                    <i class="bi bi-hourglass-split fs-1" style="color:#eab308;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #7f1d1d, #991b1b);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Critical Alerts</div>
+                        <div class="stat-value text-white" id="kpiAlertsCritical">0</div>
+                    </div>
+                    <i class="bi bi-exclamation-triangle-fill fs-1" style="color:#fca5a5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #78350f, #92400e);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Warnings</div>
+                        <div class="stat-value text-white" id="kpiAlertsWarning">0</div>
+                    </div>
+                    <i class="bi bi-exclamation-circle-fill fs-1" style="color:#fde68a;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background: linear-gradient(135deg, #1e1b4b, #312e81);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Blocked</div>
+                        <div class="stat-value text-white" id="kpiBlocked">0</div>
+                    </div>
+                    <i class="bi bi-shield-x fs-1" style="color:#c4b5fd;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-pie-chart me-1"></i>Device Status</h6>
+                <canvas id="statusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-heart me-1"></i>Health Distribution</h6>
+                <canvas id="healthChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-laptop me-1"></i>Platform Distribution</h6>
+                <canvas id="platformChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-graph-up me-1"></i>CPU / RAM / Disk Trend (24h)</h6>
+                <canvas id="usageTrendChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-activity me-1"></i>Health Score Trend (7d)</h6>
+                <canvas id="healthTrendChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="input-group">
+            <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-secondary"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Search hostname, IP, user..." oninput="filterDevices()">
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <select class="form-select" id="statusFilter" onchange="filterDevices()">
+            <option value="">All Status</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="pending">Pending</option>
+            <option value="blocked">Blocked</option>
+            <option value="maintenance">Maintenance</option>
+        </select>
+    </div>
+    <div class="col-md-2 mb-2">
+        <select class="form-select" id="healthFilter" onchange="filterDevices()">
+            <option value="">All Health</option>
+            <option value="healthy">Healthy</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+        </select>
+    </div>
+    <div class="col-md-2 mb-2">
+        <select class="form-select" id="platformFilter" onchange="filterDevices()">
+            <option value="">All Platforms</option>
+        </select>
+    </div>
+    <div class="col-md-3 text-md-end text-secondary small align-self-center" id="filterCount"></div>
+</div>
+
+<!-- Device Table -->
+<div class="card mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Status</th>
+                        <th>Health</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Disk</th>
+                        <th>Platform</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTableBody">
+                    <tr><td colspan="9" class="text-center text-secondary py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Alerts -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="text-secondary mb-3"><i class="bi bi-bell me-1"></i>Recent Alerts</h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Severity</th>
+                        <th>Device</th>
+                        <th>Type</th>
+                        <th>Message</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="alertsBody">
+                    <tr><td colspan="7" class="text-center text-secondary">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Device Detail Modal -->
+<div class="modal fade" id="deviceDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="deviceDetailTitle">Device Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deviceDetailBody">
+                <div class="text-center py-4 text-secondary">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/websocket.js"></script>
+<script src="/static/js/monitoring.js"></script>
+{% endblock %}

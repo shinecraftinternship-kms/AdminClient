@@ -1,0 +1,126 @@
+from django.urls import path
+from . import views
+from . import jwt_views
+
+urlpatterns = [
+    path("register", views.RegisterClientView.as_view(), name="api-register"),
+    path("approve", views.ApproveClientView.as_view(), name="api-approve"),
+    path("approve-multiple", views.ApproveMultipleView.as_view(), name="api-approve-multiple"),
+    path("ping", views.PingClientView.as_view(), name="api-ping"),
+    path("scan", views.SubmitScanView.as_view(), name="api-scan"),
+    path("scan/history", views.ScanHistoryView.as_view(), name="api-scan-history"),
+    path("clients", views.ClientListView.as_view(), name="api-clients"),
+    path("clients/delete-multiple", views.DeleteMultipleView.as_view(), name="api-delete-multiple"),
+    path("clients/<str:key>/status", views.ClientStatusView.as_view(), name="api-client-status"),
+    path("clients/<str:key>/manual", views.ManualUpdateView.as_view(), name="api-manual"),
+    path("clients/<str:key>/addons", views.AddonListView.as_view(), name="api-addons"),
+    path("clients/<str:key>/addons/<int:addon_id>", views.AddonDeleteView.as_view(), name="api-addon-delete"),
+    path("clients/<str:key>/scan-config", views.ScanConfigView.as_view(), name="api-scan-config"),
+    path("clients/<str:key>/scan-now", views.TriggerScanView.as_view(), name="api-trigger-scan"),
+    path("clients/<str:key>/scan-results", views.ClientScanResultsView.as_view(), name="api-client-scan-results"),
+    path("clients/<str:key>", views.ClientDetailView.as_view(), name="api-client-detail"),
+    path("scan/local", views.LocalScanView.as_view(), name="api-scan-local"),
+    path("scan/all", views.ScanAllView.as_view(), name="api-scan-all"),
+    path("admin-client", views.AdminClientInfoView.as_view(), name="api-admin-client"),
+    path("activity-log", views.ActivityLogView.as_view(), name="api-activity-log"),
+    path("groups", views.GroupListView.as_view(), name="api-groups"),
+    path("groups/<int:group_id>", views.GroupDeleteView.as_view(), name="api-group-delete"),
+    path("settings", views.SettingsView.as_view(), name="api-settings"),
+    path("settings/organization", views.OrgSettingsView.as_view(), name="api-org-settings"),
+    path("settings/security", views.SecuritySettingsView.as_view(), name="api-security-settings"),
+    path("settings/notifications", views.NotificationSettingsView.as_view(), name="api-notification-settings"),
+    path("settings/dashboard", views.DashboardSettingsView.as_view(), name="api-dashboard-settings"),
+    path("admin/users", views.AdminUsersView.as_view(), name="api-admin-users"),
+    path("admin/users/<int:user_id>", views.AdminUserDeleteView.as_view(), name="api-admin-user-delete"),
+    path("admin/stats", views.AdminStatsView.as_view(), name="api-admin-stats"),
+    path("admin/scan-changes", views.ScanChangesView.as_view(), name="api-admin-scan-changes"),
+    path("admin/change-password", views.ChangePasswordView.as_view(), name="api-change-password"),
+
+    # ── JWT Auth ───────────────────────────────────────────
+    path("auth/login", views.AuthLoginView.as_view(), name="api-auth-login"),
+    path("auth/logout", views.AuthLogoutView.as_view(), name="api-auth-logout"),
+    path("auth/me", views.AuthMeView.as_view(), name="api-auth-me"),
+    path("auth/profile", views.AuthProfileView.as_view(), name="api-auth-profile"),
+    path("auth/change-password", views.ChangePasswordView.as_view(), name="api-auth-change-password"),
+    path("auth/upload-avatar", views.AuthAvatarUploadView.as_view(), name="api-auth-upload-avatar"),
+    path("auth/login-history", views.AuthLoginHistoryView.as_view(), name="api-auth-login-history"),
+    path("auth/audit-logs", views.AuthAuditLogsView.as_view(), name="api-auth-audit-logs"),
+    path("auth/active-sessions", views.AuthActiveSessionsView.as_view(), name="api-auth-active-sessions"),
+    path("auth/token/obtain", jwt_views.TokenObtainView.as_view(), name="api-token-obtain"),
+    path("auth/token/refresh", jwt_views.TokenRefreshView.as_view(), name="api-token-refresh"),
+    path("auth/token/verify", jwt_views.TokenVerifyView.as_view(), name="api-token-verify"),
+    path("auth/api-keys", jwt_views.ApiKeyListView.as_view(), name="api-keys-list"),
+    path("auth/api-keys/<int:key_id>", jwt_views.ApiKeyDeleteView.as_view(), name="api-keys-delete"),
+
+    # ── Organization Module ───────────────────────────────────────────────
+    # Locations
+    path("locations", views.LocationListView.as_view(), name="api-locations"),
+    path("locations/export", views.LocationExportView.as_view(), name="api-locations-export"),
+    path("locations/import", views.LocationImportView.as_view(), name="api-locations-import"),
+    path("locations/bulk", views.LocationBulkActionView.as_view(), name="api-locations-bulk"),
+    path("locations/<uuid:key>", views.LocationDetailView.as_view(), name="api-location-detail"),
+    path("locations/<uuid:key>/delete", views.LocationDeleteView.as_view(), name="api-location-delete"),
+    path("locations/<uuid:key>/archive", views.LocationArchiveView.as_view(), name="api-location-archive"),
+    path("locations/<uuid:key>/dashboard", views.LocationDashboardView.as_view(), name="api-location-dashboard"),
+    # Departments
+    path("departments", views.DepartmentListView.as_view(), name="api-departments"),
+    path("departments/export", views.DepartmentExportView.as_view(), name="api-departments-export"),
+    path("departments/import", views.DepartmentImportView.as_view(), name="api-departments-import"),
+    path("departments/bulk", views.DepartmentBulkActionView.as_view(), name="api-departments-bulk"),
+    path("departments/<uuid:key>", views.DepartmentDetailView.as_view(), name="api-department-detail"),
+    path("departments/<uuid:key>/delete", views.DepartmentDeleteView.as_view(), name="api-department-delete"),
+    path("departments/<uuid:key>/disable", views.DepartmentDisableView.as_view(), name="api-department-disable"),
+    path("departments/<uuid:key>/dashboard", views.DepartmentDashboardView.as_view(), name="api-department-dashboard"),
+    # Employees
+    path("employees", views.EmployeeListView.as_view(), name="api-employees"),
+    path("employees/export", views.EmployeeExportView.as_view(), name="api-employees-export"),
+    path("employees/import", views.EmployeeImportView.as_view(), name="api-employees-import"),
+    path("employees/bulk", views.EmployeeBulkActionView.as_view(), name="api-employees-bulk"),
+    path("employees/<uuid:key>", views.EmployeeDetailView.as_view(), name="api-employee-detail"),
+    path("employees/<uuid:key>/delete", views.EmployeeDeleteView.as_view(), name="api-employee-delete"),
+    path("employees/<uuid:key>/deactivate", views.EmployeeDeactivateView.as_view(), name="api-employee-deactivate"),
+    path("employees/<uuid:key>/archive", views.EmployeeArchiveView.as_view(), name="api-employee-archive"),
+    path("employees/<uuid:key>/dashboard", views.EmployeeDashboardView.as_view(), name="api-employee-dashboard"),
+    path("employees/<uuid:key>/assets", views.EmployeeAssetHistoryView.as_view(), name="api-employee-assets"),
+    # Assignments
+    path("assignments", views.AssignmentListView.as_view(), name="api-assignments"),
+    path("assignments/<uuid:key>/return", views.AssignmentReturnView.as_view(), name="api-assignment-return"),
+    path("assignments/bulk", views.AssignmentBulkView.as_view(), name="api-assignments-bulk"),
+    # Org audit + stats
+    path("org/audit-logs", views.OrgAuditLogView.as_view(), name="api-org-audit-logs"),
+    path("org/stats", views.OrgDashboardStatsView.as_view(), name="api-org-stats"),
+
+    # ── Asset Management Module ───────────────────────────────────────────────
+    # Assets
+    path("assets", views.AssetListView.as_view(), name="api-assets"),
+    path("assets/dashboard", views.AssetDashboardView.as_view(), name="api-asset-dashboard"),
+    path("assets/analytics", views.AssetAnalyticsView.as_view(), name="api-asset-analytics"),
+    path("assets/import", views.AssetImportView.as_view(), name="api-asset-import"),
+    path("assets/export", views.AssetExportView.as_view(), name="api-asset-export"),
+    path("assets/bulk", views.AssetBulkActionView.as_view(), name="api-assets-bulk"),
+    path("assets/<uuid:key>", views.AssetDetailView.as_view(), name="api-asset-detail"),
+    path("assets/<uuid:key>/status", views.AssetStatusView.as_view(), name="api-asset-status"),
+    path("assets/<uuid:key>/assign", views.AssetAssignView.as_view(), name="api-asset-assign"),
+    path("assets/<uuid:key>/return", views.AssetReturnView.as_view(), name="api-asset-return"),
+    path("assets/<uuid:key>/transfer", views.AssetTransferView.as_view(), name="api-asset-transfer"),
+    path("assets/<uuid:key>/retire", views.AssetRetireView.as_view(), name="api-asset-retire"),
+    path("assets/<uuid:key>/dispose", views.AssetDisposeView.as_view(), name="api-asset-dispose"),
+    path("assets/<uuid:key>/history", views.AssetHistoryView.as_view(), name="api-asset-history"),
+    path("assets/<uuid:key>/qr", views.AssetQRCodeView.as_view(), name="api-asset-qr"),
+    # Asset Categories
+    path("asset-categories", views.AssetCategoryListView.as_view(), name="api-asset-categories"),
+    path("asset-categories/<uuid:key>", views.AssetCategoryDetailView.as_view(), name="api-asset-category-detail"),
+    # Asset Vendors
+    path("asset-vendors", views.AssetVendorListView.as_view(), name="api-asset-vendors"),
+    path("asset-vendors/<uuid:key>", views.AssetVendorDetailView.as_view(), name="api-asset-vendor-detail"),
+    # Asset Assignments
+    path("asset-assignments", views.AssetAssignmentListView.as_view(), name="api-asset-assignments"),
+    path("asset-assignments/<uuid:key>/return", views.AssetAssignmentReturnView.as_view(), name="api-asset-assignment-return"),
+    # Asset Transfers
+    path("asset-transfers", views.AssetTransferListView.as_view(), name="api-asset-transfers"),
+    # QR Scan
+    path("scan/<str:qr_code>", views.AssetQRScanView.as_view(), name="api-asset-qr-scan"),
+    # Executive Dashboard
+    path("executive-analytics", views.ExecutiveAnalyticsView.as_view(), name="api-executive-analytics"),
+    path("global-search", views.GlobalSearchView.as_view(), name="api-global-search"),
+]

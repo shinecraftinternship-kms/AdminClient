@@ -1,0 +1,608 @@
+{% extends "base.html" %}
+{% block title %}Device Monitoring - Scanner Pro{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>Device Monitoring</h4>
+    <button class="btn btn-outline-secondary" onclick="loadAll()" title="Refresh">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Total Devices</div>
+                        <div class="stat-value text-white" id="statTotal">-</div>
+                    </div>
+                    <i class="bi bi-pc-display-horizontal fs-1 text-secondary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Online</div>
+                        <div class="stat-value text-white" id="statOnline">-</div>
+                    </div>
+                    <i class="bi bi-wifi fs-1" style="color:#22c55e;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Offline</div>
+                        <div class="stat-value text-white" id="statOffline">-</div>
+                    </div>
+                    <i class="bi bi-wifi-off fs-1" style="color:#ef4444;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value text-white" id="statPending">-</div>
+                    </div>
+                    <i class="bi bi-hourglass-split fs-1" style="color:#eab308;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#1e3a5f,#2563eb);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Avg Health Score</div>
+                        <div class="stat-value text-white" id="statAvgHealth">-</div>
+                    </div>
+                    <i class="bi bi-heart-pulse fs-1" style="color:#93c5fd;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#78350f,#b45309);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Active Alerts</div>
+                        <div class="stat-value text-white" id="statActiveAlerts">-</div>
+                    </div>
+                    <i class="bi bi-exclamation-triangle-fill fs-1" style="color:#fde68a;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#7f1d1d,#b91c1c);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Critical Alerts</div>
+                        <div class="stat-value text-white" id="statCriticalAlerts">-</div>
+                    </div>
+                    <i class="bi bi-shield-exclamation fs-1" style="color:#fca5a5;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card stat-card" style="background:linear-gradient(135deg,#1e1b4b,#4338ca);">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Blocked</div>
+                        <div class="stat-value text-white" id="statBlocked">-</div>
+                    </div>
+                    <i class="bi bi-shield-x fs-1" style="color:#c4b5fd;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-pie-chart me-1"></i>Status Distribution</h6>
+                <canvas id="statusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-bar-chart me-1"></i>Platform Distribution</h6>
+                <canvas id="platformChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-graph-up me-1"></i>CPU / RAM / Disk Trend (24h)</h6>
+                <canvas id="usageTrendChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="text-secondary mb-3"><i class="bi bi-bell me-1"></i>Active Alerts</h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Severity</th>
+                        <th>Hostname</th>
+                        <th>Status</th>
+                        <th>Created At</th>
+                    </tr>
+                </thead>
+                <tbody id="alertsTableBody">
+                    <tr><td colspan="5" class="text-center text-secondary py-3">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="text-secondary mb-3"><i class="bi bi-clock-history me-1"></i>Recent Changes</h6>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Event Type</th>
+                        <th>Hostname</th>
+                        <th>Description</th>
+                        <th>Severity</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="changesTableBody">
+                    <tr><td colspan="5" class="text-center text-secondary py-3">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4 mb-2">
+        <div class="input-group">
+            <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-secondary"></i></span>
+            <input type="text" class="form-control" id="deviceSearch" placeholder="Search hostname, IP, user..." oninput="loadDevices()">
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <select class="form-select" id="deviceStatusFilter" onchange="loadDevices()">
+            <option value="">All Status</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="pending">Pending</option>
+            <option value="blocked">Blocked</option>
+            <option value="maintenance">Maintenance</option>
+        </select>
+    </div>
+    <div class="col-md-2 mb-2">
+        <select class="form-select" id="deviceHealthFilter" onchange="loadDevices()">
+            <option value="">All Health</option>
+            <option value="good">Good</option>
+            <option value="warning">Warning</option>
+            <option value="critical">Critical</option>
+        </select>
+    </div>
+    <div class="col-md-4 text-md-end text-secondary small align-self-center" id="deviceFilterCount"></div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>IP</th>
+                        <th>Status</th>
+                        <th>Health</th>
+                        <th>Last Heartbeat</th>
+                        <th>Agent Version</th>
+                        <th>Current User</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTableBody">
+                    <tr><td colspan="8" class="text-center text-secondary py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="devicePagination" class="d-flex justify-content-center mb-4"></div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-3 text-secondary"><i class="bi bi-activity me-1"></i>Health Trend (7 Days)</h6>
+                <canvas id="healthTrendChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deviceDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="deviceDetailTitle">Device Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deviceDetailBody">
+                <div class="text-center py-4 text-secondary">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    let statusChart = null;
+    let platformChart = null;
+    let usageTrendChart = null;
+    let healthTrendChart = null;
+    let devicePage = 1;
+    const PAGE_SIZE = 15;
+
+    function setEl(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    function severityBadge(sev) {
+        const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', warning: 'warning', info: 'info' };
+        return '<span class="badge bg-' + (map[sev] || 'secondary') + '">' + escapeHtml(sev || 'unknown') + '</span>';
+    }
+
+    function statusBadge(status) {
+        const map = { online: 'success', offline: 'danger', pending: 'warning', blocked: 'danger', maintenance: 'info', inactive: 'secondary' };
+        return '<span class="badge bg-' + (map[status] || 'secondary') + '">' + escapeHtml(status || 'unknown') + '</span>';
+    }
+
+    function healthBadge(level, score) {
+        const map = { good: 'success', healthy: 'success', warning: 'warning', critical: 'danger', unknown: 'secondary' };
+        return '<span class="badge bg-' + (map[level] || 'secondary') + '">' + escapeHtml(level || 'unknown') + ' (' + (score != null ? score : '-') + ')</span>';
+    }
+
+    function loadDashboard() {
+        fetch('/api/monitoring/dashboard')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                setEl('statTotal', d.total_devices != null ? d.total_devices : '-');
+                setEl('statOnline', d.online_count != null ? d.online_count : '-');
+                setEl('statOffline', d.offline_count != null ? d.offline_count : '-');
+                setEl('statPending', d.pending_count != null ? d.pending_count : '-');
+                setEl('statAvgHealth', d.avg_health_score != null ? Number(d.avg_health_score).toFixed(1) : '-');
+                setEl('statActiveAlerts', d.active_alerts != null ? d.active_alerts : '-');
+                setEl('statCriticalAlerts', d.critical_alerts != null ? d.critical_alerts : '-');
+                setEl('statBlocked', d.blocked_count != null ? d.blocked_count : '-');
+                renderCharts(d);
+            })
+            .catch(function() { showToast('Failed to load dashboard data', 'danger'); });
+    }
+
+    function renderCharts(d) {
+        var sd = d.status_distribution || {};
+        var sLabels = Object.keys(sd);
+        var sData = Object.values(sd);
+        var sColors = ['#22c55e','#ef4444','#eab308','#3b82f6','#6b7280','#a855f7','#f97316','#06b6d4','#ec4899'];
+        if (!statusChart) {
+            statusChart = new Chart(document.getElementById('statusChart').getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: sLabels, datasets: [{ data: sData, backgroundColor: sColors.slice(0, sLabels.length), borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { color: '#8888a0', padding: 10, font: { size: 11 } } } } }
+            });
+        } else {
+            statusChart.data.labels = sLabels;
+            statusChart.data.datasets[0].data = sData;
+            statusChart.update();
+        }
+
+        var pd = d.platform_distribution || [];
+        var pLabels = pd.map(function(p) { return p.name || p.platform || 'Unknown'; });
+        var pData = pd.map(function(p) { return p.count || 0; });
+        var pColors = ['#4f8cff','#a78bfa','#f472b6','#34d399','#fbbf24','#f97316','#8888a0'];
+        if (!platformChart) {
+            platformChart = new Chart(document.getElementById('platformChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: pLabels, datasets: [{ label: 'Devices', data: pData, backgroundColor: pColors.slice(0, pLabels.length), borderWidth: 0, borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8888a0' }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: '#8888a0', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } } } }
+            });
+        } else {
+            platformChart.data.labels = pLabels;
+            platformChart.data.datasets[0].data = pData;
+            platformChart.update();
+        }
+
+        var cpuTrend = d.cpu_trend || [];
+        var ramTrend = d.ram_trend || [];
+        var diskTrend = d.disk_trend || [];
+        var tLabels = cpuTrend.map(function(t) { var dt = new Date(t.timestamp); return dt.getHours() + ':00'; });
+        if (!usageTrendChart) {
+            usageTrendChart = new Chart(document.getElementById('usageTrendChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: tLabels,
+                    datasets: [
+                        { label: 'CPU %', data: cpuTrend.map(function(t) { return t.avg; }), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+                        { label: 'RAM %', data: ramTrend.map(function(t) { return t.avg; }), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', fill: true, tension: 0.4, pointRadius: 0 },
+                        { label: 'Disk %', data: diskTrend.map(function(t) { return t.avg; }), borderColor: '#f472b6', backgroundColor: 'rgba(244,114,182,0.1)', fill: true, tension: 0.4, pointRadius: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#8888a0', padding: 10, font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#8888a0', maxRotation: 45, maxTicksLimit: 12 }, grid: { display: false } },
+                        y: { beginAtZero: true, max: 100, ticks: { color: '#8888a0' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        } else {
+            usageTrendChart.data.labels = tLabels;
+            usageTrendChart.data.datasets[0].data = cpuTrend.map(function(t) { return t.avg; });
+            usageTrendChart.data.datasets[1].data = ramTrend.map(function(t) { return t.avg; });
+            usageTrendChart.data.datasets[2].data = diskTrend.map(function(t) { return t.avg; });
+            usageTrendChart.update();
+        }
+
+        var htData = d.health_trend || [];
+        var htLabels = htData.map(function(t) { return t.date; });
+        if (!healthTrendChart) {
+            healthTrendChart = new Chart(document.getElementById('healthTrendChart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: htLabels,
+                    datasets: [{ label: 'Avg Health Score', data: htData.map(function(t) { return t.avg; }), borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.15)', fill: true, tension: 0.4, pointRadius: 3 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#8888a0', padding: 10, font: { size: 11 } } } },
+                    scales: {
+                        x: { ticks: { color: '#8888a0', maxRotation: 45 }, grid: { display: false } },
+                        y: { beginAtZero: true, max: 100, ticks: { color: '#8888a0' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        } else {
+            healthTrendChart.data.labels = htLabels;
+            healthTrendChart.data.datasets[0].data = htData.map(function(t) { return t.avg; });
+            healthTrendChart.update();
+        }
+    }
+
+    function loadAlerts() {
+        fetch('/api/monitoring/alerts')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var alerts = Array.isArray(data) ? data : (data.results || []);
+                var tbody = document.getElementById('alertsTableBody');
+                if (alerts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-3">No active alerts</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = alerts.slice(0, 30).map(function(a) {
+                    return '<tr>' +
+                        '<td class="small">' + escapeHtml(a.title || a.message || '') + '</td>' +
+                        '<td>' + severityBadge(a.severity) + '</td>' +
+                        '<td class="small">' + escapeHtml(a.hostname || '') + '</td>' +
+                        '<td><span class="badge bg-' + (a.status === 'active' ? 'danger' : 'secondary') + '">' + escapeHtml(a.status || '') + '</span></td>' +
+                        '<td class="small text-secondary">' + timeAgo(a.created_at) + '</td>' +
+                    '</tr>';
+                }).join('');
+            })
+            .catch(function() { showToast('Failed to load alerts', 'danger'); });
+    }
+
+    function loadChanges() {
+        fetch('/api/monitoring/alerts')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var all = Array.isArray(data) ? data : (data.results || []);
+                var changes = all.filter(function(a) { return a.event_type || a.category === 'change'; });
+                var tbody = document.getElementById('changesTableBody');
+                if (changes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-3">No recent changes</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = changes.slice(0, 30).map(function(c) {
+                    return '<tr>' +
+                        '<td class="small">' + escapeHtml(c.event_type || c.alert_type || '') + '</td>' +
+                        '<td class="small">' + escapeHtml(c.hostname || '') + '</td>' +
+                        '<td class="small">' + escapeHtml(c.description || c.message || '') + '</td>' +
+                        '<td>' + severityBadge(c.severity) + '</td>' +
+                        '<td class="small text-secondary">' + timeAgo(c.timestamp || c.created_at) + '</td>' +
+                    '</tr>';
+                }).join('');
+            })
+            .catch(function() { showToast('Failed to load recent changes', 'danger'); });
+    }
+
+    function loadDevices() {
+        var search = (document.getElementById('deviceSearch')?.value || '').trim();
+        var status = document.getElementById('deviceStatusFilter')?.value || '';
+        var health = document.getElementById('deviceHealthFilter')?.value || '';
+        var params = new URLSearchParams();
+        if (search) params.set('search', search);
+        if (status) params.set('status', status);
+        if (health) params.set('health', health);
+        params.set('page', devicePage);
+        params.set('page_size', PAGE_SIZE);
+
+        fetch('/api/monitoring/devices?' + params.toString())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var devices = Array.isArray(data) ? data : (data.results || []);
+                var totalCount = data.count != null ? data.count : devices.length;
+                var tbody = document.getElementById('deviceTableBody');
+
+                if (devices.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary py-4"><i class="bi bi-pc-display-horizontal fs-1 d-block mb-2"></i>No devices found</td></tr>';
+                    document.getElementById('deviceFilterCount').textContent = '0 devices';
+                    document.getElementById('devicePagination').innerHTML = '';
+                    return;
+                }
+
+                document.getElementById('deviceFilterCount').textContent = 'Showing ' + devices.length + ' of ' + totalCount;
+
+                tbody.innerHTML = devices.map(function(d) {
+                    var id = d.id || d.registration_key || '';
+                    return '<tr>' +
+                        '<td class="fw-semibold">' + escapeHtml(d.hostname || 'Unknown') + '</td>' +
+                        '<td class="small" style="font-family:monospace;">' + escapeHtml(d.ip_address || '') + '</td>' +
+                        '<td>' + statusBadge(d.monitoring_status || d.status) + '</td>' +
+                        '<td>' + healthBadge(d.health_level, d.health_score) + '</td>' +
+                        '<td class="small text-secondary">' + (d.last_heartbeat || d.last_seen ? timeAgo(d.last_heartbeat || d.last_seen) : 'Never') + '</td>' +
+                        '<td class="small">' + escapeHtml(d.agent_version || '-') + '</td>' +
+                        '<td class="small">' + escapeHtml(d.current_user || '-') + '</td>' +
+                        '<td onclick="event.stopPropagation()">' +
+                            '<div class="d-flex gap-1">' +
+                                '<button class="btn btn-sm btn-outline-info" onclick="showDetail(\'' + id + '\')" title="View Detail"><i class="bi bi-info-circle"></i></button>' +
+                                '<button class="btn btn-sm btn-outline-success" onclick="approveDevice(\'' + id + '\')" title="Approve"><i class="bi bi-check-lg"></i></button>' +
+                                '<button class="btn btn-sm btn-outline-danger" onclick="blockDevice(\'' + id + '\')" title="Block"><i class="bi bi-shield-x"></i></button>' +
+                            '</div>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
+
+                renderPagination(totalCount);
+            })
+            .catch(function() { showToast('Failed to load devices', 'danger'); });
+    }
+
+    function renderPagination(total) {
+        var pages = Math.ceil(total / PAGE_SIZE);
+        var container = document.getElementById('devicePagination');
+        if (pages <= 1) { container.innerHTML = ''; return; }
+        var html = '<nav><ul class="pagination pagination-sm">';
+        html += '<li class="page-item' + (devicePage <= 1 ? ' disabled' : '') + '"><a class="page-link bg-dark border-secondary text-secondary" href="#" onclick="goPage(' + (devicePage - 1) + ');return false;">&laquo;</a></li>';
+        for (var i = 1; i <= pages; i++) {
+            if (pages > 7 && Math.abs(i - devicePage) > 2 && i !== 1 && i !== pages) {
+                if (i === 2 || i === pages - 1) html += '<li class="page-item disabled"><span class="page-link bg-dark border-secondary text-secondary">...</span></li>';
+                continue;
+            }
+            html += '<li class="page-item' + (i === devicePage ? ' active' : '') + '"><a class="page-link' + (i === devicePage ? '' : ' bg-dark border-secondary text-secondary') + '" href="#" onclick="goPage(' + i + ');return false;">' + i + '</a></li>';
+        }
+        html += '<li class="page-item' + (devicePage >= pages ? ' disabled' : '') + '"><a class="page-link bg-dark border-secondary text-secondary" href="#" onclick="goPage(' + (devicePage + 1) + ');return false;">&raquo;</a></li>';
+        html += '</ul></nav>';
+        container.innerHTML = html;
+    }
+
+    window.goPage = function(p) { devicePage = p; loadDevices(); };
+
+    window.approveDevice = function(id) {
+        fetch('/api/monitoring/devices/' + id + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function() { showToast('Device approved', 'success'); loadDevices(); loadDashboard(); })
+            .catch(function() { showToast('Failed to approve device', 'danger'); });
+    };
+
+    window.blockDevice = function(id) {
+        if (!confirm('Are you sure you want to block this device?')) return;
+        fetch('/api/monitoring/devices/' + id + '/block', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function() { showToast('Device blocked', 'warning'); loadDevices(); loadDashboard(); })
+            .catch(function() { showToast('Failed to block device', 'danger'); });
+    };
+
+    window.showDetail = function(id) {
+        var modal = new bootstrap.Modal(document.getElementById('deviceDetailModal'));
+        document.getElementById('deviceDetailTitle').textContent = 'Device Details';
+        document.getElementById('deviceDetailBody').innerHTML = '<div class="text-center py-4 text-secondary"><div class="spinner-border text-primary" role="status"></div></div>';
+        modal.show();
+
+        fetch('/api/monitoring/devices/' + id)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var hb = d.latest_heartbeat || {};
+                var cpu = hb.cpu_usage_pct || 0;
+                var ram = hb.ram_usage_pct || 0;
+                var disk = hb.disk_usage_pct || 0;
+                var html = '<div class="row mb-3"><div class="col-md-6"><h6 class="text-secondary">Device Information</h6>' +
+                    '<table class="table table-sm table-borderless text-white mb-0">' +
+                    '<tr><td class="text-secondary">Hostname</td><td>' + escapeHtml(d.hostname || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">IP Address</td><td>' + escapeHtml(d.ip_address || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">Platform</td><td>' + escapeHtml(d.platform || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">OS</td><td>' + escapeHtml(d.os_name || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">Agent Version</td><td>' + escapeHtml(d.agent_version || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">Current User</td><td>' + escapeHtml(d.current_user || 'N/A') + '</td></tr>' +
+                    '<tr><td class="text-secondary">Status</td><td>' + statusBadge(d.monitoring_status || d.status) + '</td></tr>' +
+                    '<tr><td class="text-secondary">Last Heartbeat</td><td>' + (d.last_heartbeat || d.last_seen ? timeAgo(d.last_heartbeat || d.last_seen) : 'Never') + '</td></tr>' +
+                    '</table></div>' +
+                    '<div class="col-md-6"><h6 class="text-secondary">Current Health</h6>' +
+                    '<div class="text-center mb-3"><div style="font-size:3rem;font-weight:bold;color:' + (d.health_level === 'good' || d.health_level === 'healthy' ? '#22c55e' : d.health_level === 'warning' ? '#eab308' : d.health_level === 'critical' ? '#ef4444' : '#6b7280') + '">' + (d.health_score != null ? d.health_score : 0) + '</div>' +
+                    '<div class="badge bg-' + (d.health_level === 'good' || d.health_level === 'healthy' ? 'success' : d.health_level === 'warning' ? 'warning' : d.health_level === 'critical' ? 'danger' : 'secondary') + '">' + escapeHtml(d.health_level || 'unknown') + '</div></div>' +
+                    '<div class="mb-2"><div class="d-flex justify-content-between small"><span>CPU</span><span>' + cpu.toFixed(1) + '%</span></div>' +
+                    '<div class="progress" style="height:8px;background:rgba(255,255,255,0.1);"><div class="progress-bar" style="width:' + cpu + '%;background:' + (cpu > 90 ? '#ef4444' : cpu > 70 ? '#eab308' : '#4f8cff') + '"></div></div></div>' +
+                    '<div class="mb-2"><div class="d-flex justify-content-between small"><span>RAM</span><span>' + ram.toFixed(1) + '%</span></div>' +
+                    '<div class="progress" style="height:8px;background:rgba(255,255,255,0.1);"><div class="progress-bar" style="width:' + ram + '%;background:' + (ram > 90 ? '#ef4444' : ram > 70 ? '#eab308' : '#a78bfa') + '"></div></div></div>' +
+                    '<div class="mb-2"><div class="d-flex justify-content-between small"><span>Disk</span><span>' + disk.toFixed(1) + '%</span></div>' +
+                    '<div class="progress" style="height:8px;background:rgba(255,255,255,0.1);"><div class="progress-bar" style="width:' + disk + '%;background:' + (disk > 95 ? '#ef4444' : disk > 80 ? '#eab308' : '#f472b6') + '"></div></div></div></div></div>';
+
+                if (d.recent_alerts && d.recent_alerts.length > 0) {
+                    html += '<h6 class="text-secondary mt-3">Recent Alerts</h6><div class="table-responsive"><table class="table table-sm table-dark table-hover mb-0">' +
+                        '<thead><tr><th>Severity</th><th>Type</th><th>Message</th><th>Time</th></tr></thead><tbody>' +
+                        d.recent_alerts.map(function(a) {
+                            return '<tr><td>' + severityBadge(a.severity) + '</td><td class="small">' + escapeHtml(a.alert_type || '') + '</td><td class="small">' + escapeHtml(a.message || a.title || '') + '</td><td class="small text-secondary">' + timeAgo(a.created_at) + '</td></tr>';
+                        }).join('') +
+                        '</tbody></table></div>';
+                }
+
+                document.getElementById('deviceDetailBody').innerHTML = html;
+            })
+            .catch(function() {
+                document.getElementById('deviceDetailBody').innerHTML = '<div class="text-danger text-center py-4">Failed to load device details.</div>';
+            });
+    };
+
+    window.loadAll = function() {
+        loadDashboard();
+        loadAlerts();
+        loadChanges();
+        loadDevices();
+    };
+
+    window.loadDevices = loadDevices;
+
+    loadAll();
+    setInterval(loadAll, 30000);
+})();
+</script>
+{% endblock %}

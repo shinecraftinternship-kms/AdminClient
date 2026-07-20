@@ -1,0 +1,568 @@
+{
+  "id": 14,
+  "scan_type": "scheduled",
+  "scan_data": {
+    "hostname": "vel",
+    "scan_type": "scheduled",
+    "platform": "Windows",
+    "platform_version": "10.0.26200",
+    "scan_timestamp": "2026-05-22T10:11:49.851430",
+    "scanned_by": "admin_local",
+    "processor": {
+      "manufacturer": "AuthenticAMD",
+      "model": "AMD Ryzen 5 5500U with Radeon Graphics",
+      "serial": "178BFBFF00860F81",
+      "cores": 6,
+      "logical": 12,
+      "speed_mhz": 2100,
+      "architecture": "x64"
+    },
+    "ram": {
+      "manufacturer": "Ramaxel Technology",
+      "capacity_gb": "8.00 GB",
+      "serial": "12202B0D",
+      "frequency_mhz": 3200,
+      "slot": "Bottom - Slot 1 (left)"
+    },
+    "storage": {
+      "disks": [
+        {
+          "model": "WD PC SN740 SDDPNQD-512G-1006",
+          "serial": "E823_8FA6_BF53_0001_001B_448B_4C69_1372.",
+          "size_gb": 476.94
+        }
+      ],
+      "partitions": [
+        {
+          "device": "C:",
+          "filesystem": "NTFS",
+          "free_gb": 280.08,
+          "total_gb": 475.88
+        }
+      ]
+    },
+    "gpu": [
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "driver": "31.0.21914.8004",
+        "vram_mb": 512
+      }
+    ],
+    "motherboard": {
+      "manufacturer": "HP",
+      "product": "887A",
+      "serial": "PLFDL048JILA2P",
+      "version": "59.25",
+      "bios_vendor": "AMI",
+      "bios_version": "F.35"
+    },
+    "os_info": {
+      "system_type": "Windows",
+      "version": "Microsoft Windows 11 Home Single Language",
+      "build": "10.0.26200",
+      "architecture": "64-bit",
+      "hostname": "vel",
+      "user_accounts": [
+        "Administrator",
+        "CodexSandboxOffline",
+        "CodexSandboxOnline",
+        "DefaultAccount",
+        "Guest",
+        "mkail",
+        "WDAGUtilityAccount",
+        "WsiAccount"
+      ]
+    },
+    "accounts": [
+      {
+        "name": "Administrator",
+        "disabled": true,
+        "sid": "S-1-5-21-757942642-939196389-347348421-500"
+      },
+      {
+        "name": "CodexSandboxOffline",
+        "disabled": false,
+        "sid": "S-1-5-21-757942642-939196389-347348421-1021"
+      },
+      {
+        "name": "CodexSandboxOnline",
+        "disabled": false,
+        "sid": "S-1-5-21-757942642-939196389-347348421-1022"
+      },
+      {
+        "name": "DefaultAccount",
+        "disabled": true,
+        "sid": "S-1-5-21-757942642-939196389-347348421-503"
+      },
+      {
+        "name": "Guest",
+        "disabled": true,
+        "sid": "S-1-5-21-757942642-939196389-347348421-501"
+      },
+      {
+        "name": "mkail",
+        "disabled": false,
+        "sid": "S-1-5-21-757942642-939196389-347348421-1001"
+      },
+      {
+        "name": "WDAGUtilityAccount",
+        "disabled": true,
+        "sid": "S-1-5-21-757942642-939196389-347348421-504"
+      },
+      {
+        "name": "WsiAccount",
+        "disabled": true,
+        "sid": "S-1-5-21-757942642-939196389-347348421-1019"
+      }
+    ],
+    "network": {
+      "interfaces": [
+        {
+          "name": "Realtek RTL8822CE 802.11ac PCIe Adapter",
+          "mac": "F8:54:F6:ED:E5:ED",
+          "ipv4": [
+            "10.136.22.1"
+          ]
+        },
+        {
+          "name": "Rust Wintun Tunnel Tunnel",
+          "mac": null,
+          "ipv4": [
+            "172.30.246.155"
+          ]
+        }
+      ],
+      "public_ip": "",
+      "private_ips": [
+        "10.136.22.1",
+        "172.30.246.155"
+      ]
+    },
+    "peripherals": {
+      "keyboard": [
+        {
+          "name": "Standard PS/2 Keyboard",
+          "manufacturer": "(Standard keyboards)",
+          "description": "Standard PS/2 Keyboard",
+          "status": "OK",
+          "usb": false
+        }
+      ],
+      "mouse": [
+        {
+          "name": "ELAN Input Device",
+          "manufacturer": "ELAN",
+          "description": "ELAN Input Device",
+          "status": "OK",
+          "usb": false
+        }
+      ],
+      "audio": [
+        {
+          "name": "Microsoft Streaming Service Proxy",
+          "manufacturer": "Microsoft",
+          "description": "Microsoft Streaming Service Proxy",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Realtek(R) Audio",
+          "manufacturer": "Realtek",
+          "description": "Realtek High Definition Audio",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Realtek Audio Effects Component (INT)",
+          "manufacturer": "Realtek",
+          "description": "Realtek Audio Effects Component",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Realtek Audio Effects Component",
+          "manufacturer": "Realtek",
+          "description": "Realtek Audio Effects Component",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Speaker (Realtek(R) Audio)",
+          "manufacturer": "Microsoft",
+          "description": "Audio Endpoint",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "AMD Audio CoProcessor",
+          "manufacturer": "AMD",
+          "description": "AMD Audio CoProcessor",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "AMD Audio Device",
+          "manufacturer": "AMD",
+          "description": "AMD Audio Device",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "High Definition Audio Controller",
+          "manufacturer": "Microsoft",
+          "description": "High Definition Audio Controller",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "HP Audio Hardware Support Application",
+          "manufacturer": "Realtek",
+          "description": "HP Audio Hardware Support Application",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "AMD High Definition Audio Device",
+          "manufacturer": "Advanced Micro Devices",
+          "description": "AMD High Definition Audio Device",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Sound Research Audio Effects Component",
+          "manufacturer": "Sound Research Corp.",
+          "description": "Sound Research Audio Effects Component",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Realtek Audio Universal Service",
+          "manufacturer": "Realtek",
+          "description": "Realtek Audio Universal Service",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "High Definition Audio Controller",
+          "manufacturer": "Microsoft",
+          "description": "High Definition Audio Controller",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Microphone Array (AMD Audio Device)",
+          "manufacturer": "Microsoft",
+          "description": "Audio Endpoint",
+          "status": "OK",
+          "usb": false
+        }
+      ],
+      "webcam": [
+        {
+          "name": "HP TrueVision HD Camera",
+          "manufacturer": "Microsoft",
+          "description": "USB Video Device",
+          "status": "OK",
+          "usb": true
+        }
+      ],
+      "printers": [
+        {
+          "name": "Root Print Queue",
+          "manufacturer": "Microsoft",
+          "description": "Local Print Queue",
+          "status": "OK",
+          "usb": false
+        },
+        {
+          "name": "Microsoft Print to PDF",
+          "manufacturer": "Microsoft",
+          "description": "Local Print Queue",
+          "status": "OK",
+          "usb": false
+        }
+      ],
+      "storage": [],
+      "other_usb": [
+        {
+          "name": "Realtek Bluetooth 5 Adapter",
+          "manufacturer": "Realtek Semiconductor Corp.",
+          "description": "Realtek Bluetooth 5 Adapter",
+          "status": "OK",
+          "usb": true
+        }
+      ]
+    },
+    "software": [
+      {
+        "name": "Apache Tomcat 10.1 Tomcat10 (remove only)",
+        "version": "10.1.54",
+        "publisher": "The Apache Software Foundation"
+      },
+      {
+        "name": "Git",
+        "version": "2.54.0",
+        "publisher": "The Git Development Community"
+      },
+      {
+        "name": "Microsoft Office Home and Student 2021 - en-us",
+        "version": "16.0.19929.20172",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "HP Documentation",
+        "version": "1.0.0.1",
+        "publisher": "HP Inc."
+      },
+      {
+        "name": "O+ Connect",
+        "version": "16.2.6.0",
+        "publisher": ""
+      },
+      {
+        "name": "Microsoft OneDrive",
+        "version": "26.074.0420.0001",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Microsoft OneNote - en-us",
+        "version": "16.0.19929.20172",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Windows Subsystem for Linux",
+        "version": "2.7.3.0",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Microsoft GameInput",
+        "version": "3.3.221.0",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Application Verifier x64 External Package (DesktopEditions)",
+        "version": "10.1.26100.8249",
+        "publisher": "Microsoft"
+      },
+      {
+        "name": "MongoDB 8.3.2 2008R2Plus SSL (64 bit)",
+        "version": "8.3.2",
+        "publisher": "MongoDB Inc."
+      },
+      {
+        "name": "MySQL Server 8.4",
+        "version": "8.4.9",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Microsoft Visual C++ 2022 X64 Debug Runtime - 14.51.36231",
+        "version": "14.51.36231",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Python 3.13.13 Tcl/Tk Support (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Python 3.13.13 Test Suite (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Python 3.13.13 Executables (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "MySQL Workbench 8.0 CE",
+        "version": "8.0.47",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Application Verifier x64 External Package (OnecoreUAP)",
+        "version": "10.1.26100.8249",
+        "publisher": "Microsoft"
+      },
+      {
+        "name": "Quick Share",
+        "version": "1.0.2555.1",
+        "publisher": "Google LLC"
+      },
+      {
+        "name": "MySQL Server 8.0",
+        "version": "8.0.43",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "HP One Agent",
+        "version": "1.3.214.7339",
+        "publisher": "HP Inc."
+      },
+      {
+        "name": "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.51.36231",
+        "version": "14.51.36231",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Microsoft Windows Desktop Runtime - 6.0.36 (x64)",
+        "version": "48.144.23186",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "HP Enabling Services",
+        "version": "0.1.48",
+        "publisher": "HP Inc."
+      },
+      {
+        "name": "Microsoft Visual Studio Installer",
+        "version": "4.0.2167.44905",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "HP PSDr NTService Component",
+        "version": "11.8.0.0",
+        "publisher": "HP Inc."
+      },
+      {
+        "name": "MySQL Shell",
+        "version": "8.0.43",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Microsoft Visual C++ 2022 X64 Additional Runtime - 14.51.36231",
+        "version": "14.51.36231",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "MySQL Router 8.0",
+        "version": "8.0.43",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Windows App Certification Kit Native Components",
+        "version": "10.1.26100.8249",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Python 3.13.13 Core Interpreter (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Universal CRT Tools x64",
+        "version": "10.1.26100.8249",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Office 16 Click-to-Run Extensibility Component",
+        "version": "16.0.19929.20172",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Python 3.13.13 Standard Library (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Windows SDK DirectX x64 Remote",
+        "version": "10.1.26100.8249",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Java(TM) SE Development Kit 11.0.29 (64-bit)",
+        "version": "11.0.29.0",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Microsoft .NET Host FX Resolver - 6.0.36 (x64)",
+        "version": "48.144.23141",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Python 3.13.13 Add to Path (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Python 3.13.13 Documentation (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "MongoDB Compass",
+        "version": "1.49.7.0",
+        "publisher": "MongoDB Inc"
+      },
+      {
+        "name": "HP One Agent",
+        "version": "1.3.214.7339",
+        "publisher": "HP Inc."
+      },
+      {
+        "name": "Microsoft .NET Runtime - 6.0.36 (x64)",
+        "version": "48.144.23141",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Python 3.13.13 Development Libraries (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      },
+      {
+        "name": "Microsoft .NET Host - 6.0.36 (x64)",
+        "version": "48.144.23141",
+        "publisher": "Microsoft Corporation"
+      },
+      {
+        "name": "Java(TM) SE Development Kit 17.0.12 (64-bit)",
+        "version": "17.0.12.0",
+        "publisher": "Oracle Corporation"
+      },
+      {
+        "name": "Node.js",
+        "version": "24.13.0",
+        "publisher": "Node.js Foundation"
+      },
+      {
+        "name": "Python 3.13.13 pip Bootstrap (64-bit)",
+        "version": "3.13.13150.0",
+        "publisher": "Python Software Foundation"
+      }
+    ],
+    "updates": [
+      {
+        "kb": "KB5087051",
+        "description": "Update"
+      },
+      {
+        "kb": "KB5048779",
+        "description": "Update"
+      },
+      {
+        "kb": "KB5050575",
+        "description": "Update"
+      },
+      {
+        "kb": "KB5054156",
+        "description": "Update"
+      },
+      {
+        "kb": "KB5089549",
+        "description": "Security Update"
+      },
+      {
+        "kb": "KB5092762",
+        "description": "Security Update"
+      }
+    ],
+    "antivirus": {
+      "products": [
+        {
+          "name": "Windows Defender"
+        }
+      ]
+    }
+  },
+  "created_at": "2026-05-22T04:42:03.372658Z"
+}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Intelligence Dashboard{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-cpu"></i> Intelligence Dashboard</h2>
+
+    <div class="row" id="kpiCards">
+        <div class="col-md-3 mb-3"><div class="card text-bg-primary"><div class="card-body text-center"><h3 id="totalAlerts">0</h3><small>Total Alerts</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-warning"><div class="card-body text-center"><h3 id="openAlerts">0</h3><small>Open Alerts</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-danger"><div class="card-body text-center"><h3 id="criticalAlerts">0</h3><small>Critical Alerts</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-info"><div class="card-body text-center"><h3 id="pendingNotifications">0</h3><small>Pending Notifications</small></div></div></div>
+    </div>
+    <div class="row mb-3">
+        <div class="col-md-3 mb-3"><div class="card text-bg-success"><div class="card-body text-center"><h3 id="reportsGenerated">0</h3><small>Reports Generated</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-danger"><div class="card-body text-center"><h3 id="securityViolations">0</h3><small>Security Violations</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-secondary"><div class="card-body text-center"><h3 id="auditEventsToday">0</h3><small>Audit Events Today</small></div></div></div>
+        <div class="col-md-3 mb-3"><div class="card text-bg-danger"><div class="card-body text-center"><h3 id="complianceViolations">0</h3><small>Compliance Violations</small></div></div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card"><div class="card-header">Alerts Trend (7 Days)</div>
+                <div class="card-body"><canvas id="alertsTrendChart" height="200"></canvas></div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card"><div class="card-header">Alerts by Severity</div>
+                <div class="card-body"><canvas id="severityChart" height="200"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <div class="card"><div class="card-header">Recent Alerts</div>
+                <div class="card-body" id="recentAlerts"><div class="text-muted small">Loading...</div></div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card"><div class="card-header">Recent Notifications</div>
+                <div class="card-body" id="recentNotifications"><div class="text-muted small">Loading...</div></div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card"><div class="card-header">Recent Audit Events</div>
+                <div class="card-body" id="recentAuditEvents"><div class="text-muted small">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    const resp = await fetch('/api/intelligence/dashboard');
+    const data = await resp.json();
+    document.getElementById('totalAlerts').textContent = data.total_alerts;
+    document.getElementById('openAlerts').textContent = data.open_alerts;
+    document.getElementById('criticalAlerts').textContent = data.critical_alerts;
+    document.getElementById('pendingNotifications').textContent = data.pending_notifications;
+    document.getElementById('reportsGenerated').textContent = data.reports_generated;
+    document.getElementById('securityViolations').textContent = data.security_violations;
+    document.getElementById('auditEventsToday').textContent = data.audit_events_today;
+    document.getElementById('complianceViolations').textContent = data.compliance_violations;
+
+    if (data.alerts_trend && window.Chart) {
+        new Chart(document.getElementById('alertsTrendChart'), {
+            type: 'line',
+            data: { labels: data.alerts_trend.map(d=>d.date), datasets: [{ label: 'Alerts', data: data.alerts_trend.map(d=>d.count), borderColor: '#0d6efd' }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+    if (data.alerts_by_severity && window.Chart) {
+        new Chart(document.getElementById('severityChart'), {
+            type: 'doughnut',
+            data: { labels: Object.keys(data.alerts_by_severity), datasets: [{ data: Object.values(data.alerts_by_severity) }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    const alertsEl = document.getElementById('recentAlerts');
+    alertsEl.innerHTML = (data.recent_alerts || []).map(a => `<div class="d-flex justify-content-between"><span class="badge bg-${a.severity==='critical'?'danger':a.severity==='warning'?'warning text-dark':'info'} me-2">${a.severity}</span><span class="small">${a.title}</span></div>`).join('') || '<span class="text-muted small">No alerts</span>';
+
+    const notifEl = document.getElementById('recentNotifications');
+    notifEl.innerHTML = (data.recent_notifications || []).map(n => `<div class="small">${n.title}</div>`).join('') || '<span class="text-muted small">No notifications</span>';
+
+    const auditEl = document.getElementById('recentAuditEvents');
+    auditEl.innerHTML = (data.recent_audit_events || []).map(a => `<div class="small"><span class="badge bg-secondary me-1">${a.action}</span>${a.username} - ${a.description}</div>`).join('') || '<span class="text-muted small">No events</span>';
+}
+loadDashboard();
+</script>
+{% endblock %}

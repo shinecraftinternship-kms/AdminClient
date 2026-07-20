@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Compliance{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="bi bi-shield-check"></i> Compliance Logs</h2>
+    </div>
+
+    <div class="card mb-3" id="complianceDashboard">
+        <div class="card-header">Overview</div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3"><h4 id="totalChecks">0</h4><small>Total Checks</small></div>
+                <div class="col-md-3"><h4 id="passCount">0</h4><small>Passed</small></div>
+                <div class="col-md-3"><h4 id="failCount">0</h4><small>Failed</small></div>
+                <div class="col-md-3"><h4 id="complianceRate">0%</h4><small>Compliance Rate</small></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col">
+            <select class="form-select form-select-sm" id="statusFilter">
+                <option value="">All</option>
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+                <option value="waived">Waived</option>
+            </select>
+        </div>
+        <div class="col">
+            <input class="form-control form-control-sm" id="frameworkFilter" placeholder="Framework...">
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead><tr><th>Timestamp</th><th>Check Name</th><th>Framework</th><th>Category</th><th>Status</th><th>Severity</th></tr></thead>
+                <tbody id="complianceBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    const resp = await fetch('/api/intelligence/compliance/dashboard');
+    const d = await resp.json();
+    document.getElementById('totalChecks').textContent = d.total_checks;
+    document.getElementById('passCount').textContent = d.pass_count;
+    document.getElementById('failCount').textContent = d.fail_count;
+    document.getElementById('complianceRate').textContent = d.compliance_rate + '%';
+}
+async function loadCompliance() {
+    const status = document.getElementById('statusFilter').value;
+    const framework = document.getElementById('frameworkFilter').value;
+    const params = new URLSearchParams({ limit: 100 });
+    if (status) params.set('status', status);
+    if (framework) params.set('framework', framework);
+
+    const resp = await fetch('/api/intelligence/compliance?' + params.toString());
+    const data = await resp.json();
+    document.getElementById('complianceBody').innerHTML = (data.results || []).map(c => `<tr class="small">
+        <td class="text-nowrap">${new Date(c.checked_at).toLocaleString()}</td>
+        <td>${c.check_name}</td>
+        <td>${c.framework}</td>
+        <td>${c.category}</td>
+        <td><span class="badge bg-${c.status==='pass'?'success':'danger'}">${c.status}</span></td>
+        <td><span class="badge bg-${c.severity==='critical'?'danger':c.severity==='high'?'warning text-dark':'info'}">${c.severity}</span></td>
+    </tr>`).join('');
+}
+document.getElementById('statusFilter').addEventListener('change', loadCompliance);
+document.getElementById('frameworkFilter').addEventListener('input', loadCompliance);
+loadDashboard();
+loadCompliance();
+</script>
+{% endblock %}

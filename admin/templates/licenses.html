@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block title %}Software Licenses - Scanner Pro{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0"><i class="bi bi-key me-2"></i>Software Licenses</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" id="filterType" style="width:150px">
+            <option value="">All Types</option>
+            <option value="perpetual">Perpetual</option>
+            <option value="subscription">Subscription</option>
+            <option value="trial">Trial</option>
+            <option value="oem">OEM</option>
+        </select>
+        <select class="form-select form-select-sm" id="filterStatus" style="width:150px">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="draft">Draft</option>
+            <option value="expired">Expired</option>
+            <option value="expiring_soon">Expiring Soon</option>
+            <option value="archived">Archived</option>
+        </select>
+        <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search..." style="width:180px">
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadLicenses()"><i class="bi bi-arrow-clockwise"></i></button>
+        <button class="btn btn-sm btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-circle me-1"></i>Create License</button>
+    </div>
+</div>
+
+<div class="row g-3 mb-4" id="statCards">
+    <div class="col-md-3"><div class="card bg-gradient-primary text-white h-100"><div class="card-body"><small class="opacity-75">Total Licenses</small><h3 class="mb-0" id="statTotal">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card bg-gradient-success text-white h-100"><div class="card-body"><small class="opacity-75">Active</small><h3 class="mb-0" id="statActive">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card bg-gradient-danger text-white h-100"><div class="card-body"><small class="opacity-75">Expired</small><h3 class="mb-0" id="statExpired">-</h3></div></div></div>
+    <div class="col-md-3"><div class="card bg-gradient-warning text-white h-100"><div class="card-body"><small class="opacity-75">Expiring Soon</small><h3 class="mb-0" id="statExpiring">-</h3></div></div></div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card bg-dark border-secondary h-100"><div class="card-body"><small class="text-muted">Total Seats</small><h4 class="mb-0" id="statTotalSeats">-</h4></div></div></div>
+    <div class="col-md-3"><div class="card bg-dark border-secondary h-100"><div class="card-body"><small class="text-muted">Used Seats</small><h4 class="mb-0 text-warning" id="statUsedSeats">-</h4></div></div></div>
+    <div class="col-md-3"><div class="card bg-dark border-secondary h-100"><div class="card-body"><small class="text-muted">Total Cost</small><h4 class="mb-0 text-success" id="statCost">-</h4></div></div></div>
+    <div class="col-md-3"><div class="card bg-dark border-secondary h-100"><div class="card-body"><small class="text-muted">Departments</small><h4 class="mb-0" id="statDepts">-</h4></div></div></div>
+</div>
+
+<div class="card bg-dark border-secondary">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>License ID</th>
+                        <th>Software Name</th>
+                        <th>Vendor</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Seats</th>
+                        <th>Expiration Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="licenseTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-dark border-secondary d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="paginationInfo">Showing 0 of 0</small>
+        <nav><ul class="pagination pagination-sm mb-0" id="paginationControls"></ul></nav>
+    </div>
+</div>
+
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Create License</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createForm">
+                    <div class="mb-3">
+                        <label class="form-label">Software Name</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="createSoftwareName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Vendor</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="createVendor" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">License Type</label>
+                        <select class="form-select bg-dark text-white border-secondary" id="createLicenseType" required>
+                            <option value="perpetual">Perpetual</option>
+                            <option value="subscription">Subscription</option>
+                            <option value="trial">Trial</option>
+                            <option value="oem">OEM</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">License Key</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="createLicenseKey" placeholder="XXXXX-XXXXX-XXXXX">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label">Purchased Seats</label>
+                            <input type="number" class="form-control bg-dark text-white border-secondary" id="createSeats" min="1" value="1" required>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Cost ($)</label>
+                            <input type="number" class="form-control bg-dark text-white border-secondary" id="createCost" min="0" step="0.01" value="0">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Expiration Date</label>
+                        <input type="date" class="form-control bg-dark text-white border-secondary" id="createExpiration" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Department</label>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="createDepartment">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreate()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Assign License</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assignLicenseId">
+                <div class="mb-3">
+                    <label class="form-label">Assign To</label>
+                    <select class="form-select bg-dark text-white border-secondary" id="assignType" required>
+                        <option value="Asset">Asset</option>
+                        <option value="Employee">Employee</option>
+                        <option value="Department">Department</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control bg-dark text-white border-secondary" id="assignNotes" rows="3" placeholder="Assignment notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitAssign()">Assign</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>License Detail</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailBody"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentPage = 1;
+const pageSize = 15;
+
+function licenseStatusBadge(status) {
+    const map = {active:'success',draft:'secondary',expired:'danger',expiring_soon:'warning',archived:'secondary'};
+    return `<span class="badge bg-${map[status]||'secondary'}">${escapeHtml((status||'unknown').replace(/_/g,' '))}</span>`;
+}
+
+async function loadDashboard() {
+    try {
+        const res = await fetch('/api/maintenance/analytics/license-dashboard');
+        const data = await res.json();
+        document.getElementById('statTotal').textContent = data.total ?? '-';
+        document.getElementById('statActive').textContent = data.active ?? '-';
+        document.getElementById('statExpired').textContent = data.expired ?? '-';
+        document.getElementById('statExpiring').textContent = data.expiring_soon ?? '-';
+        document.getElementById('statTotalSeats').textContent = data.total_seats ?? '-';
+        document.getElementById('statUsedSeats').textContent = data.used_seats ?? '-';
+        document.getElementById('statCost').textContent = data.total_cost ? '$' + Number(data.total_cost).toLocaleString() : '-';
+        if (data.departments) document.getElementById('statDepts').textContent = data.departments;
+    } catch { showToast('Failed to load license dashboard stats', 'danger'); }
+}
+
+async function loadLicenses(page) {
+    currentPage = page || 1;
+    const params = new URLSearchParams({ page: currentPage, page_size: pageSize });
+    const type = document.getElementById('filterType').value;
+    const status = document.getElementById('filterStatus').value;
+    const search = document.getElementById('searchInput').value.trim();
+    if (type) params.set('license_type', type);
+    if (status) params.set('status', status);
+    if (search) params.set('search', search);
+
+    try {
+        const res = await fetch(`/api/maintenance/licenses?${params}`);
+        const data = await res.json();
+        const items = data.results || data;
+        const total = data.total || items.length;
+        const totalPages = data.pages || Math.ceil(total / pageSize);
+        const tbody = document.getElementById('licenseTableBody');
+
+        if (!items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No licenses found</td></tr>';
+        } else {
+            tbody.innerHTML = items.map(l => `
+                <tr>
+                    <td class="text-nowrap">#${escapeHtml(String(l.id))}</td>
+                    <td>${escapeHtml(l.software_name || '-')}</td>
+                    <td>${escapeHtml(l.vendor || '-')}</td>
+                    <td>${escapeHtml((l.license_type || '-').replace(/_/g,' '))}</td>
+                    <td>${licenseStatusBadge(l.status)}</td>
+                    <td>${l.used_seats ?? 0} / ${l.purchased_seats ?? l.total_seats ?? 0}</td>
+                    <td class="text-nowrap">${l.expiration_date || '-'}</td>
+                    <td class="text-nowrap">
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="viewDetail(${l.id})"><i class="bi bi-eye"></i></button>
+                        <button class="btn btn-sm btn-outline-warning me-1" onclick="editLicense(${l.id})"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-success me-1" onclick="openAssignModal(${l.id})"><i class="bi bi-person-plus"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="archiveLicense(${l.id})"><i class="bi bi-archive"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('paginationInfo').textContent = `Showing ${items.length ? (currentPage-1)*pageSize+1 : 0}-${Math.min(currentPage*pageSize,total)} of ${total}`;
+        renderPagination(totalPages);
+    } catch { showToast('Failed to load licenses', 'danger'); }
+}
+
+function renderPagination(totalPages) {
+    const ul = document.getElementById('paginationControls');
+    ul.innerHTML = '';
+    if (totalPages <= 1) return;
+    const addPage = (p, label, disabled) => {
+        ul.innerHTML += `<li class="page-item ${disabled?'disabled':''}"><a class="page-link bg-dark border-secondary text-white" href="#" onclick="loadLicenses(${p});return false;">${label}</a></li>`;
+    };
+    addPage(currentPage - 1, '&laquo;', currentPage <= 1);
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            ul.innerHTML += `<li class="page-item ${i===currentPage?'active':''}"><a class="page-link bg-dark border-secondary text-white" href="#" onclick="loadLicenses(${i});return false;">${i}</a></li>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            ul.innerHTML += `<li class="page-item disabled"><span class="page-link bg-dark border-secondary text-white">...</span></li>`;
+        }
+    }
+    addPage(currentPage + 1, '&raquo;', currentPage >= totalPages);
+}
+
+function openCreateModal() { new bootstrap.Modal(document.getElementById('createModal')).show(); }
+
+async function submitCreate() {
+    const payload = {
+        software_name: document.getElementById('createSoftwareName').value,
+        vendor: document.getElementById('createVendor').value,
+        license_type: document.getElementById('createLicenseType').value,
+        license_key: document.getElementById('createLicenseKey').value,
+        purchased_seats: parseInt(document.getElementById('createSeats').value) || 1,
+        expiration_date: document.getElementById('createExpiration').value,
+        cost: parseFloat(document.getElementById('createCost').value) || 0,
+        department: document.getElementById('createDepartment').value
+    };
+    if (!payload.software_name || !payload.vendor) { showToast('Software name and vendor are required', 'warning'); return; }
+    try {
+        const res = await fetch('/api/maintenance/licenses', {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+        showToast('License created', 'success');
+        loadLicenses(1); loadDashboard();
+    } catch { showToast('Failed to create license', 'danger'); }
+}
+
+async function editLicense(id) {
+    try {
+        const res = await fetch(`/api/maintenance/licenses/${id}`);
+        const l = await res.json();
+        document.getElementById('createSoftwareName').value = l.software_name || '';
+        document.getElementById('createVendor').value = l.vendor || '';
+        document.getElementById('createLicenseType').value = l.license_type || 'perpetual';
+        document.getElementById('createLicenseKey').value = l.license_key || '';
+        document.getElementById('createSeats').value = l.purchased_seats || 1;
+        document.getElementById('createCost').value = l.cost || 0;
+        document.getElementById('createExpiration').value = l.expiration_date || '';
+        document.getElementById('createDepartment').value = l.department || '';
+        const modal = new bootstrap.Modal(document.getElementById('createModal'));
+        document.querySelector('#createModal .modal-title').innerHTML = '<i class="bi bi-pencil me-2"></i>Edit License';
+        document.querySelector('#createModal .btn-primary').textContent = 'Update';
+        document.querySelector('#createModal .btn-primary').setAttribute('onclick', `submitEdit(${id})`);
+        modal.show();
+    } catch { showToast('Failed to load license', 'danger'); }
+}
+
+async function submitEdit(id) {
+    const payload = {
+        software_name: document.getElementById('createSoftwareName').value,
+        vendor: document.getElementById('createVendor').value,
+        license_type: document.getElementById('createLicenseType').value,
+        license_key: document.getElementById('createLicenseKey').value,
+        purchased_seats: parseInt(document.getElementById('createSeats').value) || 1,
+        expiration_date: document.getElementById('createExpiration').value,
+        cost: parseFloat(document.getElementById('createCost').value) || 0,
+        department: document.getElementById('createDepartment').value
+    };
+    try {
+        const res = await fetch(`/api/maintenance/licenses/${id}`, {
+            method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+        resetCreateForm();
+        showToast('License updated', 'success');
+        loadLicenses(currentPage); loadDashboard();
+    } catch { showToast('Failed to update license', 'danger'); }
+}
+
+function resetCreateForm() {
+    document.getElementById('createForm').reset();
+    document.querySelector('#createModal .modal-title').innerHTML = '<i class="bi bi-plus-circle me-2"></i>Create License';
+    document.querySelector('#createModal .btn-primary').textContent = 'Create';
+    document.querySelector('#createModal .btn-primary').setAttribute('onclick', 'submitCreate()');
+}
+
+function openAssignModal(id) {
+    document.getElementById('assignLicenseId').value = id;
+    document.getElementById('assignNotes').value = '';
+    document.getElementById('assignType').value = 'Asset';
+    new bootstrap.Modal(document.getElementById('assignModal')).show();
+}
+
+async function submitAssign() {
+    const payload = {
+        license_id: document.getElementById('assignLicenseId').value,
+        assignable_type: document.getElementById('assignType').value,
+        notes: document.getElementById('assignNotes').value
+    };
+    try {
+        const res = await fetch('/api/maintenance/licenses/assign', {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        bootstrap.Modal.getInstance(document.getElementById('assignModal')).hide();
+        showToast('License assigned', 'success');
+        loadLicenses(currentPage); loadDashboard();
+    } catch { showToast('Failed to assign license', 'danger'); }
+}
+
+async function viewDetail(id) {
+    try {
+        const res = await fetch(`/api/maintenance/licenses/${id}`);
+        const l = await res.json();
+        document.getElementById('detailBody').innerHTML = `
+            <div class="row g-3">
+                <div class="col-md-6"><strong>License ID:</strong> #${escapeHtml(String(l.id))}</div>
+                <div class="col-md-6"><strong>Status:</strong> ${licenseStatusBadge(l.status)}</div>
+                <div class="col-md-6"><strong>Software:</strong> ${escapeHtml(l.software_name||'-')}</div>
+                <div class="col-md-6"><strong>Vendor:</strong> ${escapeHtml(l.vendor||'-')}</div>
+                <div class="col-md-6"><strong>Type:</strong> ${escapeHtml((l.license_type||'-').replace(/_/g,' '))}</div>
+                <div class="col-md-6"><strong>Department:</strong> ${escapeHtml(l.department||'-')}</div>
+                <div class="col-md-6"><strong>Seats:</strong> ${l.used_seats ?? 0} / ${l.purchased_seats ?? 0}</div>
+                <div class="col-md-6"><strong>Cost:</strong> $${Number(l.cost||0).toLocaleString()}</div>
+                <div class="col-md-6"><strong>License Key:</strong> <code>${escapeHtml(l.license_key||'-')}</code></div>
+                <div class="col-md-6"><strong>Expiration:</strong> ${l.expiration_date||'-'}</div>
+                <div class="col-md-6"><strong>Created:</strong> ${l.created_at?timeAgo(l.created_at):'-'}</div>
+                <div class="col-md-6"><strong>Updated:</strong> ${l.updated_at?timeAgo(l.updated_at):'-'}</div>
+            </div>`;
+        new bootstrap.Modal(document.getElementById('detailModal')).show();
+    } catch { showToast('Failed to load detail', 'danger'); }
+}
+
+async function archiveLicense(id) {
+    if (!confirm('Are you sure you want to archive this license?')) return;
+    try {
+        const res = await fetch(`/api/maintenance/licenses/${id}`, {
+            method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status:'archived'})
+        });
+        if (!res.ok) throw new Error();
+        showToast('License archived', 'success');
+        loadLicenses(currentPage); loadDashboard();
+    } catch { showToast('Failed to archive license', 'danger'); }
+}
+
+document.getElementById('filterType').addEventListener('change', () => loadLicenses(1));
+document.getElementById('filterStatus').addEventListener('change', () => loadLicenses(1));
+let searchTimer;
+document.getElementById('searchInput').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadLicenses(1), 400);
+});
+document.getElementById('createModal').addEventListener('hidden.bs.modal', resetCreateForm);
+
+loadDashboard(); loadLicenses(1);
+</script>
+{% endblock %}

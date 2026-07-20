@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}Settings - Scanner Pro{% endblock %}
+{% block content %}
+
+<h4 class="mb-4"><i class="bi bi-gear me-2"></i>Settings</h4>
+
+<ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabOrganization" type="button">
+            <i class="bi bi-building me-1"></i>Organization
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSecurity" type="button">
+            <i class="bi bi-shield-lock me-1"></i>Security
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabNotifications" type="button">
+            <i class="bi bi-bell me-1"></i>Notifications
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabGeneral" type="button">
+            <i class="bi bi-sliders me-1"></i>General
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Organization Tab -->
+    <div class="tab-pane fade show active" id="tabOrganization" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-building me-2"></i>Organization Information</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Organization Name</label>
+                            <input type="text" class="form-control" id="orgName" placeholder="Your Organization">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Logo URL</label>
+                            <input type="url" class="form-control" id="orgLogoUrl" placeholder="https://example.com/logo.png">
+                            <div class="form-text">Direct URL to your organization logo</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveOrgSettings()"><i class="bi bi-save me-1"></i> Save Organization Settings</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-globe me-2"></i>Regional Settings</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Timezone</label>
+                            <select class="form-select" id="orgTimezone">
+                                <option value="UTC">UTC</option>
+                                <option value="US/Eastern">US/Eastern</option>
+                                <option value="US/Central">US/Central</option>
+                                <option value="US/Pacific">US/Pacific</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="Europe/Berlin">Europe/Berlin</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                <option value="Asia/Shanghai">Asia/Shanghai</option>
+                                <option value="Asia/Kolkata">Asia/Kolkata</option>
+                                <option value="Australia/Sydney">Australia/Sydney</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Currency</label>
+                            <select class="form-select" id="orgCurrency">
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (&euro;)</option>
+                                <option value="GBP">GBP (&pound;)</option>
+                                <option value="JPY">JPY (&yen;)</option>
+                                <option value="INR">INR (&#8377;)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Date Format</label>
+                            <select class="form-select" id="orgDateFormat">
+                                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                                <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Tab -->
+    <div class="tab-pane fade" id="tabSecurity" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-clock-history me-2"></i>Session Management</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Session Timeout</label>
+                            <select class="form-select" id="sessionTimeout">
+                                <option value="15">15 Minutes</option>
+                                <option value="30" selected>30 Minutes</option>
+                                <option value="60">1 Hour</option>
+                                <option value="240">4 Hours</option>
+                                <option value="480">8 Hours</option>
+                                <option value="1440">24 Hours</option>
+                            </select>
+                            <div class="form-text">Automatically logout after inactivity</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSecuritySettings()"><i class="bi bi-save me-1"></i> Save Security Settings</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-shield-exclamation me-2"></i>Account Protection</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Max Login Attempts</label>
+                            <select class="form-select" id="maxLoginAttempts">
+                                <option value="3">3 attempts</option>
+                                <option value="5" selected>5 attempts</option>
+                                <option value="10">10 attempts</option>
+                            </select>
+                            <div class="form-text">Lock account after this many failed attempts</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Lock Duration</label>
+                            <select class="form-select" id="lockDuration">
+                                <option value="15">15 Minutes</option>
+                                <option value="30" selected>30 Minutes</option>
+                                <option value="60">1 Hour</option>
+                                <option value="240">4 Hours</option>
+                            </select>
+                            <div class="form-text">How long to lock the account</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Password Expiry</label>
+                            <select class="form-select" id="passwordExpiry">
+                                <option value="0" selected>Never</option>
+                                <option value="30">30 Days</option>
+                                <option value="60">60 Days</option>
+                                <option value="90">90 Days</option>
+                                <option value="180">180 Days</option>
+                                <option value="365">1 Year</option>
+                            </select>
+                            <div class="form-text">Force password change after this period</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-key me-2"></i>Password Policy</h5>
+                        <div class="small text-secondary">
+                            <div class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> Minimum 8 characters</div>
+                            <div class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> At least one uppercase letter</div>
+                            <div class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> At least one lowercase letter</div>
+                            <div class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> At least one number</div>
+                            <div class="mb-1"><i class="bi bi-check-circle text-success me-1"></i> At least one special character</div>
+                            <div class="mb-1"><i class="bi bi-x-circle text-danger me-1"></i> Cannot be a common password</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications Tab -->
+    <div class="tab-pane fade" id="tabNotifications" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-bell me-2"></i>Notification Preferences</h5>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="notifEmail" checked>
+                            <label class="form-check-label">Email Alerts</label>
+                            <div class="form-text">Receive important alerts via email</div>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="notifInApp" checked>
+                            <label class="form-check-label">In-App Alerts</label>
+                            <div class="form-text">Show notifications within the application</div>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="notifDailySummary">
+                            <label class="form-check-label">Daily Summary Reports</label>
+                            <div class="form-text">Receive a daily summary of system activity</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveNotificationSettings()"><i class="bi bi-save me-1"></i> Save Notification Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- General Tab -->
+    <div class="tab-pane fade" id="tabGeneral" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-shield-check me-2"></i>Registration</h5>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="autoApprove">
+                            <label class="form-check-label">Auto-approve new clients</label>
+                            <div class="form-text">New clients will be approved immediately</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Stale Threshold</label>
+                            <select class="form-select" id="staleThreshold">
+                                <option value="1800">30 minutes</option>
+                                <option value="3600">1 hour</option>
+                                <option value="7200" selected>2 hours</option>
+                                <option value="14400">4 hours</option>
+                                <option value="28800">8 hours</option>
+                                <option value="86400">24 hours</option>
+                            </select>
+                            <div class="form-text">Clients not seen within this period are marked as stale</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveSettings()"><i class="bi bi-save me-1"></i> Save Settings</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-clock me-2"></i>Scanning</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Default Scan Interval</label>
+                            <select class="form-select" id="defaultScanInterval">
+                                <option value="300">Every 5 minutes</option>
+                                <option value="900">Every 15 minutes</option>
+                                <option value="1800">Every 30 minutes</option>
+                                <option value="3600" selected>Every 1 hour</option>
+                                <option value="7200">Every 2 hours</option>
+                                <option value="86400">Every 24 hours</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-outline-success" onclick="scanAdminServer()"><i class="bi bi-server me-1"></i> Scan This Server Now</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-people me-2"></i>Client Groups</h5>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="newGroupName" placeholder="Group name...">
+                            <button class="btn btn-outline-primary" onclick="createGroup()"><i class="bi bi-plus-lg"></i> Add</button>
+                        </div>
+                        <div id="groupsList"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3"><i class="bi bi-info-circle me-2"></i>System Info</h5>
+                        <div class="mb-2">
+                            <span class="text-secondary">Admin Server Key:</span>
+                            <code id="adminClientKey" class="ms-2">---</code>
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-secondary">Server Version:</span>
+                            <span class="ms-2">v2.1</span>
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-secondary">Database:</span>
+                            <span class="ms-2">SQLite</span>
+                        </div>
+                        <div class="mb-2">
+                            <span class="text-secondary">Total Scans:</span>
+                            <span class="ms-2" id="totalScans">---</span>
+                        </div>
+                        <button class="btn btn-outline-danger mt-3" onclick="exportBackup()"><i class="bi bi-database-down"></i> Export Backup (JSON)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/settings.js"></script>
+{% endblock %}

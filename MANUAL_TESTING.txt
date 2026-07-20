@@ -1,0 +1,910 @@
+================================================================================
+              SYSTEM SCANNER PRO v3.0 - MANUAL TESTING DOCUMENT
+================================================================================
+  Project   : AI-Powered Distributed Endpoint Monitoring & Remote Scanning Platform
+  Version   : 3.0
+  Date      : 18 July 2026
+  Team      : Kailasanathan (Leader), Saagr, Mega
+  Total     : 100 Critical Test Cases (Condensed from 354)
+================================================================================
+
+
+================================================================================
+                        TEAM WORK DISTRIBUTION
+================================================================================
+
+  +-----+-------------------+-----------+------------------------------------+
+  | No. | Member            | Role      | Modules Assigned                  |
+  +-----+-------------------+-----------+------------------------------------+
+  |  1  | Kailasanathan     | Leader    | Auth, Dashboard, Client Mgmt,     |
+  |     |                   |           | Scanning, Settings, Agent,         |
+  |     |                   |           | WebSocket, API, Security, DB      |
+  +-----+-------------------+-----------+------------------------------------+
+  |  2  | Saagr             | Tester    | Assets, Maintenance, Licenses,     |
+  |     |                   |           | Organization, Compliance, Alerts  |
+  +-----+-------------------+-----------+------------------------------------+
+  |  3  | Mega              | Tester    | Intelligence, Reports, Audit,      |
+  |     |                   |           | Monitoring, Notifications,         |
+  |     |                   |           | Usability, Performance            |
+  +-----+-------------------+-----------+------------------------------------+
+
+
+================================================================================
+                    MODULE 1: AUTHENTICATION
+================================================================================
+
+  Tested By: Kailasanathan
+
+  1.1 LOGIN / AUTHENTICATION
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify login with valid credentials    | [ ] Pending   | Kailas.   |
+  | 2  | Verify login with invalid credentials  | [ ] Pending   | Kailas.   |
+  | 3  | Verify SQL injection on login fields   | [ ] Pending   | Kailas.   |
+  | 4  | Verify JWT access + refresh token pair | [ ] Pending   | Kailas.   |
+  | 5  | Verify role-based access (Super/Admin/ | [ ] Pending   | Kailas.   |
+  |    |   Viewer) restricts pages correctly    |               |           |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Authentication):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 2: DASHBOARD
+================================================================================
+
+  Tested By: Kailasanathan
+
+  2.1 DASHBOARD
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify dashboard loads with stats      | [ ] Pending   | Kailas.   |
+  | 2  | Verify online/offline device counts    | [ ] Pending   | Kailas.   |
+  | 3  | Verify charts render correctly         | [ ] Pending   | Kailas.   |
+  | 4  | Verify search/filter on dashboard      | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Dashboard):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 3: CLIENT MANAGEMENT & SCANNING
+================================================================================
+
+  Tested By: Kailasanathan
+
+  3.1 CLIENT MANAGEMENT
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify client registration & approval  | [ ] Pending   | Kailas.   |
+  | 2  | Verify auto-approve toggle in settings | [ ] Pending   | Kailas.   |
+  | 3  | Verify client detail page loads data   | [ ] Pending   | Kailas.   |
+  | 4  | Verify scan config per client          | [ ] Pending   | Kailas.   |
+  | 5  | Verify scan history with filter        | [ ] Pending   | Kailas.   |
+  | 6  | Verify hardware/software change detect | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Client Management):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 4: SETTINGS
+================================================================================
+
+  Tested By: Kailasanathan
+
+  4.1 SETTINGS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify auto-approve toggle saves       | [ ] Pending   | Kailas.   |
+  | 2  | Verify stale threshold config          | [ ] Pending   | Kailas.   |
+  | 3  | Verify scan interval config            | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Settings):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 5: ASSET MANAGEMENT
+================================================================================
+
+  Tested By: Saagr
+
+  5.1 ASSET MANAGEMENT
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify create new asset                | [ ] Pending   | Saagr     |
+  | 2  | Verify asset status transitions        | [ ] Pending   | Saagr     |
+  |    | (Draft->Pending->Approved->Purchased   |               |           |
+  |    |  ->Available->Assigned->Maintenance    |               |           |
+  |    |  ->Retired->Disposed)                 |               |           |
+  | 3  | Verify assign asset to employee        | [ ] Pending   | Saagr     |
+  | 4  | Verify return/transfer asset           | [ ] Pending   | Saagr     |
+  | 5  | Verify asset search and filter         | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Asset Management):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 6: MAINTENANCE MANAGEMENT
+================================================================================
+
+  Tested By: Saagr
+
+  6.1 MAINTENANCE
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify create maintenance record       | [ ] Pending   | Saagr     |
+  | 2  | Verify maintenance status workflow     | [ ] Pending   | Saagr     |
+  |    | (9 status states)                      |               |           |
+  | 3  | Verify cost tracking (est vs actual)   | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Maintenance):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 7: LICENSE MANAGEMENT
+================================================================================
+
+  Tested By: Saagr
+
+  7.1 LICENSE MANAGEMENT
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify create license record           | [ ] Pending   | Saagr     |
+  | 2  | Verify seat tracking & utilization %   | [ ] Pending   | Saagr     |
+  | 3  | Verify license assignment to asset/    | [ ] Pending   | Saagr     |
+  |    | employee/dept                         |               |           |
+  | 4  | Verify license expiration tracking     | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (License Management):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 8: ORGANIZATION MANAGEMENT
+================================================================================
+
+  Tested By: Saagr
+
+  8.1 ORGANIZATION MANAGEMENT
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify create employee with status     | [ ] Pending   | Saagr     |
+  | 2  | Verify create department with budget   | [ ] Pending   | Saagr     |
+  | 3  | Verify create location with address    | [ ] Pending   | Saagr     |
+  | 4  | Verify CSV import/export employees     | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Organization):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 9: COMPLIANCE TRACKING
+================================================================================
+
+  Tested By: Saagr
+
+  9.1 COMPLIANCE
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify compliance checks (ISO/ITIL/    | [ ] Pending   | Saagr     |
+  |    | SOC2/GDPR)                             |               |           |
+  | 2  | Verify compliance violation alerts     | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Compliance):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 10: ALERT MANAGEMENT
+================================================================================
+
+  Tested By: Saagr
+
+  10.1 ALERTS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify alert create/edit/delete        | [ ] Pending   | Saagr     |
+  | 2  | Verify alert severity levels           | [ ] Pending   | Saagr     |
+  | 3  | Verify alert acknowledge/dismiss       | [ ] Pending   | Saagr     |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Alerts):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 11: INTELLIGENCE & REPORTS
+================================================================================
+
+  Tested By: Mega
+
+  11.1 INTELLIGENCE DASHBOARD
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify intelligence dashboard loads    | [ ] Pending   | Mega      |
+  | 2  | Verify charts and analytics render     | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  11.2 REPORT GENERATION
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 3  | Verify generate key report types       | [ ] Pending   | Mega      |
+  |    | (Asset Inventory, Device Health,       |               |           |
+  |    |  License Compliance, Audit)            |               |           |
+  | 4  | Verify PDF/Excel/CSV export            | [ ] Pending   | Mega      |
+  | 5  | Verify scheduled report create/edit    | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Intelligence & Reports):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                    MODULE 12: NOTIFICATIONS & AUDIT
+================================================================================
+
+  Tested By: Mega
+
+  12.1 NOTIFICATIONS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify notifications list loads        | [ ] Pending   | Mega      |
+  | 2  | Verify mark as read/unread             | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  12.2 AUDIT LOGS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 3  | Verify audit log page loads            | [ ] Pending   | Mega      |
+  | 4  | Verify CRUD actions are logged         | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Notifications & Audit):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 13: CLIENT AGENT
+================================================================================
+
+  Tested By: Kailasanathan
+
+  13.1 CLIENT AGENT FUNCTIONALITY
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify agent starts & connects         | [ ] Pending   | Kailas.   |
+  | 2  | Verify auto-discovery via UDP (45000)  | [ ] Pending   | Kailas.   |
+  | 3  | Verify heartbeat every 30 seconds      | [ ] Pending   | Kailas.   |
+  | 4  | Verify USB/file/process/software       | [ ] Pending   | Kailas.   |
+  |    | monitors detect changes                |               |           |
+  | 5  | Verify offline event queue & replay    | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Client Agent):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 14: WEBSOCKET & REAL-TIME
+================================================================================
+
+  Tested By: Kailasanathan
+
+  14.1 WEBSOCKET COMMUNICATION
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify agent WS connects (HMAC auth)  | [ ] Pending   | Kailas.   |
+  | 2  | Verify dashboard WS connects           | [ ] Pending   | Kailas.   |
+  | 3  | Verify scan_now command via WS         | [ ] Pending   | Kailas.   |
+  | 4  | Verify auto-reconnect on disconnect    | [ ] Pending   | Kailas.   |
+  | 5  | Verify live status updates to dashboard| [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (WebSocket):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 15: HEALTH SCORING & MONITORING
+================================================================================
+
+  Tested By: Mega
+
+  15.1 DEVICE HEALTH
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify health score calculation (0-100)| [ ] Pending   | Mega      |
+  | 2  | Verify Healthy/Warning/Critical status | [ ] Pending   | Mega      |
+  | 3  | Verify monitoring page loads           | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  15.2 ANOMALY DETECTION
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 4  | Verify failure risk scoring (0-100)    | [ ] Pending   | Mega      |
+  | 5  | Verify capacity forecasting            | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Health & Monitoring):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 16: API TESTING
+================================================================================
+
+  Tested By: Kailasanathan
+
+  16.1 REST API ENDPOINTS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify API CRUD endpoints (clients,    | [ ] Pending   | Kailas.   |
+  |    | assets, settings, organization)        |               |           |
+  | 2  | Verify proper HTTP status codes        | [ ] Pending   | Kailas.   |
+  |    | (200, 201, 400, 401, 403, 404, 500)    |               |           |
+  | 3  | Verify API key authentication          | [ ] Pending   | Kailas.   |
+  | 4  | Verify pagination & filtering          | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (API):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 17: INTEGRATION TESTING
+================================================================================
+
+  Tested By: Full Team
+
+  17.1 END-TO-END INTEGRATION
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Full flow: Agent start -> discover ->  | [ ] Pending   | Kailas.   |
+  |    | register -> approve -> scan -> dashboard|              |           |
+  | 2  | Full flow: USB insert -> event detect  | [ ] Pending   | Mega      |
+  |    | -> WebSocket push -> alert generated   |               |           |
+  | 3  | Full flow: Asset create -> assign to   | [ ] Pending   | Saagr     |
+  |    | employee -> maintenance -> retire       |               |           |
+  | 4  | Full flow: License create -> assign -> | [ ] Pending   | Saagr     |
+  |    | expire -> compliance violation alert    |               |           |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Integration):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 18: SECURITY TESTING
+================================================================================
+
+  Tested By: Kailasanathan
+
+  18.1 SECURITY
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify JWT token expiry & refresh      | [ ] Pending   | Kailas.   |
+  | 2  | Verify HMAC-SHA256 agent auth          | [ ] Pending   | Kailas.   |
+  | 3  | Verify role-based access control       | [ ] Pending   | Kailas.   |
+  | 4  | Verify SQL injection prevention        | [ ] Pending   | Kailas.   |
+  | 5  | Verify login brute-force block         | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Security):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 19: ERROR HANDLING & EDGE CASES
+================================================================================
+
+  Tested By: Full Team
+
+  19.1 ERROR HANDLING
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify network disconnection handling  | [ ] Pending   | Kailas.   |
+  | 2  | Verify server restart recovery         | [ ] Pending   | Kailas.   |
+  | 3  | Verify expired JWT token refresh       | [ ] Pending   | Kailas.   |
+  | 4  | Verify client agent crash recovery     | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Error Handling):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 20: SCHEDULING
+================================================================================
+
+  Tested By: Kailasanathan
+
+  20.1 SCHEDULED TASKS
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify scheduled scan triggers on time | [ ] Pending   | Kailas.   |
+  | 2  | Verify stale/health/alert checkers     | [ ] Pending   | Kailas.   |
+  |    | run on schedule                        |               |           |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Scheduling):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 21: DATABASE TESTING
+================================================================================
+
+  Tested By: Kailasanathan
+
+  21.1 DATABASE INTEGRITY
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify migrations run without error    | [ ] Pending   | Kailas.   |
+  | 2  | Verify foreign key & unique constraints| [ ] Pending   | Kailas.   |
+  | 3  | Verify cascade deletes work properly   | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Database):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 22: PERFORMANCE TESTING
+================================================================================
+
+  Tested By: Mega
+
+  22.1 PERFORMANCE
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify dashboard loads under 3 seconds | [ ] Pending   | Mega      |
+  | 2  | Verify scan history with 1000+ records | [ ] Pending   | Mega      |
+  | 3  | Verify WebSocket handles 10+ agents    | [ ] Pending   | Mega      |
+  | 4  | Verify concurrent user simulation (5+) | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Performance):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 23: COMPATIBILITY & USABILITY
+================================================================================
+
+  Tested By: Kailasanathan + Mega
+
+  23.1 COMPATIBILITY
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify Chrome (latest) full support    | [ ] Pending   | Kailas.   |
+  | 2  | Verify client agent on Windows 11      | [ ] Pending   | Kailas.   |
+  | 3  | Verify client agent on Ubuntu 22.04    | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  23.2 USABILITY
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 4  | Verify responsive layout (mobile)      | [ ] Pending   | Mega      |
+  | 5  | Verify confirm dialogs on delete       | [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Compatibility & Usability):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 24: EXPORT TESTING
+================================================================================
+
+  Tested By: Mega
+
+  24.1 PDF / EXCEL / CSV EXPORT
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify PDF report content accuracy     | [ ] Pending   | Mega      |
+  | 2  | Verify Excel report data correctness   | [ ] Pending   | Mega      |
+  | 3  | Verify large dataset export (>10K rows)| [ ] Pending   | Mega      |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Export):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+              MODULE 25: ADMIN PANEL & ACCOUNT
+================================================================================
+
+  Tested By: Kailasanathan
+
+  25.1 ADMIN PANEL
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 1  | Verify admin page loads                | [ ] Pending   | Kailas.   |
+  | 2  | Verify user management CRUD            | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  25.2 ACCOUNT PAGE
+  ---------------------------------------------------------------------------
+  | #  | Test Case                              | Status        | Assigned  |
+  |----|----------------------------------------|---------------|-----------|
+  | 3  | Verify password change functionality   | [ ] Pending   | Kailas.   |
+  +----|----------------------------------------|---------------|-----------+
+
+  ERROR DESCRIPTION (Admin & Account):
+  +==========================================================================+
+  | Test Case #  :                                                           |
+  | Error Found  :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                          |
+  | 2.                                                                          |
+  | Expected     :                                                           |
+  | Actual       :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                      TESTING SUMMARY DASHBOARD
+================================================================================
+
+  +--------------------------------------+----------+----------+----------+
+  | Module                               | Kailas.  | Saagr    | Mega     |
+  +--------------------------------------+----------+----------+----------+
+  | 1.  Authentication                   |   5 TCs  |    -     |    -     |
+  | 2.  Dashboard                        |   4 TCs  |    -     |    -     |
+  | 3.  Client Management & Scanning     |   6 TCs  |    -     |    -     |
+  | 4.  Settings                         |   3 TCs  |    -     |    -     |
+  | 5.  Asset Management                 |    -     |   5 TCs  |    -     |
+  | 6.  Maintenance Management           |    -     |   3 TCs  |    -     |
+  | 7.  License Management               |    -     |   4 TCs  |    -     |
+  | 8.  Organization Management          |    -     |   4 TCs  |    -     |
+  | 9.  Compliance Tracking              |    -     |   2 TCs  |    -     |
+  | 10. Alert Management                 |    -     |   3 TCs  |    -     |
+  | 11. Intelligence & Reports           |    -     |    -     |   5 TCs  |
+  | 12. Notifications & Audit            |    -     |    -     |   4 TCs  |
+  | 13. Client Agent                     |   5 TCs  |    -     |    -     |
+  | 14. WebSocket & Real-Time            |   5 TCs  |    -     |    -     |
+  | 15. Health & Monitoring              |    -     |    -     |   5 TCs  |
+  | 16. API Testing                      |   4 TCs  |    -     |    -     |
+  | 17. Integration                      |   2 TCs  |   2 TCs  |    -     |
+  | 18. Security                         |   5 TCs  |    -     |    -     |
+  | 19. Error Handling                   |   4 TCs  |    -     |    -     |
+  | 20. Scheduling                       |   2 TCs  |    -     |    -     |
+  | 21. Database                         |   3 TCs  |    -     |    -     |
+  | 22. Performance                      |    -     |    -     |   4 TCs  |
+  | 23. Compatibility & Usability        |   3 TCs  |    -     |   2 TCs  |
+  | 24. Export                           |    -     |    -     |   3 TCs  |
+  | 25. Admin & Account                  |   3 TCs  |    -     |    -     |
+  +--------------------------------------+----------+----------+----------+
+  | TOTAL                                | 54 TCs   | 23 TCs   | 23 TCs   |
+  +--------------------------------------+----------+----------+----------+
+  | GRAND TOTAL                          |             100 Test Cases        |
+  +---------------------------------------------------------+---------------+
+
+
+================================================================================
+                      STATUS LEGEND
+================================================================================
+
+  [ ] Pending   - Not started yet
+  [~] In Progress - Currently being tested
+  [x] Passed    - Test passed successfully
+  [!] Failed    - Test failed (error logged in description box)
+  [-] Skipped   - Not applicable / blocked
+  [B] Blocked   - Cannot test due to dependency
+
+
+================================================================================
+                      SEVERITY LEVELS
+================================================================================
+
+  Critical  - System crash, data loss, security breach, blocks all users
+  Major     - Feature broken, no workaround, degrades core functionality
+  Minor     - Feature partially broken, workaround exists
+  Trivial   - Cosmetic, spelling, alignment issues
+
+
+================================================================================
+                      BUG REPORT TEMPLATE
+================================================================================
+
+  +==========================================================================+
+  | Bug ID       : BUG-XXX                                                   |
+  | Module       :                                                           |
+  | Reported By  :                                                           |
+  | Date         :                                                           |
+  | Severity     : [ ] Critical  [ ] Major  [ ] Minor  [ ] Trivial           |
+  | Priority     : [ ] P1-Immediate  [ ] P2-High  [ ] P3-Medium  [ ] P4-Low  |
+  | Status       : [ ] Open  [ ] In Progress  [ ] Fixed  [ ] Verified        |
+  +==========================================================================+
+  | Summary      :                                                           |
+  +==========================================================================+
+  | Description  :                                                           |
+  |              :                                                           |
+  +==========================================================================+
+  | Steps to Reproduce:                                                      |
+  | 1.                                                                         |
+  | 2.                                                                         |
+  | 3.                                                                         |
+  +==========================================================================+
+  | Expected Result:                                                         |
+  |              :                                                           |
+  +==========================================================================+
+  | Actual Result:                                                           |
+  |              :                                                           |
+  +==========================================================================+
+  | Environment  : Browser / OS / Python Version / Screen Resolution         |
+  +==========================================================================+
+  | Screenshots  : [ ] Attached                                              |
+  +==========================================================================+
+  | Assigned To  :                                                           |
+  | Fixed In     :                                                           |
+  | Verified By  :                                                           |
+  +==========================================================================+
+
+
+================================================================================
+                          END OF DOCUMENT
+  Prepared by: Kailasanathan (Team Leader)
+  Team: Kailasanathan, Saagr, Mega
+  Project: System Scanner Pro v3.0
+  Date: 18 July 2026
+================================================================================

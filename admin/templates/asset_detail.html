@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Asset Detail - ITAMS{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <a href="/assets/" class="text-secondary text-decoration-none me-3"><i class="bi bi-arrow-left"></i> Back to Assets</a>
+        <h4 class="d-inline mb-0" id="assetTitle">Loading...</h4>
+    </div>
+    <div class="d-flex gap-2" id="actionButtons"></div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <ul class="nav nav-tabs mb-3" id="detailTabs">
+            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#overviewTab">Overview</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#financialTab">Financial</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#assignmentsTab">Assignments</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#transfersTab">Transfers</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#historyTab">History</a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#childrenTab">Children</a></li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="overviewTab">
+                <div class="card"><div class="card-body" id="overviewContent">
+                    <div class="text-center py-4 text-secondary"><div class="spinner-border spinner-border-sm me-2"></div>Loading...</div>
+                </div></div>
+            </div>
+            <div class="tab-pane fade" id="financialTab">
+                <div class="card"><div class="card-body" id="financialContent"></div></div>
+            </div>
+            <div class="tab-pane fade" id="assignmentsTab">
+                <div class="card"><div class="card-body" id="assignmentsContent"></div></div>
+            </div>
+            <div class="tab-pane fade" id="transfersTab">
+                <div class="card"><div class="card-body" id="transfersContent"></div></div>
+            </div>
+            <div class="tab-pane fade" id="historyTab">
+                <div class="card"><div class="card-body" id="historyContent"></div></div>
+            </div>
+            <div class="tab-pane fade" id="childrenTab">
+                <div class="card"><div class="card-body" id="childrenContent"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3"><div class="card-body" id="statusCard"></div></div>
+        <div class="card mb-3"><div class="card-body" id="qrCard"></div></div>
+        <div class="card mb-3"><div class="card-body" id="ownershipCard"></div></div>
+        <div class="card mb-3"><div class="card-body" id="warrantyCard"></div></div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>const ASSET_KEY = "{{ asset_key }}";</script>
+<script src="/static/js/asset_detail.js"></script>
+{% endblock %}
