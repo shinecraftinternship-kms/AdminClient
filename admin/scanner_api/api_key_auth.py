@@ -37,6 +37,7 @@ class ApiKey(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        app_label = "scanner_api"
         db_table = "api_keys"
         ordering = ["-created_at"]
 
