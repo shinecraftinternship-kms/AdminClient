@@ -1,6 +1,6 @@
 import os
 import sys
-import types
+import importlib.util
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
@@ -14,29 +14,30 @@ PARENT_DIR = os.path.dirname(PROJECT_ROOT)
 if PARENT_DIR not in sys.path:
     sys.path.insert(0, PARENT_DIR)
 
-if "AdminClient" not in sys.modules:
-    _admin_pkg = types.ModuleType("AdminClient")
-    _admin_pkg.__path__ = [PROJECT_ROOT]
-    _admin_pkg.__package__ = "AdminClient"
-    sys.modules["AdminClient"] = _admin_pkg
 
-if "AdminClient.admin" not in sys.modules:
-    _admin_sub = types.ModuleType("AdminClient.admin")
-    _admin_sub.__path__ = [ADMIN_DIR]
-    _admin_sub.__package__ = "AdminClient.admin"
-    sys.modules["AdminClient.admin"] = _admin_sub
-    sys.modules["AdminClient"].admin = _admin_sub
+def _make_package(name, path):
+    """Create a package module with proper __spec__ for relative imports."""
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(
+        name,
+        origin=os.path.join(path, "__init__.py"),
+        submodule_search_locations=[path],
+    )
+    mod = importlib.util.module_from_spec(spec)
+    mod.__package__ = name
+    mod.__path__ = [path]
+    sys.modules[name] = mod
+    return mod
 
-for sub in os.listdir(ADMIN_DIR):
+
+_make_package("AdminClient", PROJECT_ROOT)
+_make_package("AdminClient.admin", ADMIN_DIR)
+
+for sub in sorted(os.listdir(ADMIN_DIR)):
     sub_path = os.path.join(ADMIN_DIR, sub)
     if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, "__init__.py")):
-        mod_name = f"AdminClient.admin.{sub}"
-        if mod_name not in sys.modules:
-            mod = types.ModuleType(mod_name)
-            mod.__path__ = [sub_path]
-            mod.__package__ = mod_name
-            sys.modules[mod_name] = mod
-            setattr(sys.modules["AdminClient.admin"], sub, mod)
+        _make_package(f"AdminClient.admin.{sub}", sub_path)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
 
