@@ -9,6 +9,7 @@ gunicorn>=22.0
 openpyxl>=3.1
 qrcode[pil]>=7.4
 Pillow>=10.0
+whitenoise>=6.5
 
 # WebSocket / Real-Time
 channels>=4.0

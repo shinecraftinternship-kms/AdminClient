@@ -6,18 +6,18 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me-in-production")
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1", "yes")
 ALLOWED_HOSTS_RAW = os.getenv("DJANGO_ALLOWED_HOSTS", "*")
 ALLOWED_HOSTS = ["*"] if ALLOWED_HOSTS_RAW.strip() == "*" else ALLOWED_HOSTS_RAW.split(",")
 
+IS_VERCEL = os.getenv("VERCEL", "0") == "1"
+
 INSTALLED_APPS = [
-    "daphne",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "channels",
     "rest_framework",
     "corsheaders",
     "scanner_api",
@@ -26,8 +26,13 @@ INSTALLED_APPS = [
     "intelligence",
 ]
 
+if not IS_VERCEL:
+    INSTALLED_APPS.insert(0, "daphne")
+    INSTALLED_APPS.insert(5, "channels")
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -68,37 +73,34 @@ LOGIN_REDIRECT_URL = "/"
 WSGI_APPLICATION = "django_admin.wsgi.application"
 ASGI_APPLICATION = "django_admin.asgi.application"
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-        "CONFIG": {
-            "capacity": 1000,
+if not IS_VERCEL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+            "CONFIG": {
+                "capacity": 1000,
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+            "CONFIG": {
+                "capacity": 1000,
+            },
+        },
+    }
 
-# Channel layers config for production (uncomment to use Redis):
-# CHANNEL_LAYERS = {
-#     "default": {
-#         "BACKEND": "channels_redis.core.RedisChannelLayer",
-#         "CONFIG": {
-#             "hosts": [("127.0.0.1", 6379)],
-#         },
-#     },
-# }
-
-# WebSocket Configuration
 WS_HEARTBEAT_INTERVAL = 30
 WS_AGENT_GROUP_PREFIX = "agent"
 WS_DASHBOARD_GROUP = "dashboard"
 
-# Monitoring thresholds (seconds)
 MONITORING_HEARTBEAT_INTERVAL = 30
 MONITORING_WARNING_SECONDS = 300
 MONITORING_OFFLINE_SECONDS = 900
 MONITORING_CRITICAL_SECONDS = 1800
 
-# APScheduler Configuration
 SCHEDULER_CONFIG = {
     "job_defaults": {
         "coalesce": True,
@@ -107,26 +109,44 @@ SCHEDULER_CONFIG = {
     },
 }
 
-# JWT Configuration
 JWT_SECRET = SECRET_KEY
 JWT_ALGORITHM = "HS256"
 JWT_ACCESS_EXPIRY_MINUTES = 60
 JWT_REFRESH_EXPIRY_DAYS = 7
 JWT_ISSUER = "system-scanner-pro"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.path.join(os.environ.get("SCANNER_DATA_DIR", str(BASE_DIR / "data")), "scanner.db"),
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+if DATABASE_URL:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("DB_NAME", ""),
+            "USER": os.getenv("DB_USER", ""),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", ""),
+            "PORT": os.getenv("DB_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.path.join(os.environ.get("SCANNER_DATA_DIR", str(BASE_DIR / "data")), "scanner.db"),
+        }
+    }
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True
 
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
