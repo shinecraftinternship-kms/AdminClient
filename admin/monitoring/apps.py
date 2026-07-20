@@ -13,6 +13,10 @@ class MonitoringConfig(AppConfig):
     verbose_name = "Inventory & Monitoring"
 
     def ready(self):
+        if IS_VERCEL:
+            logger.info("Vercel mode: skipping scheduler and event bus init")
+            return
+
         try:
             from . import subscribers  # noqa: F401 — registers event bus subscribers
             logger.info("Event bus subscribers loaded")
