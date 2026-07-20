@@ -1,6 +1,6 @@
 import os
 import sys
-import importlib.util
+import types
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
@@ -16,17 +16,13 @@ if PARENT_DIR not in sys.path:
 
 
 def _make_package(name, path):
-    """Create a package module with proper __spec__ for relative imports."""
+    """Create a package module with __path__ and __package__ for relative imports."""
     if name in sys.modules:
         return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(
-        name,
-        origin=os.path.join(path, "__init__.py"),
-        submodule_search_locations=[path],
-    )
-    mod = importlib.util.module_from_spec(spec)
-    mod.__package__ = name
+    mod = types.ModuleType(name)
     mod.__path__ = [path]
+    mod.__package__ = name
+    mod.__file__ = os.path.join(path, "__init__.py")
     sys.modules[name] = mod
     return mod
 
