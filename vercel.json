@@ -1,5 +1,4 @@
 {
-  "buildCommand": "python build.py",
   "routes": [
     {
       "src": "/static/(.*)",
