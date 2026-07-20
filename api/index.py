@@ -41,5 +41,7 @@ for sub in os.listdir(ADMIN_DIR):
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
 
 from django.core.wsgi import get_wsgi_application
+from mangum import Mangum
 
 application = get_wsgi_application()
+handler = Mangum(application)
