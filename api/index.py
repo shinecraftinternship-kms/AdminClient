@@ -1,44 +1,66 @@
 import os
 import sys
 import types
+import traceback
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
+_log = []
 
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-if ADMIN_DIR not in sys.path:
-    sys.path.insert(0, ADMIN_DIR)
+def _diag_app(environ, start_response):
+    body = "\n".join(_log).encode()
+    start_response("200 OK", [("Content-Type", "text/plain"), ("Content-Length", str(len(body)))])
+    return [body]
 
-PARENT_DIR = os.path.dirname(PROJECT_ROOT)
-if PARENT_DIR not in sys.path:
-    sys.path.insert(0, PARENT_DIR)
+try:
+    _log.append("STEP1: paths")
 
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
 
-def _make_package(name, path):
-    if name in sys.modules:
-        return sys.modules[name]
-    mod = types.ModuleType(name)
-    mod.__path__ = [path]
-    mod.__package__ = name
-    mod.__file__ = os.path.join(path, "__init__.py")
-    sys.modules[name] = mod
-    return mod
+    for p in [PROJECT_ROOT, ADMIN_DIR, os.path.dirname(PROJECT_ROOT)]:
+        if p not in sys.path:
+            sys.path.insert(0, p)
 
+    _log.append(f"STEP2: VERCEL={os.getenv('VERCEL', 'unset')}")
 
-_make_package("AdminClient", PROJECT_ROOT)
-_make_package("AdminClient.admin", ADMIN_DIR)
+    def _make_package(name, path):
+        if name in sys.modules:
+            return sys.modules[name]
+        mod = types.ModuleType(name)
+        mod.__path__ = [path]
+        mod.__package__ = name
+        mod.__file__ = os.path.join(path, "__init__.py")
+        sys.modules[name] = mod
+        return mod
 
-for sub in sorted(os.listdir(ADMIN_DIR)):
-    sub_path = os.path.join(ADMIN_DIR, sub)
-    if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, "__init__.py")):
-        _make_package(f"AdminClient.admin.{sub}", sub_path)
+    _make_package("AdminClient", PROJECT_ROOT)
+    _make_package("AdminClient.admin", ADMIN_DIR)
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
+    for sub in sorted(os.listdir(ADMIN_DIR)):
+        sub_path = os.path.join(ADMIN_DIR, sub)
+        if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, "__init__.py")):
+            _make_package(f"AdminClient.admin.{sub}", sub_path)
 
-import django
-django.setup()
+    _log.append("STEP3: packages done")
 
-from django.core.handlers.wsgi import WSGIHandler
+    os.environ["DJANGO_SETTINGS_MODULE"] = "django_admin.settings"
 
-app = WSGIHandler()
+    import django
+    django.setup()
+    _log.append("STEP4: django.setup OK")
+
+    from django.core.handlers.wsgi import WSGIHandler
+    _handler = WSGIHandler()
+    _log.append("STEP5: WSGIHandler OK")
+
+    class _App:
+        def __call__(self, environ, start_response):
+            if environ.get("PATH_INFO") == "/__diag":
+                return _diag_app(environ, start_response)
+            return _handler(environ, start_response)
+
+    app = _App()
+    _log.append("STEP6: READY")
+
+except Exception:
+    _log.append("CRASH: " + traceback.format_exc())
+    app = _diag_app
