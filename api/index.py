@@ -1,9 +1,25 @@
 import os
 import sys
 import types
+import socket
 import traceback
 
 _log = []
+
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    supabase_host = os.getenv("DB_HOST", "")
+    pooler_host = "aws-0-us-east-1.pooler.supabase.com"
+    if supabase_host and host == supabase_host:
+        results = _real_getaddrinfo(pooler_host, port, family, type, proto, flags)
+        if results:
+            return results
+    return _real_getaddrinfo(host, port, family, type, proto, flags)
+
+
+socket.getaddrinfo = _patched_getaddrinfo
 
 
 def _diag(environ, start_response):
