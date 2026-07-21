@@ -2953,7 +2953,7 @@ class ExecutiveAnalyticsView(APIView):
     """Aggregate KPIs from all modules for the executive dashboard."""
 
     def get(self, request):
-        from django.db.models import Count, Sum, Avg
+        from django.db.models import Count, Sum, Avg, F
         from django.utils import timezone
         from datetime import timedelta, date
 
