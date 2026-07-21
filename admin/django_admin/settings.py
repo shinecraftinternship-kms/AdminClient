@@ -80,8 +80,8 @@ TEMPLATES = [
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 
-WSGI_APPLICATION = "django_admin.wsgi.application"
-ASGI_APPLICATION = "django_admin.asgi.application"
+WSGI_APPLICATION = "django_admin.wsgi_handler.application"
+ASGI_APPLICATION = "django_admin.asgi_handler.application"
 
 if not IS_VERCEL:
     CHANNEL_LAYERS = {

@@ -1,22 +1,9 @@
 {
   "installCommand": "pip install -r requirements.txt",
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python@6.51.0"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/admin/static/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index"
+      "source": "/((?!static/).*)",
+      "destination": "/api/index.py"
     }
   ]
 }
