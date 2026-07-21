@@ -120,7 +120,15 @@ JWT_REFRESH_EXPIRY_DAYS = 7
 JWT_ISSUER = "system-scanner-pro"
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-if DATABASE_URL:
+if IS_VERCEL:
+    _vdb = os.path.join("/tmp", "vercel.db")
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": _vdb,
+        }
+    }
+elif DATABASE_URL:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -157,7 +165,10 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
+if IS_VERCEL:
+    SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+else:
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

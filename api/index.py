@@ -1,58 +1,11 @@
 import os
 import sys
 import types
-import ctypes
-import ctypes.util
 import traceback
 
 _log = []
 
-DB_HOST = os.getenv("DB_HOST", "")
-POOLER_HOST = os.getenv("POOLER_HOST", "aws-0-us-east-1.pooler.supabase.com")
-
-
-def _patch_c_getaddrinfo():
-    if not DB_HOST:
-        return
-    try:
-        libc_name = ctypes.util.find_library("c")
-        if not libc_name:
-            return
-        libc = ctypes.CDLL(libc_name)
-
-        original = libc.getaddrinfo
-        original.restype = ctypes.c_int
-
-        AddrInfo = ctypes.c_void_p
-        AddrHints = ctypes.c_void_p
-
-        CBType = ctypes.CFUNCTYPE(
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-            AddrHints,
-            ctypes.POINTER(AddrInfo),
-        )
-
-        db_host_enc = DB_HOST.encode("utf-8")
-        pooler_enc = POOLER_HOST.encode("utf-8")
-
-        def hook(node, service, hints, res):
-            try:
-                hostname = node.decode("utf-8") if node else ""
-            except Exception:
-                hostname = ""
-            if hostname == db_host_enc.decode("utf-8") or node == db_host_enc:
-                return original(pooler_enc, service, hints, res)
-            return original(node, service, hints, res)
-
-        libc.getaddrinfo = CBType(hook)
-        _log.append(f"DNS_PATCH: redirected {DB_HOST} -> {POOLER_HOST}")
-    except Exception as e:
-        _log.append(f"DNS_PATCH_FAILED: {e}")
-
-
-_patch_c_getaddrinfo()
+IS_VERCEL = os.getenv("VERCEL", "0") == "1"
 
 
 def _diag(environ, start_response):
@@ -96,8 +49,32 @@ def _init():
     import django
     django.setup()
 
+    if IS_VERCEL:
+        _setup_vercel_db()
+
     from django.core.handlers.wsgi import WSGIHandler
     return WSGIHandler()
+
+
+def _setup_vercel_db():
+    import django
+    from django.core.management import call_command
+
+    try:
+        call_command("migrate", "--run-syncdb", verbosity=0)
+        _log.append("VERCEL_DB: migrate ok")
+    except Exception as e:
+        _log.append(f"VERCEL_DB_MIGRATE_ERR: {e}")
+
+    try:
+        from django.contrib.auth.models import User
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_superuser("admin", "admin@example.com", "admin123")
+            _log.append("VERCEL_DB: created admin superuser")
+        else:
+            _log.append("VERCEL_DB: admin user exists")
+    except Exception as e:
+        _log.append(f"VERCEL_DB_USER_ERR: {e}")
 
 
 try:
