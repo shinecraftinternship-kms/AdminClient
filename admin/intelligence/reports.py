@@ -1,4 +1,4 @@
-﻿﻿import csv
+import csv
 import io
 import logging
 from datetime import timedelta

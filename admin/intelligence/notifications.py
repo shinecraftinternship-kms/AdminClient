@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from django.utils import timezone
 
 logger = logging.getLogger("intelligence")
