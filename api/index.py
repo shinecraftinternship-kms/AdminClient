@@ -40,7 +40,5 @@ import django
 django.setup()
 
 from django.core.handlers.wsgi import WSGIHandler
-from mangum import Mangum
 
-application = WSGIHandler()
-handler = Mangum(application)
+app = WSGIHandler()
