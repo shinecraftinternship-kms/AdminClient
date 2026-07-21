@@ -5,13 +5,18 @@ import traceback
 
 _log = []
 
-def _diag_app(environ, start_response):
+
+def _diag(environ, start_response):
     body = "\n".join(_log).encode()
-    start_response("200 OK", [("Content-Type", "text/plain"), ("Content-Length", str(len(body)))])
+    start_response("200 OK", [
+        ("Content-Type", "text/plain"),
+        ("Content-Length", str(len(body))),
+    ])
     return [body]
 
+
 try:
-    _log.append("STEP1: paths")
+    _log.append("STEP1")
 
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
@@ -20,7 +25,7 @@ try:
         if p not in sys.path:
             sys.path.insert(0, p)
 
-    _log.append(f"STEP2: VERCEL={os.getenv('VERCEL', 'unset')}")
+    _log.append(f"STEP2 VERCEL={os.getenv('VERCEL', 'unset')}")
 
     def _make_package(name, path):
         if name in sys.modules:
@@ -40,27 +45,25 @@ try:
         if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, "__init__.py")):
             _make_package(f"AdminClient.admin.{sub}", sub_path)
 
-    _log.append("STEP3: packages done")
+    _log.append("STEP3 packages")
 
     os.environ["DJANGO_SETTINGS_MODULE"] = "django_admin.settings"
 
     import django
     django.setup()
-    _log.append("STEP4: django.setup OK")
+    _log.append("STEP4 django OK")
 
     from django.core.handlers.wsgi import WSGIHandler
-    _handler = WSGIHandler()
-    _log.append("STEP5: WSGIHandler OK")
+    _real_app = WSGIHandler()
+    _log.append("STEP5 WSGI OK")
 
-    class _App:
-        def __call__(self, environ, start_response):
-            if environ.get("PATH_INFO") == "/__diag":
-                return _diag_app(environ, start_response)
-            return _handler(environ, start_response)
+    def application(environ, start_response):
+        if environ.get("PATH_INFO", "") == "/__diag":
+            return _diag(environ, start_response)
+        return _real_app(environ, start_response)
 
-    app = _App()
-    _log.append("STEP6: READY")
+    _log.append("STEP6 READY")
 
 except Exception:
     _log.append("CRASH: " + traceback.format_exc())
-    app = _diag_app
+    application = _diag
