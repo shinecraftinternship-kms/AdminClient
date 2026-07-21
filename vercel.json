@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/index.py": {
+      "runtime": "@vercel/python"
+    }
+  },
   "outputDirectory": ".",
   "buildCommand": "echo done",
   "installCommand": "pip install -r requirements.txt",
