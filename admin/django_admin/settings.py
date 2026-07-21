@@ -12,16 +12,10 @@ ALLOWED_HOSTS = ["*"] if ALLOWED_HOSTS_RAW.strip() == "*" else ALLOWED_HOSTS_RAW
 
 IS_VERCEL = os.getenv("VERCEL", "0") == "1"
 
-if IS_VERCEL:
-    _API = "AdminClient.admin.scanner_api"
-    _MON = "AdminClient.admin.monitoring"
-    _MNT = "AdminClient.admin.maintenance"
-    _INT = "AdminClient.admin.intelligence"
-else:
-    _API = "scanner_api"
-    _MON = "monitoring"
-    _MNT = "maintenance"
-    _INT = "intelligence"
+_API = "scanner_api"
+_MON = "monitoring"
+_MNT = "maintenance"
+_INT = "intelligence"
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -183,7 +177,6 @@ LOGGING = {
         "monitoring": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "channels": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "daphne": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "AdminClient.admin.scanner_api": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "AdminClient.admin.monitoring": {"handlers": ["console"], "level": "INFO", "propagate": False},
+
     },
 }

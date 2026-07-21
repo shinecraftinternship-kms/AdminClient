@@ -8,7 +8,7 @@ logger = logging.getLogger("monitoring")
 
 class MonitoringConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "AdminClient.admin.monitoring" if IS_VERCEL else "monitoring"
+    name = "monitoring"
     label = "monitoring"
     verbose_name = "Inventory & Monitoring"
 

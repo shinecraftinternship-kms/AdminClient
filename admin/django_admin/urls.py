@@ -5,10 +5,10 @@ from maintenance import templates as mnt_templates
 from intelligence import templates as intel_templates
 from django.conf import settings
 
-_api_urls = "AdminClient.admin.scanner_api.urls" if settings.IS_VERCEL else "scanner_api.urls"
-_mon_urls = "AdminClient.admin.monitoring.urls" if settings.IS_VERCEL else "monitoring.urls"
-_mnt_urls = "AdminClient.admin.maintenance.urls" if settings.IS_VERCEL else "maintenance.urls"
-_int_urls = "AdminClient.admin.intelligence.urls" if settings.IS_VERCEL else "intelligence.urls"
+_api_urls = "scanner_api.urls"
+_mon_urls = "monitoring.urls"
+_mnt_urls = "maintenance.urls"
+_int_urls = "intelligence.urls"
 
 urlpatterns = [
     path("api/", include(_api_urls)),
