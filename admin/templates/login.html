@@ -66,9 +66,10 @@
     </style>
 </head>
 <body>
-    <a href="/download-client/" class="btn btn-outline-success btn-sm download-btn">
+    <a href="#" class="btn btn-outline-success btn-sm download-btn" onclick="downloadClient(); return false;">
         <i class="bi bi-download me-1"></i> Download Client Agent
     </a>
+    <iframe id="downloadFrame" style="display:none;"></iframe>
     <div class="login-container">
         <div class="login-card">
             <div class="card">
@@ -169,6 +170,10 @@
 
         function showForgotInfo() {
             document.getElementById('forgotInfo').classList.toggle('d-none');
+        }
+
+        function downloadClient() {
+            document.getElementById('downloadFrame').src = '/download-client/';
         }
 
         document.getElementById('loginForm').addEventListener('submit', function(e) {
