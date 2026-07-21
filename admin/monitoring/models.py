@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from AdminClient.admin.scanner_api.models import Client, Setting
+from scanner_api.models import Client, Setting
 
 
 class DeviceMonitoringInfo(models.Model):

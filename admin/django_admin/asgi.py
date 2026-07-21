@@ -7,7 +7,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
 
 django_asgi_app = get_asgi_application()
 
-from AdminClient.admin.monitoring.routing import websocket_urlpatterns
+from monitoring.routing import websocket_urlpatterns
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,

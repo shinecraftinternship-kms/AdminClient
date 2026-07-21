@@ -1,7 +1,7 @@
 import uuid
 from django.db import models
 from django.utils import timezone
-from AdminClient.admin.scanner_api.models import Asset, AssetCategory, Department, Location, Employee
+from scanner_api.models import Asset, AssetCategory, Department, Location, Employee
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

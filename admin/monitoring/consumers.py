@@ -272,7 +272,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _verify_agent(self, agent_id, secret):
-        from AdminClient.admin.monitoring.models import AgentSecret
+        from monitoring.models import AgentSecret
         try:
             return AgentSecret.objects.select_related("client").get(
                 agent_id=agent_id, secret_key=secret, is_active=True
@@ -284,7 +284,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _mark_online(self):
         if not self.agent_secret_obj:
             return
-        from AdminClient.admin.monitoring.models import DeviceMonitoringInfo
+        from monitoring.models import DeviceMonitoringInfo
         client = self.agent_secret_obj.client
         client.status = "online"
         client.last_seen = tz.now()
@@ -300,7 +300,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _mark_offline(self):
         if not self.agent_secret_obj:
             return
-        from AdminClient.admin.monitoring.models import DeviceMonitoringInfo
+        from monitoring.models import DeviceMonitoringInfo
         client = self.agent_secret_obj.client
         try:
             info = DeviceMonitoringInfo.objects.get(client=client)
@@ -314,11 +314,11 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _process_heartbeat(self, metrics):
         if not self.agent_secret_obj:
             return {"health_score": 0, "health_level": "unknown"}
-        from AdminClient.admin.monitoring.models import (
+        from monitoring.models import (
             DeviceHeartbeat, DeviceMonitoringInfo, SoftwareInventory, DeviceHistory,
         )
-        from AdminClient.admin.monitoring.health import calculate_health_score
-        from AdminClient.admin.monitoring.alerts import check_and_create_alerts
+        from monitoring.health import calculate_health_score
+        from monitoring.alerts import check_and_create_alerts
         from django.db.models import F
 
         client = self.agent_secret_obj.client
@@ -385,7 +385,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _get_pending_commands(self):
         if not self.agent_secret_obj:
             return []
-        from AdminClient.admin.monitoring.models import DeviceMonitoringInfo
+        from monitoring.models import DeviceMonitoringInfo
         client = self.agent_secret_obj.client
         try:
             info = DeviceMonitoringInfo.objects.get(client=client)
@@ -397,7 +397,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _submit_scan_result(self, scan_type, scan_data):
         if not self.agent_secret_obj:
             return False
-        from AdminClient.admin.scanner_api.models import ScanResult
+        from scanner_api.models import ScanResult
         client = self.agent_secret_obj.client
         try:
             ScanResult.objects.create(
@@ -416,7 +416,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _store_event(self, event_type, event_data, severity):
         if not self.agent_secret_obj:
             return
-        from AdminClient.admin.monitoring.models import DeviceHistory, DeviceAlert
+        from monitoring.models import DeviceHistory, DeviceAlert
         client = self.agent_secret_obj.client
         DeviceHistory.objects.create(
             client=client,
@@ -441,7 +441,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
     def _update_agent_status(self, data):
         if not self.agent_secret_obj:
             return
-        from AdminClient.admin.monitoring.models import DeviceMonitoringInfo
+        from monitoring.models import DeviceMonitoringInfo
         client = self.agent_secret_obj.client
         info, _ = DeviceMonitoringInfo.objects.get_or_create(
             client=client, defaults={"monitoring_status": "online"}

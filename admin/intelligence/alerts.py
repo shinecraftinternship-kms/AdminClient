@@ -153,8 +153,8 @@ def escalate_alerts():
 
 
 def run_alert_checks():
-    from AdminClient.admin.scanner_api.models import Asset, Client
-    from AdminClient.admin.maintenance.models import MaintenanceRecord, SoftwareLicense, WarrantyRecord
+    from scanner_api.models import Asset, Client
+    from maintenance.models import MaintenanceRecord, SoftwareLicense, WarrantyRecord
     from django.utils import timezone as tz
     today = tz.now().date()
 

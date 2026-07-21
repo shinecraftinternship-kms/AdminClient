@@ -9,7 +9,7 @@ from pathlib import Path
 from django.core.management import call_command
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.admin.runtime import is_frozen, get_app_data_dir, get_resources_dir
+from runtime import is_frozen, get_app_data_dir, get_resources_dir
 
 DATA_DIR = get_app_data_dir()
 RESOURCES_DIR = get_resources_dir()
@@ -73,7 +73,7 @@ def register_with_cloud_discovery(port, protocol="http"):
         if not public_ip:
             print("  [WARN] Could not detect public IP for cloud discovery")
             return False
-        from AdminClient.admin.scanner_api.supabase_client import register_server_in_registry
+        from scanner_api.supabase_client import register_server_in_registry
         register_server_in_registry(public_ip, port, protocol)
         print(f"  [OK] Registered with cloud discovery: {protocol}://{public_ip}:{port}")
         return True
@@ -89,7 +89,7 @@ def cloud_discovery_refresh_loop(port, protocol="http"):
         try:
             public_ip = detect_public_ip()
             if public_ip:
-                from AdminClient.admin.scanner_api.supabase_client import register_server_in_registry
+                from scanner_api.supabase_client import register_server_in_registry
                 register_server_in_registry(public_ip, port, protocol)
         except Exception:
             pass
@@ -167,7 +167,7 @@ def main():
         User.objects.create_superuser(args.username, "", args.password)
         print(f"  Admin user created: {args.username} / {args.password}")
 
-    from AdminClient.admin.scanner_api.views import ensure_admin_client, admin_self_scan
+    from scanner_api.views import ensure_admin_client, admin_self_scan
     admin_key = ensure_admin_client()
     import threading
     threading.Thread(target=admin_self_scan, daemon=True).start()

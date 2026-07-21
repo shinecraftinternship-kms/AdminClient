@@ -1,6 +1,6 @@
 import logging
 from django.core.management.base import BaseCommand
-from AdminClient.admin.scanner_api.models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup
+from scanner_api.models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup
 
 logger = logging.getLogger(__name__)
 

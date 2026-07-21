@@ -14,9 +14,9 @@ def _format_date(d):
 
 def generate_report(report_type, filters=None, format="csv") -> dict:
     from .models import Report
-    from AdminClient.admin.scanner_api.models import Asset, Client
-    from AdminClient.admin.maintenance.models import MaintenanceRecord, SoftwareLicense, WarrantyRecord, ComplianceRecord
-    from AdminClient.admin.monitoring.models import DeviceAlert, DeviceMonitoringInfo
+    from scanner_api.models import Asset, Client
+    from maintenance.models import MaintenanceRecord, SoftwareLicense, WarrantyRecord, ComplianceRecord
+    from monitoring.models import DeviceAlert, DeviceMonitoringInfo
 
     filters = filters or {}
     report_name = dict(Report.REPORT_TYPE_CHOICES).get(report_type, report_type)
@@ -42,7 +42,7 @@ def generate_report(report_type, filters=None, format="csv") -> dict:
             ])
 
     elif report_type == "asset_assignment":
-        from AdminClient.admin.scanner_api.models import AssetAssignment
+        from scanner_api.models import AssetAssignment
         qs = AssetAssignment.objects.select_related("asset", "employee", "department", "location")
         qs = _apply_assignment_filters(qs, filters)
         headers = ["Asset Tag", "Asset Name", "Employee", "Department", "Location",
@@ -96,7 +96,7 @@ def generate_report(report_type, filters=None, format="csv") -> dict:
             ])
 
     elif report_type == "compliance_report":
-        from AdminClient.admin.maintenance.models import ComplianceRecord
+        from maintenance.models import ComplianceRecord
         qs = ComplianceRecord.objects.select_related("license", "asset")
         headers = ["Title", "Category", "Severity", "Status", "License", "Asset", "Created"]
         for c in qs:
@@ -132,7 +132,7 @@ def generate_report(report_type, filters=None, format="csv") -> dict:
         ]
 
     elif report_type == "software_inventory":
-        from AdminClient.admin.monitoring.models import SoftwareInventory
+        from monitoring.models import SoftwareInventory
         qs = SoftwareInventory.objects.filter(is_present=True).select_related("client")
         headers = ["Client Hostname", "Software Name", "Version", "Publisher", "Category"]
         for s in qs:

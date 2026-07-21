@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from AdminClient.admin.scanner_api.models import Asset, AssetAssignment, Department, Location, Employee
+from scanner_api.models import Asset, AssetAssignment, Department, Location, Employee
 from .models import (
     MaintenanceRecord, MaintenanceHistory, MaintenanceDocument,
     WarrantyRecord, DowntimeRecord,

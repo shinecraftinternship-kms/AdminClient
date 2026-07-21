@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.core.management.base import BaseCommand
-from AdminClient.admin.scanner_api.models import Client, Setting
+from scanner_api.models import Client, Setting
 
 logger = logging.getLogger(__name__)
 

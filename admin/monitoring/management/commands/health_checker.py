@@ -2,8 +2,8 @@ import time
 import logging
 from django.utils import timezone
 from django.core.management.base import BaseCommand
-from AdminClient.admin.scanner_api.models import Setting
-from AdminClient.admin.monitoring.models import DeviceMonitoringInfo, DeviceHistory
+from scanner_api.models import Setting
+from monitoring.models import DeviceMonitoringInfo, DeviceHistory
 
 logger = logging.getLogger("monitoring")
 
@@ -20,8 +20,8 @@ class Command(BaseCommand):
 
         while True:
             try:
-                from AdminClient.admin.monitoring.health import calculate_health_score
-                from AdminClient.admin.monitoring.models import DeviceHeartbeat, SoftwareInventory
+                from monitoring.health import calculate_health_score
+                from monitoring.models import DeviceHeartbeat, SoftwareInventory
 
                 infos = DeviceMonitoringInfo.objects.filter(
                     client__deleted=False,

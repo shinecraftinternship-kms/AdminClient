@@ -55,7 +55,7 @@ def _get_fleet_summary():
 def _get_device_details(client=None):
     """Get detailed info for all devices or a specific one."""
     from .models import DeviceMonitoringInfo, DeviceAlert, DeviceHistory
-    from AdminClient.admin.scanner_api.models import Client as ClientModel
+    from scanner_api.models import Client as ClientModel
 
     if client:
         devices = DeviceMonitoringInfo.objects.filter(client=client)
@@ -192,7 +192,7 @@ def generate_device_pdf(client_key):
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from AdminClient.admin.scanner_api.models import Client
+    from scanner_api.models import Client
 
     try:
         client = Client.objects.get(key=client_key)
@@ -365,7 +365,7 @@ def generate_alerts_csv(days=30):
 
 def generate_device_csv(client_key):
     """Generate CSV export for a single device's alert history."""
-    from AdminClient.admin.scanner_api.models import Client
+    from scanner_api.models import Client
 
     try:
         client = Client.objects.get(key=client_key)

@@ -211,7 +211,7 @@ def _execute_schedule(schedule_id):
 def _get_target_clients(schedule):
     """Get the list of clients targeted by a schedule."""
     if schedule.target_all:
-        from AdminClient.admin.scanner_api.models import Client
+        from scanner_api.models import Client
         return list(Client.objects.filter(deleted=False, approved=True))
 
     clients = list(schedule.target_clients.all())

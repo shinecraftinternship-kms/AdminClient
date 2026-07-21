@@ -2,8 +2,8 @@ import time
 import logging
 from django.utils import timezone
 from django.core.management.base import BaseCommand
-from AdminClient.admin.monitoring.models import DeviceMonitoringInfo, DeviceAlert
-from AdminClient.admin.monitoring.alerts import check_and_create_alerts, check_offline_alerts
+from monitoring.models import DeviceMonitoringInfo, DeviceAlert
+from monitoring.alerts import check_and_create_alerts, check_offline_alerts
 
 logger = logging.getLogger("monitoring")
 

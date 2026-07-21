@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from AdminClient.admin.scanner_api.models import ScanResult
-from AdminClient.admin.scanner_api.scanner import collect_all, get_hostname, detect_platform
+from scanner_api.models import ScanResult
+from scanner_api.scanner import collect_all, get_hostname, detect_platform
 
 logger = logging.getLogger(__name__)
 

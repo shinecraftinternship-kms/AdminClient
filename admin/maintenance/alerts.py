@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.utils import timezone as tz
 from django.db.models import Q
 
-from AdminClient.admin.scanner_api.models import Asset
+from scanner_api.models import Asset
 from .models import (
     MaintenanceRecord, WarrantyRecord, SoftwareLicense,
     ComplianceRecord, MaintenanceAlert,

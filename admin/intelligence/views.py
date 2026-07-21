@@ -801,7 +801,7 @@ class RetentionPolicyListView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class IntelligenceSettingsView(APIView):
     def get(self, request):
-        from AdminClient.admin.scanner_api.models import Setting
+        from scanner_api.models import Setting
         return Response({
             "alert_escalation_enabled": Setting.get("alert_escalation_enabled", "true"),
             "alert_auto_checks_enabled": Setting.get("alert_auto_checks_enabled", "true"),
@@ -811,7 +811,7 @@ class IntelligenceSettingsView(APIView):
         })
 
     def put(self, request):
-        from AdminClient.admin.scanner_api.models import Setting
+        from scanner_api.models import Setting
         data = request.data
         for key in ["alert_escalation_enabled", "alert_auto_checks_enabled",
                       "notification_retention_days", "report_retention_days",

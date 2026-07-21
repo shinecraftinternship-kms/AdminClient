@@ -1,8 +1,8 @@
 from django.urls import path, include
-from AdminClient.admin.scanner_api import templates
-from AdminClient.admin.monitoring import templates as mon_templates
-from AdminClient.admin.maintenance import templates as mnt_templates
-from AdminClient.admin.intelligence import templates as intel_templates
+from scanner_api import templates
+from monitoring import templates as mon_templates
+from maintenance import templates as mnt_templates
+from intelligence import templates as intel_templates
 from django.conf import settings
 
 _api_urls = "AdminClient.admin.scanner_api.urls" if settings.IS_VERCEL else "scanner_api.urls"

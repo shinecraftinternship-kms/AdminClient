@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from AdminClient.admin.scanner_api.models import Client, Setting, ActivityLog
+from scanner_api.models import Client, Setting, ActivityLog
 from .models import (
     DeviceMonitoringInfo, HardwareInventory, SoftwareInventory,
     DeviceHeartbeat, DeviceMetrics, DeviceHistory, DeviceAlert,
