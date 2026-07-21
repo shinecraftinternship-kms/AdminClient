@@ -1,0 +1,8 @@
+admin/django_admin/asgi.py
+admin/django_admin/wsgi.py
+admin/manage_django.py
+client/
+.git/
+.vercel/
+__pycache__/
+*.pyc

@@ -16,7 +16,6 @@ if PARENT_DIR not in sys.path:
 
 
 def _make_package(name, path):
-    """Create a package module with __path__ and __package__ for relative imports."""
     if name in sys.modules:
         return sys.modules[name]
     mod = types.ModuleType(name)
@@ -37,8 +36,11 @@ for sub in sorted(os.listdir(ADMIN_DIR)):
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
 
-from django.core.wsgi import get_wsgi_application
+import django
+django.setup()
+
+from django.core.handlers.wsgi import WSGIHandler
 from mangum import Mangum
 
-application = get_wsgi_application()
+application = WSGIHandler()
 handler = Mangum(application)
