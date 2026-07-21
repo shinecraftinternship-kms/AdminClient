@@ -2954,9 +2954,10 @@ class ExecutiveAnalyticsView(APIView):
 
     def get(self, request):
         from django.db.models import Count, Sum, Avg
+        from django.utils import timezone
         from datetime import timedelta, date
 
-        today = tz.now().date()
+        today = timezone.now().date()
         User = get_user_model()
 
         # ── Asset KPIs ──
