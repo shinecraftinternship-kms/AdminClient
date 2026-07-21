@@ -1,25 +1,58 @@
 import os
 import sys
 import types
-import socket
+import ctypes
+import ctypes.util
 import traceback
 
 _log = []
 
-_real_getaddrinfo = socket.getaddrinfo
+DB_HOST = os.getenv("DB_HOST", "")
+POOLER_HOST = os.getenv("POOLER_HOST", "aws-0-us-east-1.pooler.supabase.com")
 
 
-def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    supabase_host = os.getenv("DB_HOST", "")
-    pooler_host = "aws-0-us-east-1.pooler.supabase.com"
-    if supabase_host and host == supabase_host:
-        results = _real_getaddrinfo(pooler_host, port, family, type, proto, flags)
-        if results:
-            return results
-    return _real_getaddrinfo(host, port, family, type, proto, flags)
+def _patch_c_getaddrinfo():
+    if not DB_HOST:
+        return
+    try:
+        libc_name = ctypes.util.find_library("c")
+        if not libc_name:
+            return
+        libc = ctypes.CDLL(libc_name)
+
+        original = libc.getaddrinfo
+        original.restype = ctypes.c_int
+
+        AddrInfo = ctypes.c_void_p
+        AddrHints = ctypes.c_void_p
+
+        CBType = ctypes.CFUNCTYPE(
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            AddrHints,
+            ctypes.POINTER(AddrInfo),
+        )
+
+        db_host_enc = DB_HOST.encode("utf-8")
+        pooler_enc = POOLER_HOST.encode("utf-8")
+
+        def hook(node, service, hints, res):
+            try:
+                hostname = node.decode("utf-8") if node else ""
+            except Exception:
+                hostname = ""
+            if hostname == db_host_enc.decode("utf-8") or node == db_host_enc:
+                return original(pooler_enc, service, hints, res)
+            return original(node, service, hints, res)
+
+        libc.getaddrinfo = CBType(hook)
+        _log.append(f"DNS_PATCH: redirected {DB_HOST} -> {POOLER_HOST}")
+    except Exception as e:
+        _log.append(f"DNS_PATCH_FAILED: {e}")
 
 
-socket.getaddrinfo = _patched_getaddrinfo
+_patch_c_getaddrinfo()
 
 
 def _diag(environ, start_response):
