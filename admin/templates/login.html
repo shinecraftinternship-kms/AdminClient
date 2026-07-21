@@ -57,9 +57,18 @@
             border-radius: 8px;
             padding: 1rem;
         }
+        .download-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
+    <a href="/download-client/" class="btn btn-outline-success btn-sm download-btn">
+        <i class="bi bi-download me-1"></i> Download Client Agent
+    </a>
     <div class="login-container">
         <div class="login-card">
             <div class="card">
@@ -140,12 +149,6 @@
                 <div class="text-center mt-3">
                     <span class="text-secondary small">Don't have an account?</span>
                     <a href="/signup/" class="text-primary small text-decoration-none">Create Admin Account</a>
-                </div>
-
-                <div class="text-center mt-3 pt-3 border-top border-secondary">
-                    <a href="/download-client/" class="btn btn-outline-success btn-sm w-100">
-                        <i class="bi bi-download me-1"></i> Download Client Agent
-                    </a>
                 </div>
             </div>
         </div>
