@@ -25,7 +25,7 @@ try:
         if p not in sys.path:
             sys.path.insert(0, p)
 
-    _log.append(f"STEP2 VERCEL={os.getenv('VERCEL', 'unset')}")
+    _log.append("STEP2")
 
     def _make_package(name, path):
         if name in sys.modules:
@@ -47,7 +47,8 @@ try:
 
     _log.append("STEP3 packages")
 
-    os.environ["DJANGO_SETTINGS_MODULE"] = "django_admin.settings"
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
+    os.environ.setdefault("SCANNER_DATA_DIR", "/tmp")
 
     import django
     django.setup()
@@ -60,7 +61,11 @@ try:
     def application(environ, start_response):
         if environ.get("PATH_INFO", "") == "/__diag":
             return _diag(environ, start_response)
-        return _real_app(environ, start_response)
+        try:
+            return _real_app(environ, start_response)
+        except Exception:
+            _log.append("REQ_CRASH: " + traceback.format_exc())
+            return _diag(environ, start_response)
 
     _log.append("STEP6 READY")
 
