@@ -485,7 +485,6 @@ class AdminUsersView(APIView):
 
     def post(self, request):
         from django.contrib.auth.models import User
-        from .validators import validate_strong_password
         from .auth_utils import log_audit_event
 
         serializer = AdminUserCreateSerializer(data=request.data)
@@ -495,10 +494,6 @@ class AdminUsersView(APIView):
         email = data.get("email", "")
         password = data["password"]
         is_superuser = data.get("is_superuser", False)
-
-        password_errors = validate_strong_password(password)
-        if password_errors:
-            return Response({"status": "error", "message": "; ".join(password_errors)}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(username=username).exists():
             return Response({"status": "error", "message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
