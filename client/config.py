@@ -76,7 +76,9 @@ def get_admin_url():
 
 
 def prompt_admin_url():
-    url = input("Enter Admin Server URL (e.g., http://192.168.1.100:80): ").strip()
+    print()
+    print("  Enter new admin server link:")
+    url = input("  URL (e.g., http://192.168.1.100:80): ").strip()
     if not url:
         url = LOCALHOST_URL
     return url.rstrip("/")

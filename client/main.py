@@ -428,7 +428,22 @@ def main():
         admin_url = sys.argv[1].rstrip("/")
         config["admin_url"] = admin_url
         save_config(config)
-    elif not admin_url or admin_url == "http://localhost:80":
+    elif admin_url and admin_url != "http://localhost:80":
+        print(f"  Current Admin Server: {admin_url}")
+        print()
+        print("  Program Change Options:")
+        print("  [1] New admin server link")
+        print("  [2] Continue")
+        print()
+        choice = input("  Select option (1/2): ").strip()
+        if choice == "1":
+            from AdminClient.client.config import prompt_admin_url
+            admin_url = prompt_admin_url()
+            config["admin_url"] = admin_url
+            save_config(config)
+            print(f"  Admin server updated to: {admin_url}")
+            print()
+    else:
         from AdminClient.client.config import get_admin_url
         admin_url = get_admin_url()
         config["admin_url"] = admin_url
