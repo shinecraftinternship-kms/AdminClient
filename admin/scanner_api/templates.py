@@ -1,4 +1,5 @@
 import os
+import hashlib
 from django.http import HttpResponseRedirect, FileResponse, Http404
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -219,8 +220,18 @@ def download_client_view(request):
     if not os.path.exists(exe_path):
         raise Http404("client_scanner.exe not found on the server")
 
-    return FileResponse(
+    sha256 = hashlib.sha256()
+    with open(exe_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256.update(chunk)
+    file_hash = sha256.hexdigest()
+
+    response = FileResponse(
         open(exe_path, "rb"),
         as_attachment=True,
         filename="client_scanner.exe",
+        content_type="application/octet-stream",
     )
+    response["Content-SHA256"] = file_hash
+    response["X-Content-Type-Options"] = "nosniff"
+    return response

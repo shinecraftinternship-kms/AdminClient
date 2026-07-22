@@ -3,6 +3,8 @@ import sys
 import shutil
 import subprocess
 import tempfile
+import hashlib
+import time
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.join(ROOT_DIR, "client")
@@ -11,6 +13,8 @@ DIST_DIR = os.path.join(ROOT_DIR, "dist")
 BUILD_DIR = os.path.join(ROOT_DIR, "build")
 OUTPUT_NAME = "client_scanner.exe"
 DATA_DIR = os.path.join(ROOT_DIR, "admin", "data")
+VERSION_FILE = os.path.join(CLIENT_DIR, "version-info.txt")
+MANIFEST_FILE = os.path.join(CLIENT_DIR, "client_scanner.exe.manifest")
 
 
 def check_pyinstaller():
@@ -48,6 +52,59 @@ def collect_datas():
                 rel = os.path.relpath(dirpath, ROOT_DIR)
                 datas.append((src, rel))
     return datas
+
+
+def sign_exe(exe_path):
+    """Sign the executable with a code signing certificate."""
+    pfx_path = os.environ.get("CODE_SIGN_PFX", "")
+    pfx_password = os.environ.get("CODE_SIGN_PASSWORD", "")
+    timestamp_url = os.environ.get("CODE_SIGN_TIMESTAMP", "http://timestamp.digicert.com")
+
+    if not pfx_path or not os.path.exists(pfx_path):
+        print("[INFO] No CODE_SIGN_PFX set or file not found. Skipping code signing.")
+        print("[INFO] To sign, set CODE_SIGN_PFX and CODE_SIGN_PASSWORD environment variables.")
+        return False
+
+    if not shutil.which("signtool"):
+        print("[INFO] signtool.exe not found in PATH. Skipping code signing.")
+        print("[INFO] Install Windows SDK or add signtool to PATH.")
+        return False
+
+    print(f"[INFO] Signing executable with certificate: {pfx_path}")
+    cmd = [
+        "signtool", "sign",
+        "/f", pfx_path,
+        "/fd", "sha256",
+        "/tr", timestamp_url,
+        "/td", "sha256",
+        "/d", "System Scanner Pro Client Agent",
+    ]
+    if pfx_password:
+        cmd.extend(["/p", pfx_password])
+    cmd.append(exe_path)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print("[INFO] Code signing successful!")
+            return True
+        else:
+            print(f"[WARN] Code signing failed: {result.stderr}")
+            return False
+    except Exception as e:
+        print(f"[WARN] Code signing error: {e}")
+        return False
+
+
+def verify_binary(output_path):
+    """Print SHA-256 hash for verification."""
+    sha256 = hashlib.sha256()
+    with open(output_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256.update(chunk)
+    file_hash = sha256.hexdigest()
+    print(f"  SHA-256 : {file_hash}")
+    return file_hash
 
 
 def build():
@@ -98,6 +155,18 @@ def build():
         "--console",
     ]
 
+    if os.path.exists(VERSION_FILE):
+        cmd.append(f"--version-file={VERSION_FILE}")
+        print(f"[INFO] Version info  : {VERSION_FILE}")
+    else:
+        print("[WARN] Version info file not found. Exe will have no metadata.")
+
+    if os.path.exists(MANIFEST_FILE):
+        cmd.append(f"--manifest={MANIFEST_FILE}")
+        print(f"[INFO] Manifest      : {MANIFEST_FILE}")
+    else:
+        print("[WARN] Manifest file not found. Exe will use default manifest.")
+
     for src, dst in datas:
         cmd.extend(["--add-data", f"{src};{dst}"])
 
@@ -128,6 +197,8 @@ def build():
                 break
 
     if os.path.exists(output_path):
+        sign_exe(output_path)
+
         os.makedirs(DATA_DIR, exist_ok=True)
         dest = os.path.join(DATA_DIR, OUTPUT_NAME)
         shutil.copy2(output_path, dest)
@@ -137,6 +208,7 @@ def build():
         print(f"  Build successful!")
         print(f"  Output : {dest}")
         print(f"  Size   : {size_mb:.1f} MB")
+        verify_binary(output_path)
         print("=" * 55)
     else:
         print(f"[ERROR] Output exe not found at {output_path}")
