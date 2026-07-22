@@ -149,8 +149,9 @@ def login_view(request):
         request.session["last_activity"] = timezone.now().isoformat()
         request.session["login_history_id"] = login_history.id
 
-        from .models import ActivityLog
-        ActivityLog.objects.create(action="login", details=f"Admin user {user.username} logged in")
+        from .models import ActivityLog, AdministratorProfile
+        _company = AdministratorProfile.objects.filter(user=user).values_list("company", flat=True).first()
+        ActivityLog.objects.create(action="login", company=_company, details=f"Admin user {user.username} logged in")
 
         next_url = request.POST.get("next", "/") or "/"
         return redirect(next_url)
@@ -204,9 +205,13 @@ def signup_view(request):
         user = User.objects.create_user(username=username, email=email, password=password)
         user.is_superuser = True
         user.save()
-        AdministratorProfile.objects.get_or_create(user=user)
+
+        from .models import Company
+        company_name = request.POST.get("company_name", "").strip() or username
+        company, _ = Company.objects.get_or_create(name=company_name)
+        AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
         log_audit_event(user, "login_success", request, details=f"Admin account created: {username}", success=True)
-        ActivityLog.objects.create(action="login", details=f"New admin account created: {username}")
+        ActivityLog.objects.create(action="login", company=company, details=f"New admin account created: {username}")
 
         return render(request, "signup.html", {"success": f"Account '{username}' created successfully! You can now sign in."})
 

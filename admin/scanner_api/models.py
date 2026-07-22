@@ -5,9 +5,23 @@ from django.utils import timezone
 from .api_key_auth import ApiKey  # noqa: F401 — registers ApiKey with Django ORM
 
 
+class Company(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(max_length=128, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "companies"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class ClientGroup(models.Model):
-    name = models.CharField(max_length=128, unique=True)
+    name = models.CharField(max_length=128)
     description = models.TextField(default="", blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="client_groups", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -26,6 +40,7 @@ class Client(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     approved = models.BooleanField(default=False)
 
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="clients", null=True, blank=True)
     group = models.ForeignKey(ClientGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="clients")
     tags = models.CharField(max_length=512, default="", blank=True, help_text="Comma-separated tags")
 
@@ -120,6 +135,7 @@ class ActivityLog(models.Model):
 
     action = models.CharField(max_length=32, choices=ACTION_CHOICES)
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name="activity_logs")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="activity_logs", null=True, blank=True)
     details = models.TextField(default="", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -135,6 +151,7 @@ class ActivityLog(models.Model):
 class Setting(models.Model):
     key = models.CharField(max_length=255, primary_key=True)
     value = models.TextField(blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="settings", null=True, blank=True)
 
     class Meta:
         db_table = "settings"
@@ -143,17 +160,24 @@ class Setting(models.Model):
         return self.key
 
     @classmethod
-    def get(cls, key, default=""):
-        obj = cls.objects.filter(key=key).first()
+    def get(cls, key, default="", company=None):
+        filters = {"key": key}
+        if company:
+            filters["company"] = company
+        obj = cls.objects.filter(**filters).first()
         return obj.value if obj else default
 
     @classmethod
-    def set(cls, key, value):
-        cls.objects.update_or_create(key=key, defaults={"value": str(value)})
+    def set(cls, key, value, company=None):
+        defaults = {"value": str(value)}
+        if company:
+            defaults["company"] = company
+        cls.objects.update_or_create(key=key, defaults=defaults)
 
 
 class AdministratorProfile(models.Model):
     user = models.OneToOneField("auth.User", on_delete=models.CASCADE, related_name="admin_profile")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="admins", null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True, default="")
     profile_picture_url = models.URLField(max_length=500, blank=True, default="")
     timezone = models.CharField(max_length=50, default="UTC")
@@ -191,6 +215,7 @@ class AuditLog(models.Model):
         ("session_expired", "Session Expired"),
     ]
     user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="audit_logs", null=True, blank=True)
     event_type = models.CharField(max_length=32, choices=EVENT_CHOICES)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, default="")
@@ -213,6 +238,7 @@ class AuditLog(models.Model):
 
 class LoginHistory(models.Model):
     user = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="login_history", null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, default="")
     browser = models.CharField(max_length=128, blank=True, default="")
@@ -268,6 +294,7 @@ class Location(models.Model):
     STATUS_CHOICES = [("Active", "Active"), ("Archived", "Archived"), ("Closed", "Closed")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="locations", null=True, blank=True)
     office_name = models.CharField(max_length=255)
     building_name = models.CharField(max_length=255, blank=True, default="")
     floor = models.CharField(max_length=50, blank=True, default="")
@@ -299,8 +326,9 @@ class Department(models.Model):
     STATUS_CHOICES = [("Active", "Active"), ("Disabled", "Disabled"), ("Archived", "Archived")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255, unique=True)
-    code = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="departments", null=True, blank=True)
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=50)
     description = models.TextField(blank=True, default="")
     department_head = models.CharField(max_length=255, blank=True, default="")
     email = models.EmailField(blank=True, default="")
@@ -331,9 +359,10 @@ class Employee(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_code = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="employees", null=True, blank=True)
+    employee_code = models.CharField(max_length=50)
     full_name = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
+    email = models.EmailField()
     phone_number = models.CharField(max_length=20, blank=True, default="")
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="employees")
     designation = models.CharField(max_length=255)
@@ -351,6 +380,7 @@ class Employee(models.Model):
     class Meta:
         db_table = "employees"
         ordering = ["full_name"]
+        unique_together = [("company", "email"), ("company", "employee_code")]
 
     def __str__(self):
         return f"{self.full_name} ({self.employee_code})"
@@ -385,6 +415,7 @@ class OrgAuditLog(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="org_audit_logs", null=True, blank=True)
     entity_type = models.CharField(max_length=20, choices=ENTITY_CHOICES)
     entity_id = models.CharField(max_length=255)
     entity_name = models.CharField(max_length=255)
@@ -415,8 +446,9 @@ class OrgAuditLog(models.Model):
 
 class AssetCategory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=128, unique=True)
-    code = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="asset_categories", null=True, blank=True)
+    name = models.CharField(max_length=128)
+    code = models.CharField(max_length=50)
     description = models.TextField(blank=True, default="")
     parent = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="children")
     icon = models.CharField(max_length=64, blank=True, default="", help_text="Bootstrap icon class")
@@ -435,6 +467,7 @@ class AssetCategory(models.Model):
 
 class AssetVendor(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="asset_vendors", null=True, blank=True)
     name = models.CharField(max_length=255)
     contact_person = models.CharField(max_length=255, blank=True, default="")
     email = models.EmailField(blank=True, default="")
@@ -487,6 +520,7 @@ class Asset(models.Model):
 
     # Identification
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="assets", null=True, blank=True)
     asset_id = models.CharField(max_length=32, unique=True, db_index=True, blank=True)
     asset_name = models.CharField(max_length=255)
     asset_tag = models.CharField(max_length=128, unique=True, db_index=True)

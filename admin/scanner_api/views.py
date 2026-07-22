@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
-from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, Setting, AdministratorProfile, LoginHistory, AuditLog
+from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, Setting, AdministratorProfile, LoginHistory, AuditLog, Company
 from .models import Location, Department, Employee, EmployeeAssetAssignment, OrgAuditLog
 from .models import AssetCategory, AssetVendor, Asset, AssetAssignment, AssetTransfer, AssetHistory, AssetDocument
 from .diff_utils import compute_scan_diff
@@ -21,6 +21,14 @@ def _client_ip(request):
     if xff:
         return xff.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "")
+
+
+def get_user_company(request):
+    """Get the Company for the currently authenticated user."""
+    if not request.user or not request.user.is_authenticated:
+        return None
+    profile, _ = AdministratorProfile.objects.get_or_create(user=request.user)
+    return profile.company
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
     ManualUpdateSerializer, ScanConfigSerializer,
@@ -78,18 +86,25 @@ class RegisterClientView(APIView):
                 same_device.last_ip = _client_ip(request)
                 same_device.status = "online"
                 same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status"])
-                ActivityLog.objects.create(action="register", details=f"Client {hostname} re-registered (same device, new key {key})")
+                ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
                 return Response({"status": "ok", "auto_approved": same_device.approved})
 
         auto_approve = Setting.get("auto_approve", "false").lower() == "true"
+        admin_key = Setting.get("admin_client_key", "")
+        company = None
+        if admin_key:
+            admin_client = Client.objects.filter(registration_key=admin_key).first()
+            if admin_client:
+                company = admin_client.company
         Client.objects.create(
             registration_key=key, hostname=hostname, platform=platform_name,
             client_version=client_version, device_fingerprint=fingerprint,
             status="online" if auto_approve else "pending",
             approved=auto_approve, last_seen=timezone.now(),
             last_ip=_client_ip(request),
+            company=company,
         )
-        ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}")
+        ActivityLog.objects.create(action="register", company=company, details=f"Client {hostname} registered with key {key}")
         return Response({"status": "ok", "auto_approved": auto_approve}, status=status.HTTP_201_CREATED)
 
 
@@ -102,7 +117,8 @@ class ApproveClientView(APIView):
 
         updated = Client.objects.filter(registration_key=key).update(approved=True, status="online")
         if updated:
-            ActivityLog.objects.create(action="approve", details=f"Client with key {key} approved")
+            company = get_user_company(request)
+            ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved")
             return Response({"status": "ok"})
         return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -115,7 +131,8 @@ class ApproveMultipleView(APIView):
         keys = serializer.validated_data["registration_keys"]
 
         count = Client.objects.filter(registration_key__in=keys).update(approved=True, status="online")
-        ActivityLog.objects.create(action="approve", details=f"Bulk approved {count} clients")
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients")
         return Response({"status": "ok", "count": count})
 
 
@@ -181,7 +198,7 @@ class SubmitScanView(APIView):
         client.save(update_fields=["status", "last_seen", "last_ip", "os_version", "cpu_model", "ram_info"])
 
         ActivityLog.objects.create(
-            action="scan", client=client,
+            action="scan", client=client, company=client.company,
             details=f"{scan_type} scan from {hostname}"
         )
         return Response({"status": "ok"})
@@ -190,8 +207,11 @@ class SubmitScanView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class ClientListView(APIView):
     def get(self, request):
-        clients = Client.objects.filter(deleted=False).select_related("group")
-        serializer = ClientListSerializer(clients, many=True)
+        company = get_user_company(request)
+        qs = Client.objects.filter(deleted=False).select_related("group")
+        if company:
+            qs = qs.filter(company=company)
+        serializer = ClientListSerializer(qs, many=True)
         return Response(serializer.data)
 
 
@@ -228,7 +248,7 @@ class ClientDetailView(APIView):
             hostname = client.hostname
             client.deleted = True
             client.save(update_fields=["deleted"])
-            ActivityLog.objects.create(action="delete", details=f"Deleted client {hostname} ({key})")
+            ActivityLog.objects.create(action="delete", company=client.company, details=f"Deleted client {hostname} ({key})")
         except Client.DoesNotExist:
             pass
         return Response({"status": "ok"})
@@ -241,7 +261,8 @@ class DeleteMultipleView(APIView):
         clients = Client.objects.filter(registration_key__in=keys)
         count = clients.count()
         clients.update(deleted=True)
-        ActivityLog.objects.create(action="delete", details=f"Bulk deleted {count} clients")
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="delete", company=company, details=f"Bulk deleted {count} clients")
         return Response({"status": "ok", "count": count})
 
 
@@ -254,7 +275,8 @@ class ManualUpdateView(APIView):
 
         updated = Client.objects.filter(registration_key=key).update(**data)
         if updated:
-            ActivityLog.objects.create(action="update", details=f"Updated fields for client {key}")
+            company = get_user_company(request)
+            ActivityLog.objects.create(action="update", company=company, details=f"Updated fields for client {key}")
             return Response({"status": "ok"})
         return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -317,15 +339,19 @@ class TriggerScanView(APIView):
 
         client.scan_requested = True
         client.save(update_fields=["scan_requested"])
-        ActivityLog.objects.create(action="scan_request", client=client, details=f"Scan requested for {client.hostname}")
+        ActivityLog.objects.create(action="scan_request", client=client, company=client.company, details=f"Scan requested for {client.hostname}")
         return Response({"status": "ok", "message": f"Scan queued for {client.hostname}"})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class ScanAllView(APIView):
     def post(self, request):
-        count = Client.objects.filter(approved=True, deleted=False).update(scan_requested=True)
-        ActivityLog.objects.create(action="scan_request", details=f"Scan requested for {count} clients")
+        company = get_user_company(request)
+        qs = Client.objects.filter(approved=True, deleted=False)
+        if company:
+            qs = qs.filter(company=company)
+        count = qs.update(scan_requested=True)
+        ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients")
         return Response({"status": "ok", "message": f"Scan queued for {count} client(s)"})
 
 
@@ -389,21 +415,29 @@ class ClientScanResultsView(APIView):
 class ActivityLogView(APIView):
     def get(self, request):
         limit = int(request.GET.get("limit", 50))
-        logs = ActivityLog.objects.select_related("client")[:limit]
+        company = get_user_company(request)
+        logs = ActivityLog.objects.select_related("client")
+        if company:
+            logs = logs.filter(company=company)
+        logs = logs[:limit]
         return Response(ActivityLogSerializer(logs, many=True).data)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class GroupListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         groups = ClientGroup.objects.all()
+        if company:
+            groups = groups.filter(company=company)
         return Response(ClientGroupSerializer(groups, many=True).data)
 
     def post(self, request):
         name = request.data.get("name", "").strip()
         if not name:
             return Response({"status": "error", "message": "Name required"}, status=status.HTTP_400_BAD_REQUEST)
-        group, created = ClientGroup.objects.get_or_create(name=name, defaults={"description": request.data.get("description", "")})
+        company = get_user_company(request)
+        group, created = ClientGroup.objects.get_or_create(name=name, company=company, defaults={"description": request.data.get("description", "")})
         return Response(ClientGroupSerializer(group).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -417,22 +451,24 @@ class GroupDeleteView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class SettingsView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         return Response({
-            "auto_approve": Setting.get("auto_approve", "false").lower() == "true",
-            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "120")),
-            "scan_all_interval": int(Setting.get("scan_all_interval", "86400")),
-            "admin_client_key": Setting.get("admin_client_key", ""),
+            "auto_approve": Setting.get("auto_approve", "false", company=company).lower() == "true",
+            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "120", company=company)),
+            "scan_all_interval": int(Setting.get("scan_all_interval", "86400", company=company)),
+            "admin_client_key": Setting.get("admin_client_key", "", company=company),
         })
 
     def put(self, request):
+        company = get_user_company(request)
         data = request.data
         if "auto_approve" in data:
-            Setting.set("auto_approve", str(data["auto_approve"]).lower())
+            Setting.set("auto_approve", str(data["auto_approve"]).lower(), company=company)
         if "stale_threshold_seconds" in data:
-            Setting.set("stale_threshold_seconds", str(data["stale_threshold_seconds"]))
+            Setting.set("stale_threshold_seconds", str(data["stale_threshold_seconds"]), company=company)
         if "scan_all_interval" in data:
-            Setting.set("scan_all_interval", str(data["scan_all_interval"]))
-        ActivityLog.objects.create(action="setting_change", details="Settings updated")
+            Setting.set("scan_all_interval", str(data["scan_all_interval"]), company=company)
+        ActivityLog.objects.create(action="setting_change", company=company, details="Settings updated")
         return Response({"status": "ok"})
 
 
@@ -468,9 +504,10 @@ class AdminUsersView(APIView):
         user = User.objects.create_user(username=username, email=email, password=password)
         user.is_superuser = is_superuser
         user.save()
-        AdministratorProfile.objects.get_or_create(user=user)
+        company = get_user_company(request)
+        AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
         log_audit_event(user, "login_success", request, details=f"Admin user {username} created", success=True)
-        ActivityLog.objects.create(action="login", details=f"Admin user {username} created")
+        ActivityLog.objects.create(action="login", company=company, details=f"Admin user {username} created")
         return Response({"status": "ok", "user": {"id": user.id, "username": user.username, "email": user.email, "is_superuser": user.is_superuser}})
 
 
@@ -482,7 +519,8 @@ class AdminUserDeleteView(APIView):
             user = User.objects.get(id=user_id)
             username = user.username
             user.delete()
-            ActivityLog.objects.create(action="delete", details=f"Admin user {username} deleted")
+            company = get_user_company(request)
+            ActivityLog.objects.create(action="delete", company=company, details=f"Admin user {username} deleted")
             return Response({"status": "ok"})
         except User.DoesNotExist:
             return Response({"status": "error", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -493,16 +531,25 @@ class AdminStatsView(APIView):
     def get(self, request):
         from django.contrib.auth.models import User
         from .models import Client, ScanResult, ActivityLog
-        total = Client.objects.count()
-        online = Client.objects.filter(deleted=False, approved=True, status__in=["online", "pending"]).count()
-        pending = Client.objects.filter(deleted=False, approved=False).count()
-        deleted = Client.objects.filter(deleted=True).count()
+        company = get_user_company(request)
+        base = Client.objects.all()
+        if company:
+            base = base.filter(company=company)
+        total = base.count()
+        online = base.filter(deleted=False, approved=True, status__in=["online", "pending"]).count()
+        pending = base.filter(deleted=False, approved=False).count()
+        deleted = base.filter(deleted=True).count()
         offline = total - online - pending
+        scan_base = ScanResult.objects.all()
+        log_base = ActivityLog.objects.all()
+        if company:
+            scan_base = scan_base.filter(client__company=company)
+            log_base = log_base.filter(company=company)
         return Response({
             "total_admins": User.objects.filter(is_superuser=True).count(),
             "total_clients": total,
-            "total_scans": ScanResult.objects.count(),
-            "total_logs": ActivityLog.objects.count(),
+            "total_scans": scan_base.count(),
+            "total_logs": log_base.count(),
             "clients_online": online,
             "clients_pending": pending,
             "clients_offline": offline,
@@ -514,8 +561,11 @@ class AdminStatsView(APIView):
 class ScanChangesView(APIView):
     def get(self, request):
         from .serializers import ScanResultSerializer
+        company = get_user_company(request)
         changes = []
         clients = Client.objects.filter(approved=True, deleted=False, scans__isnull=False).distinct()
+        if company:
+            clients = clients.filter(company=company)
 
         for client in clients:
             scans = ScanResult.objects.filter(client=client).order_by("-created_at")[:2]
@@ -552,7 +602,10 @@ class ScanHistoryView(APIView):
         scan_type = request.GET.get("type", "").strip().lower()
         limit = int(request.GET.get("limit", 100))
 
+        company = get_user_company(request)
         scans = ScanResult.objects.select_related("client").all().order_by("-created_at")
+        if company:
+            scans = scans.filter(client__company=company)
 
         if query:
             scans = scans.filter(
@@ -598,7 +651,8 @@ class ChangePasswordView(APIView):
         profile.password_changed_at = timezone.now()
         profile.save(update_fields=["password_changed_at"])
         log_audit_event(user, "password_changed", request, details="Password changed successfully")
-        ActivityLog.objects.create(action="update", details=f"Password changed for user {user.username}")
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="update", company=company, details=f"Password changed for user {user.username}")
         return Response({"status": "ok"})
 
 
@@ -705,7 +759,8 @@ class AuthLoginView(APIView):
         request.session["login_history_id"] = login_history.id
 
         login(request, user)
-        ActivityLog.objects.create(action="login", details=f"Admin user {user.username} logged in")
+        _company = AdministratorProfile.objects.filter(user=user).values_list("company", flat=True).first()
+        ActivityLog.objects.create(action="login", company=_company, details=f"Admin user {user.username} logged in")
 
         return Response({
             "status": "ok",
@@ -855,45 +910,49 @@ class AuthActiveSessionsView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class OrgSettingsView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         return Response({
-            "org_name": Setting.get("org_name", "IT Asset Management System"),
-            "org_logo_url": Setting.get("org_logo_url", ""),
-            "org_timezone": Setting.get("org_timezone", "UTC"),
-            "org_currency": Setting.get("org_currency", "USD"),
-            "org_date_format": Setting.get("org_date_format", "YYYY-MM-DD"),
+            "org_name": Setting.get("org_name", "IT Asset Management System", company=company),
+            "org_logo_url": Setting.get("org_logo_url", "", company=company),
+            "org_timezone": Setting.get("org_timezone", "UTC", company=company),
+            "org_currency": Setting.get("org_currency", "USD", company=company),
+            "org_date_format": Setting.get("org_date_format", "YYYY-MM-DD", company=company),
         })
 
     def put(self, request):
         from .auth_utils import log_audit_event
+        company = get_user_company(request)
         data = request.data
         for key in ["org_name", "org_logo_url", "org_timezone", "org_currency", "org_date_format"]:
             if key in data:
-                Setting.set(key, data[key])
+                Setting.set(key, data[key], company=company)
         if request.user.is_authenticated:
             log_audit_event(request.user, "settings_updated", request, details="Organization settings updated")
-        ActivityLog.objects.create(action="setting_change", details="Organization settings updated")
+        ActivityLog.objects.create(action="setting_change", company=company, details="Organization settings updated")
         return Response({"status": "ok"})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class SecuritySettingsView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         return Response({
-            "session_timeout_minutes": int(Setting.get("session_timeout_minutes", "30")),
-            "max_login_attempts": int(Setting.get("max_login_attempts", "5")),
-            "lock_duration_minutes": int(Setting.get("lock_duration_minutes", "30")),
-            "password_expiry_days": int(Setting.get("password_expiry_days", "0")),
+            "session_timeout_minutes": int(Setting.get("session_timeout_minutes", "30", company=company)),
+            "max_login_attempts": int(Setting.get("max_login_attempts", "5", company=company)),
+            "lock_duration_minutes": int(Setting.get("lock_duration_minutes", "30", company=company)),
+            "password_expiry_days": int(Setting.get("password_expiry_days", "0", company=company)),
         })
 
     def put(self, request):
         from .auth_utils import log_audit_event
+        company = get_user_company(request)
         data = request.data
         for key in ["session_timeout_minutes", "max_login_attempts", "lock_duration_minutes", "password_expiry_days"]:
             if key in data:
-                Setting.set(key, str(data[key]))
+                Setting.set(key, str(data[key]), company=company)
         if request.user.is_authenticated:
             log_audit_event(request.user, "settings_updated", request, details="Security settings updated")
-        ActivityLog.objects.create(action="setting_change", details="Security settings updated")
+        ActivityLog.objects.create(action="setting_change", company=company, details="Security settings updated")
         return Response({"status": "ok"})
 
 
@@ -969,7 +1028,7 @@ class AuthAvatarUploadView(APIView):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _org_audit(request, entity_type, entity_id, entity_name, action, prev=None, new=None):
+def _org_audit(request, entity_type, entity_id, entity_name, action, prev=None, new=None, company=None):
     OrgAuditLog.objects.create(
         entity_type=entity_type,
         entity_id=str(entity_id),
@@ -980,6 +1039,7 @@ def _org_audit(request, entity_type, entity_id, entity_name, action, prev=None, 
         performed_by=request.user.username if request.user.is_authenticated else "system",
         ip_address=_client_ip(request),
         user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        company=company,
     )
 
 
@@ -989,7 +1049,10 @@ def _org_audit(request, entity_type, entity_id, entity_name, action, prev=None, 
 @method_decorator(csrf_exempt, name="dispatch")
 class LocationListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = Location.objects.filter(deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         city = request.query_params.get("city", "").strip()
         s = request.query_params.get("status", "").strip()
@@ -1006,17 +1069,18 @@ class LocationListView(APIView):
         return Response(LocationListSerializer(qs, many=True).data)
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = LocationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         if Location.objects.filter(
-            office_name=data["office_name"], city=data["city"], deleted=False
+            office_name=data["office_name"], city=data["city"], deleted=False, company=company
         ).exists():
             return Response(
                 {"status": "error", "message": "A location with this office name and city already exists"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        loc = serializer.save()
+        loc = serializer.save(company=company)
         _org_audit(request, "location", loc.id, loc.office_name, "created", new=serializer.data)
         return Response(LocationSerializer(loc).data, status=status.HTTP_201_CREATED)
 
@@ -1132,8 +1196,11 @@ class LocationExportView(APIView):
     def get(self, request):
         import csv
         from django.http import HttpResponse
+        company = get_user_company(request)
         fmt = request.query_params.get("format", "csv")
         qs = Location.objects.filter(deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(office_name__icontains=search) | models.Q(city__icontains=search))
@@ -1214,7 +1281,10 @@ class LocationBulkActionView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class DepartmentListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = Department.objects.filter(deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         s = request.query_params.get("status", "").strip()
         if search:
@@ -1228,15 +1298,16 @@ class DepartmentListView(APIView):
         return Response(DepartmentListSerializer(qs, many=True).data)
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = DepartmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        if Department.objects.filter(name=data["name"], deleted=False).exists():
+        if Department.objects.filter(name=data["name"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "Department name already exists"}, status=status.HTTP_400_BAD_REQUEST)
-        if Department.objects.filter(code=data["code"], deleted=False).exists():
+        if Department.objects.filter(code=data["code"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "Department code already exists"}, status=status.HTTP_400_BAD_REQUEST)
-        dept = serializer.save()
-        _org_audit(request, "department", dept.id, dept.name, "created", new=serializer.data)
+        dept = serializer.save(company=company)
+        _org_audit(request, "department", dept.id, dept.name, "created", new=serializer.data, company=company)
         return Response(DepartmentSerializer(dept).data, status=status.HTTP_201_CREATED)
 
 
@@ -1344,8 +1415,11 @@ class DepartmentExportView(APIView):
     def get(self, request):
         import csv
         from django.http import HttpResponse
+        company = get_user_company(request)
         fmt = request.query_params.get("format", "csv")
         qs = Department.objects.filter(deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(name__icontains=search) | models.Q(code__icontains=search))
@@ -1407,7 +1481,10 @@ class DepartmentBulkActionView(APIView):
         ids = request.data.get("ids", [])
         if not ids:
             return Response({"status": "error", "message": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        company = get_user_company(request)
         qs = Department.objects.filter(id__in=ids, deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         count = 0
         if action == "disable":
             count = qs.update(status="Disabled")
@@ -1431,7 +1508,10 @@ class DepartmentBulkActionView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class EmployeeListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = Employee.objects.filter(deleted=False).select_related("department", "location")
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         dept = request.query_params.get("department", "").strip()
         loc = request.query_params.get("location", "").strip()
@@ -1456,17 +1536,18 @@ class EmployeeListView(APIView):
         return Response(EmployeeListSerializer(qs, many=True).data)
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = EmployeeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        if Employee.objects.filter(email=data["email"], deleted=False).exists():
+        if Employee.objects.filter(email=data["email"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "An employee with this email already exists"}, status=status.HTTP_400_BAD_REQUEST)
-        if Employee.objects.filter(employee_code=data["employee_code"], deleted=False).exists():
+        if Employee.objects.filter(employee_code=data["employee_code"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "An employee with this code already exists"}, status=status.HTTP_400_BAD_REQUEST)
-        if data.get("phone_number") and Employee.objects.filter(phone_number=data["phone_number"], deleted=False).exists():
+        if data.get("phone_number") and Employee.objects.filter(phone_number=data["phone_number"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "An employee with this phone number already exists"}, status=status.HTTP_400_BAD_REQUEST)
-        emp = serializer.save()
-        _org_audit(request, "employee", emp.id, emp.full_name, "created", new=serializer.data)
+        emp = serializer.save(company=company)
+        _org_audit(request, "employee", emp.id, emp.full_name, "created", new=serializer.data, company=company)
         return Response(EmployeeSerializer(emp).data, status=status.HTTP_201_CREATED)
 
 
@@ -1604,8 +1685,11 @@ class EmployeeExportView(APIView):
     def get(self, request):
         import csv
         from django.http import HttpResponse
+        company = get_user_company(request)
         fmt = request.query_params.get("format", "csv")
         qs = Employee.objects.filter(deleted=False).select_related("department", "location")
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(full_name__icontains=search) | models.Q(employee_code__icontains=search))
@@ -1682,7 +1766,10 @@ class EmployeeBulkActionView(APIView):
         ids = request.data.get("ids", [])
         if not ids:
             return Response({"status": "error", "message": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
+        company = get_user_company(request)
         qs = Employee.objects.filter(id__in=ids, deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         count = 0
         if action == "deactivate":
             count = qs.update(status="Inactive")
@@ -1703,7 +1790,10 @@ class EmployeeBulkActionView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class AssignmentListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = EmployeeAssetAssignment.objects.all().select_related("employee", "client")
+        if company:
+            qs = qs.filter(employee__company=company)
         emp = request.query_params.get("employee", "").strip()
         active = request.query_params.get("active", "").strip()
         if emp:
@@ -1771,7 +1861,10 @@ class AssignmentBulkView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class OrgAuditLogView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = OrgAuditLog.objects.all()
+        if company:
+            qs = qs.filter(company=company)
         entity_type = request.query_params.get("entity_type", "").strip()
         entity_id = request.query_params.get("entity_id", "").strip()
         action = request.query_params.get("action", "").strip()
@@ -1794,11 +1887,20 @@ class OrgAuditLogView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class OrgDashboardStatsView(APIView):
     def get(self, request):
-        total_employees = Employee.objects.filter(deleted=False).count()
-        active_employees = Employee.objects.filter(deleted=False, status="Active").count()
-        total_departments = Department.objects.filter(deleted=False).count()
-        total_locations = Location.objects.filter(deleted=False).count()
-        total_assets = EmployeeAssetAssignment.objects.filter(is_active=True).values("client").distinct().count()
+        company = get_user_company(request)
+        base_emp = Employee.objects.filter(deleted=False)
+        base_dept = Department.objects.filter(deleted=False)
+        base_loc = Location.objects.filter(deleted=False)
+        base_asn = EmployeeAssetAssignment.objects.filter(is_active=True)
+        if company:
+            base_emp = base_emp.filter(company=company)
+            base_dept = base_dept.filter(company=company)
+            base_loc = base_loc.filter(company=company)
+        total_employees = base_emp.count()
+        active_employees = base_emp.filter(status="Active").count()
+        total_departments = base_dept.count()
+        total_locations = base_loc.count()
+        total_assets = base_asn.values("client").distinct().count()
         return Response({
             "total_employees": total_employees,
             "active_employees": active_employees,
@@ -1832,23 +1934,27 @@ def _record_asset_history(asset, action, prev=None, new=None, request=None, note
 @method_decorator(csrf_exempt, name="dispatch")
 class AssetCategoryListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = AssetCategory.objects.filter(is_active=True)
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(name__icontains=search) | models.Q(code__icontains=search))
         return Response(AssetCategoryListSerializer(qs, many=True).data)
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = AssetCategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        if AssetCategory.objects.filter(name=data["name"]).exists():
+        if AssetCategory.objects.filter(name=data["name"], company=company).exists():
             return Response({"status": "error", "message": "Category name already exists"},
                             status=status.HTTP_400_BAD_REQUEST)
-        if AssetCategory.objects.filter(code=data["code"]).exists():
+        if AssetCategory.objects.filter(code=data["code"], company=company).exists():
             return Response({"status": "error", "message": "Category code already exists"},
                             status=status.HTTP_400_BAD_REQUEST)
-        cat = serializer.save()
+        cat = serializer.save(company=company)
         return Response(AssetCategorySerializer(cat).data, status=status.HTTP_201_CREATED)
 
 
@@ -1894,16 +2000,20 @@ class AssetCategoryDetailView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class AssetVendorListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = AssetVendor.objects.all()
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(name__icontains=search) | models.Q(contact_person__icontains=search))
         return Response(AssetVendorSerializer(qs, many=True).data)
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = AssetVendorSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        vendor = serializer.save()
+        vendor = serializer.save(company=company)
         return Response(AssetVendorSerializer(vendor).data, status=status.HTTP_201_CREATED)
 
 
@@ -1944,9 +2054,12 @@ class AssetVendorDetailView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class AssetListView(APIView):
     def get(self, request):
+        company = get_user_company(request)
         qs = Asset.objects.filter(deleted=False).select_related(
             "category", "vendor", "department", "location", "assigned_to", "parent", "client"
         )
+        if company:
+            qs = qs.filter(company=company)
         search = request.query_params.get("search", "").strip()
         category = request.query_params.get("category", "").strip()
         department = request.query_params.get("department", "").strip()
@@ -2002,19 +2115,21 @@ class AssetListView(APIView):
         })
 
     def post(self, request):
+        company = get_user_company(request)
         serializer = AssetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        if Asset.objects.filter(asset_tag=data["asset_tag"], deleted=False).exists():
+        if Asset.objects.filter(asset_tag=data["asset_tag"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "Asset tag already exists"},
                             status=status.HTTP_400_BAD_REQUEST)
-        if Asset.objects.filter(serial_number=data["serial_number"], deleted=False).exists():
+        if Asset.objects.filter(serial_number=data["serial_number"], deleted=False, company=company).exists():
             return Response({"status": "error", "message": "Serial number already exists"},
                             status=status.HTTP_400_BAD_REQUEST)
 
         asset = serializer.save(
-            created_by=request.user.username if request.user.is_authenticated else "system"
+            created_by=request.user.username if request.user.is_authenticated else "system",
+            company=company,
         )
         _record_asset_history(asset, "created", new=AssetSerializer(asset).data, request=request,
                               notes=f"Asset {asset.asset_name} created")
@@ -2531,7 +2646,10 @@ class AssetBulkActionView(APIView):
         if not ids:
             return Response({"status": "error", "message": "No IDs provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        company = get_user_company(request)
         qs = Asset.objects.filter(id__in=ids, deleted=False)
+        if company:
+            qs = qs.filter(company=company)
         count = 0
         if action == "delete":
             for asset in qs:
@@ -2651,8 +2769,11 @@ class AssetExportView(APIView):
         import csv
         from django.http import HttpResponse
 
+        company = get_user_company(request)
         fmt = request.query_params.get("format", "csv")
         qs = Asset.objects.filter(deleted=False).select_related("category", "vendor", "department", "location")
+        if company:
+            qs = qs.filter(company=company)
 
         search = request.query_params.get("search", "").strip()
         category = request.query_params.get("category", "").strip()
@@ -2712,9 +2833,14 @@ class AssetDashboardView(APIView):
         from django.utils import timezone as tz
         from datetime import timedelta
 
-        total = Asset.objects.filter(deleted=False).count()
+        company = get_user_company(request)
+        base_qs = Asset.objects.filter(deleted=False)
+        if company:
+            base_qs = base_qs.filter(company=company)
+
+        total = base_qs.count()
         by_status = dict(
-            Asset.objects.filter(deleted=False).values_list("asset_status")
+            base_qs.values_list("asset_status")
             .annotate(c=Count("id")).values_list("asset_status", "c")
         )
 
@@ -2725,35 +2851,34 @@ class AssetDashboardView(APIView):
         disposed = by_status.get("Disposed", 0)
 
         today = tz.now().date()
-        warranty_expiring = Asset.objects.filter(
-            deleted=False,
+        warranty_expiring = base_qs.filter(
             warranty_end__lte=today + timedelta(days=30),
             warranty_end__gte=today,
         ).count()
 
-        total_value = Asset.objects.filter(deleted=False).aggregate(
+        total_value = base_qs.aggregate(
             total=Sum("current_value"))["total"] or 0
 
         by_category = list(
-            Asset.objects.filter(deleted=False).exclude(category__isnull=True)
+            base_qs.exclude(category__isnull=True)
             .values(name=models.F("category__name"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
 
         by_department = list(
-            Asset.objects.filter(deleted=False).exclude(department__isnull=True)
+            base_qs.exclude(department__isnull=True)
             .values(name=models.F("department__name"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
 
         by_location = list(
-            Asset.objects.filter(deleted=False).exclude(location__isnull=True)
+            base_qs.exclude(location__isnull=True)
             .values(name=models.F("location__office_name"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
 
         recent_assets = AssetListSerializer(
-            Asset.objects.filter(deleted=False).order_by("-created_at")[:10], many=True
+            base_qs.order_by("-created_at")[:10], many=True
         ).data
 
         return Response({
@@ -2783,11 +2908,16 @@ class AssetAnalyticsView(APIView):
         from django.utils import timezone as tz
         from datetime import timedelta
 
-        total = Asset.objects.filter(deleted=False).count()
-        assigned_count = Asset.objects.filter(deleted=False, asset_status="Assigned").count()
+        company = get_user_company(request)
+        base_qs = Asset.objects.filter(deleted=False)
+        if company:
+            base_qs = base_qs.filter(company=company)
+
+        total = base_qs.count()
+        assigned_count = base_qs.filter(asset_status="Assigned").count()
         utilization_rate = round((assigned_count / total * 100), 1) if total else 0
 
-        avg_age = Asset.objects.filter(deleted=False, purchase_date__isnull=False).aggregate(
+        avg_age = base_qs.filter(purchase_date__isnull=False).aggregate(
             avg=Avg(F("created_at__date") - F("purchase_date"))
         )["avg"]
         avg_age_days = None
@@ -2795,14 +2925,14 @@ class AssetAnalyticsView(APIView):
             avg_age_days = avg_age.days if hasattr(avg_age, "days") else int(avg_age)
 
         value_by_department = list(
-            Asset.objects.filter(deleted=False).exclude(department__isnull=True)
+            base_qs.exclude(department__isnull=True)
             .values(name=models.F("department__name"))
             .annotate(total_value=Sum("current_value"), count=Count("id"))
             .order_by("-total_value")[:10]
         )
 
         lifecycle_dist = dict(
-            Asset.objects.filter(deleted=False).values_list("asset_status")
+            base_qs.values_list("asset_status")
             .annotate(c=Count("id")).values_list("asset_status", "c")
         )
 
@@ -2815,26 +2945,23 @@ class AssetAnalyticsView(APIView):
                 month_end = (today - timedelta(days=30 * (10 - i))).replace(day=1)
             else:
                 month_end = today
-            count = Asset.objects.filter(
-                deleted=False, created_at__date__gte=month_start, created_at__date__lt=month_end
+            count = base_qs.filter(
+                created_at__date__gte=month_start, created_at__date__lt=month_end
             ).count()
             monthly_growth.append({
                 "month": month_start.strftime("%Y-%m"),
                 "count": count,
             })
 
-        warranty_expiring_30 = Asset.objects.filter(
-            deleted=False,
+        warranty_expiring_30 = base_qs.filter(
             warranty_end__lte=today + timedelta(days=30),
             warranty_end__gte=today,
         ).count()
 
-        warranty_expired = Asset.objects.filter(
-            deleted=False, warranty_end__lt=today
-        ).count()
+        warranty_expired = base_qs.filter(warranty_end__lt=today).count()
 
-        depreciation_total = Asset.objects.filter(
-            deleted=False, purchase_cost__isnull=False, current_value__isnull=False
+        depreciation_total = base_qs.filter(
+            purchase_cost__isnull=False, current_value__isnull=False
         ).aggregate(
             total_depreciation=Sum(F("purchase_cost") - F("current_value"))
         )["total_depreciation"] or 0
@@ -2866,32 +2993,44 @@ class GlobalSearchView(APIView):
             return Response({"results": []})
 
         from django.db.models import Q as QQ
-
+        company = get_user_company(request)
         results = []
 
+        asset_qs = Asset.objects.filter(deleted=False)
+        emp_qs = Employee.objects.filter(deleted=False)
+        dept_qs = Department.objects.filter(deleted=False)
+        loc_qs = Location.objects.filter(deleted=False)
+        client_qs = Client.objects.filter(deleted=False)
+        if company:
+            asset_qs = asset_qs.filter(company=company)
+            emp_qs = emp_qs.filter(company=company)
+            dept_qs = dept_qs.filter(company=company)
+            loc_qs = loc_qs.filter(company=company)
+            client_qs = client_qs.filter(company=company)
+
         # Assets
-        for asset in Asset.objects.filter(deleted=False).filter(
-            QQ(asset_name__icontains=q) | QQ(asset_tag__icontains=q) | QQ(serial_number__icontains=q) | QQ(model__icontains=q)
+        for asset in asset_qs.filter(
+            QQ(asset_name__icontains=q) | QQ(asset_tag__icontains=q) | QQ(serial_number__icontains=q) | QQ(model_name__icontains=q)
         )[:5]:
             results.append({
                 "type": "asset", "id": str(asset.id),
-                "title": asset.asset_name, "subtitle": f"{asset.asset_tag} | {asset.model or ''}",
+                "title": asset.asset_name, "subtitle": f"{asset.asset_tag} | {asset.model_name or ''}",
                 "url": f"/assets/{asset.id}/",
             })
 
         # Employees
-        for emp in Employee.objects.filter(deleted=False).filter(
-            QQ(first_name__icontains=q) | QQ(last_name__icontains=q) | QQ(employee_id__icontains=q) | QQ(email__icontains=q)
+        for emp in emp_qs.filter(
+            QQ(full_name__icontains=q) | QQ(employee_code__icontains=q) | QQ(email__icontains=q)
         )[:5]:
             results.append({
                 "type": "employee", "id": str(emp.id),
-                "title": f"{emp.first_name} {emp.last_name}",
-                "subtitle": emp.employee_id or emp.email or "",
+                "title": emp.full_name,
+                "subtitle": emp.employee_code or emp.email or "",
                 "url": "#",
             })
 
         # Departments
-        for dep in Department.objects.filter(deleted=False).filter(
+        for dep in dept_qs.filter(
             QQ(name__icontains=q) | QQ(code__icontains=q)
         )[:5]:
             results.append({
@@ -2901,7 +3040,7 @@ class GlobalSearchView(APIView):
             })
 
         # Locations
-        for loc in Location.objects.filter(deleted=False).filter(
+        for loc in loc_qs.filter(
             QQ(office_name__icontains=q) | QQ(city__icontains=q) | QQ(country__icontains=q)
         )[:5]:
             results.append({
@@ -2911,7 +3050,7 @@ class GlobalSearchView(APIView):
             })
 
         # Clients
-        for c in Client.objects.filter(deleted=False).filter(
+        for c in client_qs.filter(
             QQ(hostname__icontains=q) | QQ(registration_key__icontains=q) | QQ(platform__icontains=q)
         )[:5]:
             results.append({
@@ -2959,10 +3098,34 @@ class ExecutiveAnalyticsView(APIView):
 
         today = timezone.now().date()
         User = get_user_model()
+        company = get_user_company(request)
+
+        # ── Base querysets (company-scoped) ──
+        asset_qs = Asset.objects.filter(deleted=False)
+        dept_qs = Department.objects.filter(deleted=False)
+        emp_qs = Employee.objects.filter(deleted=False)
+        loc_qs = Location.objects.filter(deleted=False)
+        mon_qs = DeviceMonitoringInfo.objects.filter(client__deleted=False)
+        mnt_qs = MaintenanceRecord.objects.filter(deleted=False)
+        lic_qs = SoftwareLicense.objects.filter(deleted=False)
+        alert_qs = Alert.objects.all()
+        audit_qs = AuditLogEntry.objects.all()
+        client_qs = Client.objects.filter(deleted=False)
+        if company:
+            asset_qs = asset_qs.filter(company=company)
+            dept_qs = dept_qs.filter(company=company)
+            emp_qs = emp_qs.filter(company=company)
+            loc_qs = loc_qs.filter(company=company)
+            mon_qs = mon_qs.filter(client__company=company)
+            mnt_qs = mnt_qs.filter(company=company)
+            lic_qs = lic_qs.filter(company=company)
+            alert_qs = alert_qs.filter(client__company=company) if hasattr(Alert, 'client') else alert_qs
+            audit_qs = audit_qs.filter(company=company) if hasattr(AuditLogEntry, 'company') else audit_qs
+            client_qs = client_qs.filter(company=company)
 
         # ── Asset KPIs ──
         by_status = dict(
-            Asset.objects.filter(deleted=False).values_list("asset_status")
+            asset_qs.values_list("asset_status")
             .annotate(c=Count("id")).values_list("asset_status", "c")
         )
         total_assets = sum(by_status.values())
@@ -2971,70 +3134,70 @@ class ExecutiveAnalyticsView(APIView):
         maintenance_assets = by_status.get("Maintenance", 0)
         retired_assets = by_status.get("Retired", 0)
         disposed_assets = by_status.get("Disposed", 0)
-        warranty_expiring = Asset.objects.filter(
-            deleted=False, warranty_end__lte=today + timedelta(days=30), warranty_end__gte=today
+        warranty_expiring = asset_qs.filter(
+            warranty_end__lte=today + timedelta(days=30), warranty_end__gte=today
         ).count()
-        total_asset_value = Asset.objects.filter(deleted=False).aggregate(
+        total_asset_value = asset_qs.aggregate(
             total=Sum("current_value"))["total"] or 0
 
         # ── Monitoring KPIs ──
         from monitoring.models import DeviceMonitoringInfo, DeviceAlert
-        mon = DeviceMonitoringInfo.objects.filter(client__deleted=False)
-        online_devices = mon.filter(monitoring_status="online").count()
-        offline_devices = mon.filter(monitoring_status="offline").count()
-        not_reporting = mon.filter(monitoring_status="pending").count()
-        critical_devices = DeviceAlert.objects.filter(status="active", severity="critical").count()
+        online_devices = mon_qs.filter(monitoring_status="online").count()
+        offline_devices = mon_qs.filter(monitoring_status="offline").count()
+        not_reporting = mon_qs.filter(monitoring_status="pending").count()
+        critical_devices = DeviceAlert.objects.filter(status="active", severity="critical")
+        if company:
+            critical_devices = critical_devices.filter(client__company=company)
+        critical_devices = critical_devices.count()
 
         # ── Maintenance KPIs ──
         from maintenance.models import MaintenanceRecord
-        upcoming_mnt = MaintenanceRecord.objects.filter(
-            deleted=False, scheduled_date__lte=today + timedelta(days=30),
+        upcoming_mnt = mnt_qs.filter(
+            scheduled_date__lte=today + timedelta(days=30),
             scheduled_date__gte=today, status__in=("Approved", "Scheduled")
         ).count()
-        overdue_mnt = MaintenanceRecord.objects.filter(
-            deleted=False, status__in=("Scheduled", "In Progress", "Waiting Parts"), due_date__lt=today
+        overdue_mnt = mnt_qs.filter(
+            status__in=("Scheduled", "In Progress", "Waiting Parts"), due_date__lt=today
         ).count()
-        assets_under_repair = MaintenanceRecord.objects.filter(
-            deleted=False, status__in=("In Progress", "Waiting Parts")
+        assets_under_repair = mnt_qs.filter(
+            status__in=("In Progress", "Waiting Parts")
         ).values("asset").distinct().count()
-        mnt_cost_ytd = MaintenanceRecord.objects.filter(
-            deleted=False, completion_date__year=today.year, actual_cost__isnull=False
+        mnt_cost_ytd = mnt_qs.filter(
+            completion_date__year=today.year, actual_cost__isnull=False
         ).aggregate(total=Sum("actual_cost"))["total"] or 0
 
         # ── License KPIs ──
         from maintenance.models import SoftwareLicense
-        total_licenses = SoftwareLicense.objects.filter(deleted=False).count()
-        expiring_licenses = SoftwareLicense.objects.filter(
-            deleted=False, expiration_date__lte=today + timedelta(days=30),
+        total_licenses = lic_qs.count()
+        expiring_licenses = lic_qs.filter(
+            expiration_date__lte=today + timedelta(days=30),
             expiration_date__gte=today
         ).count()
-        expired_licenses = SoftwareLicense.objects.filter(deleted=False, status="Expired").count()
-        used_seats = SoftwareLicense.objects.filter(deleted=False).aggregate(
-            total=Sum("seats_used"))["total"] or 0
-        total_seats = SoftwareLicense.objects.filter(deleted=False).aggregate(
-            total=Sum("purchased_seats"))["total"] or 0
+        expired_licenses = lic_qs.filter(status="Expired").count()
+        used_seats = lic_qs.aggregate(total=Sum("seats_used"))["total"] or 0
+        total_seats = lic_qs.aggregate(total=Sum("purchased_seats"))["total"] or 0
         license_compliance = round((used_seats / total_seats * 100), 1) if total_seats else 100
 
         # ── Security KPIs ──
         from intelligence.models import Alert, AuditLogEntry
-        open_alerts = Alert.objects.filter(status__in=("open", "acknowledged")).count()
-        critical_alerts = Alert.objects.filter(severity="critical", status="open").count()
-        security_violations = Alert.objects.filter(category__icontains="security", status="open").count()
-        audit_today = AuditLogEntry.objects.filter(timestamp__date=today).count()
+        open_alerts = alert_qs.filter(status__in=("open", "acknowledged")).count()
+        critical_alerts = alert_qs.filter(severity="critical", status="open").count()
+        security_violations = alert_qs.filter(category__icontains="security", status="open").count()
+        audit_today = audit_qs.filter(timestamp__date=today).count()
 
         # ── Charts: Asset Distribution ──
         asset_by_category = list(
-            Asset.objects.filter(deleted=False).exclude(category__isnull=True)
+            asset_qs.exclude(category__isnull=True)
             .values(name=F("category__name"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
         asset_by_department = list(
-            Asset.objects.filter(deleted=False).exclude(department__isnull=True)
+            asset_qs.exclude(department__isnull=True)
             .values(name=F("department__name"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
         lifecycle_dist = dict(
-            Asset.objects.filter(deleted=False).values_list("asset_status")
+            asset_qs.values_list("asset_status")
             .annotate(c=Count("id")).values_list("asset_status", "c")
         )
 
@@ -3043,24 +3206,24 @@ class ExecutiveAnalyticsView(APIView):
         for i in range(12):
             ms = (today - timedelta(days=30 * (11 - i))).replace(day=1)
             me = (today - timedelta(days=30 * (10 - i))).replace(day=1) if i < 11 else today
-            c = Asset.objects.filter(deleted=False, created_at__date__gte=ms, created_at__date__lt=me).count()
+            c = asset_qs.filter(created_at__date__gte=ms, created_at__date__lt=me).count()
             growth_trend.append({"month": ms.strftime("%Y-%m"), "count": c})
 
         # ── Charts: Monitoring ──
         monitor_status_dist = dict(
-            mon.values_list("monitoring_status").annotate(c=Count("id")).values_list("monitoring_status", "c")
+            mon_qs.values_list("monitoring_status").annotate(c=Count("id")).values_list("monitoring_status", "c")
         )
-        avg_health = mon.exclude(health_score=0).aggregate(avg=Avg("health_score"))["avg"] or 0
+        avg_health = mon_qs.exclude(health_score=0).aggregate(avg=Avg("health_score"))["avg"] or 0
 
         # ── Charts: Maintenance Trends ──
         mnt_by_type = dict(
-            MaintenanceRecord.objects.filter(deleted=False).values_list("maintenance_type")
+            mnt_qs.values_list("maintenance_type")
             .annotate(c=Count("id")).values_list("maintenance_type", "c")
         )
 
         # ── Charts: License Utilization ──
         license_by_type = dict(
-            SoftwareLicense.objects.filter(deleted=False).values_list("license_type")
+            lic_qs.values_list("license_type")
             .annotate(c=Count("id")).values_list("license_type", "c")
         )
 
@@ -3068,25 +3231,25 @@ class ExecutiveAnalyticsView(APIView):
         security_trend = []
         for i in range(7):
             d = today - timedelta(days=6 - i)
-            c = Alert.objects.filter(generated_time__date=d).count()
+            c = alert_qs.filter(generated_time__date=d).count()
             security_trend.append({"date": d.isoformat(), "count": c})
 
         # ── Recent Activities ──
         recent_activities = []
         recent_activities += [
             {"type": "alert", "text": a.title, "time": a.generated_time.isoformat(), "severity": a.severity}
-            for a in Alert.objects.order_by("-generated_time")[:5]
+            for a in alert_qs.order_by("-generated_time")[:5]
         ]
         recent_activities += [
             {"type": "audit", "text": e.description, "time": e.timestamp.isoformat(), "username": e.username}
-            for e in AuditLogEntry.objects.order_by("-timestamp")[:5]
+            for e in audit_qs.order_by("-timestamp")[:5]
         ]
         recent_activities = sorted(recent_activities, key=lambda x: x["time"], reverse=True)[:10]
 
         # ── Org Stats ──
-        total_employees = Employee.objects.filter(deleted=False).count()
-        total_departments = Department.objects.filter(deleted=False).count()
-        total_locations = Location.objects.filter(deleted=False).count()
+        total_employees = emp_qs.count()
+        total_departments = dept_qs.count()
+        total_locations = loc_qs.count()
         total_users = User.objects.count()
 
         return Response({
