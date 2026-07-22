@@ -14,6 +14,10 @@ from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, S
 from .models import Location, Department, Employee, EmployeeAssetAssignment, OrgAuditLog
 from .models import AssetCategory, AssetVendor, Asset, AssetAssignment, AssetTransfer, AssetHistory, AssetDocument
 from .diff_utils import compute_scan_diff
+from .serializers import (
+    AdminUserCreateSerializer, ProfileUpdateSerializer,
+    LoginHistorySerializer, AuditLogSerializer,
+)
 
 
 def _client_ip(request):
@@ -575,7 +579,6 @@ class ScanChangesView(APIView):
             new_data = scans[0].scan_data or {}
             if old_data == new_data:
                 continue
-            from .diff_utils import compute_scan_diff
             diffs = compute_scan_diff(
                 {"scan_data": old_data},
                 {"scan_data": new_data},
