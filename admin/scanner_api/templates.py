@@ -215,22 +215,33 @@ def signup_view(request):
 
 def download_client_view(request):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    zip_path = os.path.join(base_dir, "data", "client_scanner.zip")
+    data_dir = os.path.join(base_dir, "data")
 
-    if not os.path.exists(zip_path):
-        raise Http404("client_scanner.zip not found on the server. Run build_client.py first.")
+    zip_path = os.path.join(data_dir, "client_scanner.zip")
+    exe_path = os.path.join(data_dir, "client_scanner.exe")
+
+    if os.path.exists(zip_path):
+        file_path = zip_path
+        filename = "client_scanner.zip"
+        content_type = "application/zip"
+    elif os.path.exists(exe_path):
+        file_path = exe_path
+        filename = "client_scanner.exe"
+        content_type = "application/vnd.microsoft.portable-executable"
+    else:
+        raise Http404("Client installer not found on the server. Run build_client.py first.")
 
     sha256 = hashlib.sha256()
-    with open(zip_path, "rb") as f:
+    with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             sha256.update(chunk)
     file_hash = sha256.hexdigest()
 
     response = FileResponse(
-        open(zip_path, "rb"),
+        open(file_path, "rb"),
         as_attachment=True,
-        filename="client_scanner.zip",
-        content_type="application/zip",
+        filename=filename,
+        content_type=content_type,
     )
     response["Content-SHA256"] = file_hash
     response["X-Content-Type-Options"] = "nosniff"
