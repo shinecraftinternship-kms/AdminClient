@@ -2,9 +2,8 @@ import os
 import sys
 import shutil
 import subprocess
-import tempfile
 import hashlib
-import time
+import zipfile
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.join(ROOT_DIR, "client")
@@ -15,6 +14,7 @@ OUTPUT_NAME = "client_scanner.exe"
 DATA_DIR = os.path.join(ROOT_DIR, "admin", "data")
 VERSION_FILE = os.path.join(CLIENT_DIR, "version-info.txt")
 MANIFEST_FILE = os.path.join(CLIENT_DIR, "client_scanner.exe.manifest")
+ZIP_NAME = "client_scanner.zip"
 
 
 def check_pyinstaller():
@@ -44,10 +44,11 @@ def ensure_client_init():
 
 
 def collect_datas():
+    exclude_files = {"version-info.txt", "client_scanner.exe.manifest"}
     datas = []
     for dirpath, dirnames, filenames in os.walk(CLIENT_DIR):
         for f in filenames:
-            if f.endswith((".json", ".txt")):
+            if f.endswith((".json", ".txt")) and f not in exclude_files:
                 src = os.path.join(dirpath, f)
                 rel = os.path.relpath(dirpath, ROOT_DIR)
                 datas.append((src, rel))
@@ -62,12 +63,10 @@ def sign_exe(exe_path):
 
     if not pfx_path or not os.path.exists(pfx_path):
         print("[INFO] No CODE_SIGN_PFX set or file not found. Skipping code signing.")
-        print("[INFO] To sign, set CODE_SIGN_PFX and CODE_SIGN_PASSWORD environment variables.")
         return False
 
     if not shutil.which("signtool"):
         print("[INFO] signtool.exe not found in PATH. Skipping code signing.")
-        print("[INFO] Install Windows SDK or add signtool to PATH.")
         return False
 
     print(f"[INFO] Signing executable with certificate: {pfx_path}")
@@ -96,15 +95,26 @@ def sign_exe(exe_path):
         return False
 
 
-def verify_binary(output_path):
+def verify_binary(file_path):
     """Print SHA-256 hash for verification."""
     sha256 = hashlib.sha256()
-    with open(output_path, "rb") as f:
+    with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             sha256.update(chunk)
     file_hash = sha256.hexdigest()
     print(f"  SHA-256 : {file_hash}")
     return file_hash
+
+
+def create_zip(folder_path, zip_path):
+    """Create a ZIP archive from a folder."""
+    print(f"[INFO] Creating ZIP: {zip_path}")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, os.path.dirname(folder_path))
+                zf.write(file_path, arcname)
 
 
 def build():
@@ -128,12 +138,13 @@ def build():
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
         "--name", OUTPUT_NAME.replace(".exe", ""),
         "--distpath", DIST_DIR,
         "--workpath", BUILD_DIR,
         "--noconfirm",
         "--clean",
+        "--noupx",
         f"--paths={ROOT_DIR}",
         "--hidden-import=websockets",
         "--hidden-import=watchdog",
@@ -158,14 +169,10 @@ def build():
     if os.path.exists(VERSION_FILE):
         cmd.append(f"--version-file={VERSION_FILE}")
         print(f"[INFO] Version info  : {VERSION_FILE}")
-    else:
-        print("[WARN] Version info file not found. Exe will have no metadata.")
 
     if os.path.exists(MANIFEST_FILE):
         cmd.append(f"--manifest={MANIFEST_FILE}")
         print(f"[INFO] Manifest      : {MANIFEST_FILE}")
-    else:
-        print("[WARN] Manifest file not found. Exe will use default manifest.")
 
     for src, dst in datas:
         cmd.extend(["--add-data", f"{src};{dst}"])
@@ -174,6 +181,7 @@ def build():
 
     print(f"[INFO] Entry point : {ENTRY}")
     print(f"[INFO] Output dir  : {DIST_DIR}")
+    print(f"[INFO] Mode        : onedir (no self-extracting bootloader)")
     print(f"[INFO] Building with PyInstaller...")
     print()
 
@@ -181,38 +189,35 @@ def build():
         result = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, text=True)
         if result.returncode != 0:
             print("[ERROR] Build failed!")
-            print(result.stdout[-2000:] if len(result.stdout) > 2000 else result.stdout)
-            print(result.stderr[-2000:] if len(result.stderr) > 2000 else result.stderr)
+            print(result.stdout[-3000:] if len(result.stdout) > 3000 else result.stdout)
+            print(result.stderr[-3000:] if len(result.stderr) > 3000 else result.stderr)
             sys.exit(1)
     except Exception as e:
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
 
-    output_path = os.path.join(DIST_DIR, OUTPUT_NAME)
-    if not os.path.exists(output_path):
-        exe_name = OUTPUT_NAME.replace(".exe", "")
-        for f in os.listdir(DIST_DIR):
-            if f.startswith(exe_name):
-                output_path = os.path.join(DIST_DIR, f)
-                break
+    folder_name = OUTPUT_NAME.replace(".exe", "")
+    output_folder = os.path.join(DIST_DIR, folder_name)
+    exe_path = os.path.join(output_folder, OUTPUT_NAME)
 
-    if os.path.exists(output_path):
-        sign_exe(output_path)
-
-        os.makedirs(DATA_DIR, exist_ok=True)
-        dest = os.path.join(DATA_DIR, OUTPUT_NAME)
-        shutil.copy2(output_path, dest)
-        size_mb = os.path.getsize(dest) / (1024 * 1024)
-        print()
-        print("=" * 55)
-        print(f"  Build successful!")
-        print(f"  Output : {dest}")
-        print(f"  Size   : {size_mb:.1f} MB")
-        verify_binary(output_path)
-        print("=" * 55)
-    else:
-        print(f"[ERROR] Output exe not found at {output_path}")
+    if not os.path.exists(exe_path):
+        print(f"[ERROR] Output exe not found at {exe_path}")
         sys.exit(1)
+
+    sign_exe(exe_path)
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
+    create_zip(output_folder, zip_dest)
+
+    zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
+    print()
+    print("=" * 55)
+    print(f"  Build successful!")
+    print(f"  ZIP    : {zip_dest}")
+    print(f"  Size   : {zip_size_mb:.1f} MB")
+    verify_binary(zip_dest)
+    print("=" * 55)
 
     if root_created and os.path.exists(root_init):
         try:
@@ -220,8 +225,7 @@ def build():
         except OSError:
             pass
 
-    build_cache = os.path.join(ROOT_DIR, "build")
-    spec_file = os.path.join(ROOT_DIR, f"{OUTPUT_NAME.replace('.exe', '')}.spec")
+    spec_file = os.path.join(ROOT_DIR, f"{folder_name}.spec")
     if os.path.exists(spec_file):
         try:
             os.remove(spec_file)

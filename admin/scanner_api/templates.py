@@ -215,22 +215,22 @@ def signup_view(request):
 
 def download_client_view(request):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    exe_path = os.path.join(base_dir, "data", "client_scanner.exe")
+    zip_path = os.path.join(base_dir, "data", "client_scanner.zip")
 
-    if not os.path.exists(exe_path):
-        raise Http404("client_scanner.exe not found on the server")
+    if not os.path.exists(zip_path):
+        raise Http404("client_scanner.zip not found on the server. Run build_client.py first.")
 
     sha256 = hashlib.sha256()
-    with open(exe_path, "rb") as f:
+    with open(zip_path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             sha256.update(chunk)
     file_hash = sha256.hexdigest()
 
     response = FileResponse(
-        open(exe_path, "rb"),
+        open(zip_path, "rb"),
         as_attachment=True,
-        filename="client_scanner.exe",
-        content_type="application/octet-stream",
+        filename="client_scanner.zip",
+        content_type="application/zip",
     )
     response["Content-SHA256"] = file_hash
     response["X-Content-Type-Options"] = "nosniff"
