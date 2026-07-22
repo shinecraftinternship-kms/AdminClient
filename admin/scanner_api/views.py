@@ -762,8 +762,8 @@ class AuthLoginView(APIView):
         request.session["login_history_id"] = login_history.id
 
         login(request, user)
-        _company = AdministratorProfile.objects.filter(user=user).values_list("company", flat=True).first()
-        ActivityLog.objects.create(action="login", company=_company, details=f"Admin user {user.username} logged in")
+        _profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
+        ActivityLog.objects.create(action="login", company=_profile.company if _profile else None, details=f"Admin user {user.username} logged in")
 
         return Response({
             "status": "ok",
