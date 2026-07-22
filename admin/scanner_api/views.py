@@ -3065,11 +3065,11 @@ class GlobalSearchView(APIView):
         # Licenses
         from maintenance.models import SoftwareLicense
         for lic in SoftwareLicense.objects.filter(deleted=False).filter(
-            QQ(software_name__icontains=q) | QQ(license_key__icontains=q)
+            QQ(software_name__icontains=q) | QQ(license_key_masked__icontains=q)
         )[:5]:
             results.append({
                 "type": "license", "id": str(lic.id),
-                "title": lic.software_name, "subtitle": lic.license_key or "",
+                "title": lic.software_name, "subtitle": lic.license_key_masked or "",
                 "url": "#",
             })
 
@@ -3102,6 +3102,10 @@ class ExecutiveAnalyticsView(APIView):
         today = timezone.now().date()
         User = get_user_model()
         company = get_user_company(request)
+
+        from monitoring.models import DeviceMonitoringInfo, DeviceAlert
+        from maintenance.models import MaintenanceRecord, SoftwareLicense
+        from intelligence.models import Alert, AuditLogEntry
 
         # ── Base querysets (company-scoped) ──
         asset_qs = Asset.objects.filter(deleted=False)
@@ -3144,7 +3148,6 @@ class ExecutiveAnalyticsView(APIView):
             total=Sum("current_value"))["total"] or 0
 
         # ── Monitoring KPIs ──
-        from monitoring.models import DeviceMonitoringInfo, DeviceAlert
         online_devices = mon_qs.filter(monitoring_status="online").count()
         offline_devices = mon_qs.filter(monitoring_status="offline").count()
         not_reporting = mon_qs.filter(monitoring_status="pending").count()
@@ -3154,7 +3157,6 @@ class ExecutiveAnalyticsView(APIView):
         critical_devices = critical_devices.count()
 
         # ── Maintenance KPIs ──
-        from maintenance.models import MaintenanceRecord
         upcoming_mnt = mnt_qs.filter(
             scheduled_date__lte=today + timedelta(days=30),
             scheduled_date__gte=today, status__in=("Approved", "Scheduled")
@@ -3170,7 +3172,6 @@ class ExecutiveAnalyticsView(APIView):
         ).aggregate(total=Sum("actual_cost"))["total"] or 0
 
         # ── License KPIs ──
-        from maintenance.models import SoftwareLicense
         total_licenses = lic_qs.count()
         expiring_licenses = lic_qs.filter(
             expiration_date__lte=today + timedelta(days=30),
@@ -3182,7 +3183,6 @@ class ExecutiveAnalyticsView(APIView):
         license_compliance = round((used_seats / total_seats * 100), 1) if total_seats else 100
 
         # ── Security KPIs ──
-        from intelligence.models import Alert, AuditLogEntry
         open_alerts = alert_qs.filter(status__in=("open", "acknowledged")).count()
         critical_alerts = alert_qs.filter(severity="critical", status="open").count()
         security_violations = alert_qs.filter(category__icontains="security", status="open").count()
