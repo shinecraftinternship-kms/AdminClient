@@ -210,12 +210,17 @@ def build():
     zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
     create_zip(output_folder, zip_dest)
 
+    exe_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
+    shutil.copy2(exe_path, exe_dest)
+    print(f"[INFO] Copied exe to: {exe_dest}")
+
     zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
+    exe_size_mb = os.path.getsize(exe_dest) / (1024 * 1024)
     print()
     print("=" * 55)
     print(f"  Build successful!")
-    print(f"  ZIP    : {zip_dest}")
-    print(f"  Size   : {zip_size_mb:.1f} MB")
+    print(f"  EXE    : {exe_dest} ({exe_size_mb:.1f} MB)")
+    print(f"  ZIP    : {zip_dest} ({zip_size_mb:.1f} MB)")
     verify_binary(zip_dest)
     print("=" * 55)
 

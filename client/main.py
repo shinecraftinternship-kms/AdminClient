@@ -1,54 +1,113 @@
 import sys
 import os
+import traceback
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _script_dir)
 sys.path.insert(0, os.path.dirname(_script_dir))
 
-if getattr(sys, "frozen", False):
-    sys.stdout.reconfigure(line_buffering=True)
-    sys.stderr.reconfigure(line_buffering=True)
+_crash_log = os.path.join(os.path.dirname(_script_dir), "client_crash.log")
+
+
+def _log_crash(msg):
     try:
-        import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleW("System Scanner Pro Client")
+        with open(_crash_log, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
     except Exception:
         pass
 
-import time
-import json
-import socket
-import platform
-import logging
-import threading
-from datetime import datetime
-from pathlib import Path
 
-logger = logging.getLogger("client.main")
+def _keep_open_pause():
+    try:
+        input("\n  Press Enter to exit...")
+    except (EOFError, KeyboardInterrupt):
+        pass
 
-from client.runtime import is_frozen, get_client_data_dir
-from client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
-from client.config import prompt_admin_url, discover_admin, load_config, save_config
-from client.communicator import Communicator, WebSocketClient
+
+_log_crash(f"=== START {__import__('datetime').datetime.now()} ===")
+_log_crash(f"frozen={getattr(sys, 'frozen', False)}")
+_log_crash(f"executable={sys.executable}")
+_log_crash(f"argv={sys.argv}")
+
+try:
+    if getattr(sys, "frozen", False):
+        try:
+            sys.stdout.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+        try:
+            sys.stderr.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW("System Scanner Pro Client")
+        except Exception:
+            pass
+
+    _log_crash("OK: frozen setup done")
+
+    import time
+    import json
+    import socket
+    import platform
+    import logging
+    import threading
+    from datetime import datetime
+    from pathlib import Path
+
+    logger = logging.getLogger("client.main")
+    _log_crash("OK: stdlib imports done")
+
+    from client.runtime import is_frozen, get_client_data_dir
+    _log_crash("OK: imported client.runtime")
+
+    from client.key_manager import load_or_create_key, load_or_create_fingerprint
+    _log_crash("OK: imported client.key_manager (funcs)")
+
+    from client.key_manager import load_config as km_load_config, save_config as km_save_config
+    _log_crash("OK: imported client.key_manager (config)")
+
+    from client.config import prompt_admin_url, discover_admin
+    _log_crash("OK: imported client.config (funcs)")
+
+    from client.config import load_config as cfg_load_config, save_config as cfg_save_config
+    _log_crash("OK: imported client.config (config)")
+
+    from client.communicator import Communicator, WebSocketClient
+    _log_crash("OK: imported client.communicator")
+
+except Exception as e:
+    _log_crash(f"FATAL IMPORT ERROR: {e}")
+    _log_crash(traceback.format_exc())
+    print()
+    print("  ==========================================")
+    print("  FATAL ERROR - Startup import failed")
+    print("  ==========================================")
+    print(f"  Error: {e}")
+    print(f"  Crash log: {_crash_log}")
+    print()
+    traceback.print_exc()
+    print("  ==========================================")
+    _keep_open_pause()
+    sys.exit(1)
 
 try:
     from client.discovery import discover_admin_url
-except ImportError:
-    discover_admin_url = None
-except Exception:
+except (ImportError, Exception):
     discover_admin_url = None
 
 try:
     from client.scanner import collect_all
 except Exception as e:
+    _log_crash(f"FATAL: scanner import failed: {e}")
     print(f"  FATAL: Cannot import scanner module: {e}", flush=True)
-    input("  Press Enter to exit...")
+    _keep_open_pause()
     sys.exit(1)
 
 try:
     from client.metrics import collect_metrics
-except ImportError:
-    collect_metrics = None
-except Exception:
+except (ImportError, Exception):
     collect_metrics = None
 
 try:
@@ -58,14 +117,23 @@ try:
     from client.events.process_monitor import ProcessMonitor
     from client.events.software_monitor import SoftwareMonitor
     HAS_EVENT_MONITORS = True
-except ImportError:
+except (ImportError, Exception):
     HAS_EVENT_MONITORS = False
-except Exception:
-    HAS_EVENT_MONITORS = False
+
+_log_crash("OK: all imports done")
+_log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
 VERSION = "1.0.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
+
+
+def load_config():
+    return cfg_load_config()
+
+
+def save_config(data):
+    return cfg_save_config(data)
 
 
 def P(msg=""):
@@ -436,6 +504,7 @@ def _start_event_monitors(comm, key, ws_client):
 def main():
     global _global_scan_config
 
+    _log_crash("OK: main() starting")
     print_header()
 
     key = load_or_create_key()
@@ -466,9 +535,9 @@ def main():
         P("  " + "=" * 50)
         P()
         choice = safe_input("  Select option [1-4]: ").strip()
+        _log_crash(f"OK: user chose '{choice}'")
 
         if choice == "2":
-            from client.config import prompt_admin_url
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
             save_config(config)
@@ -519,6 +588,7 @@ def main():
             P()
 
     hostname = socket.gethostname()
+    _log_crash(f"OK: admin_url={admin_url} hostname={hostname}")
 
     retry_count = 0
     while True:
@@ -531,6 +601,7 @@ def main():
         P()
 
         if comm.is_reachable():
+            _log_crash("OK: server reachable")
             break
 
         retry_count += 1
@@ -574,7 +645,6 @@ def main():
         P()
         choice = safe_input("  Select option [1-3]: ").strip()
         if choice == "1":
-            from client.config import prompt_admin_url
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
             save_config(config)
@@ -591,6 +661,7 @@ def main():
 
     P("  Connecting to admin server...")
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+    _log_crash(f"OK: register result={result}")
 
     if result.get("status") in ("ok",):
         if result.get("auto_approved"):
@@ -678,6 +749,7 @@ def main():
     P("  Starting heartbeat loop (every 30 seconds)...")
     P("  Press Ctrl+C to stop.")
     P()
+    _log_crash("OK: entering main loop")
 
     last_scan = time.time()
     while True:
@@ -722,6 +794,7 @@ def main():
 
 if __name__ == "__main__":
     try:
+        _log_crash("OK: __main__ block entered")
         main()
     except KeyboardInterrupt:
         P("\n  Shutting down...")
@@ -742,14 +815,16 @@ if __name__ == "__main__":
             _global_ws_client.stop()
         P("  Stopped.")
     except Exception as e:
-        import traceback
+        _log_crash(f"FATAL RUNTIME ERROR: {e}")
+        _log_crash(traceback.format_exc())
         P()
         P("  ==========================================")
         P("  FATAL ERROR - Client crashed")
         P("  ==========================================")
         P(f"  Error: {e}")
+        P(f"  Crash log saved to: {_crash_log}")
         P()
         traceback.print_exc()
         P("  ==========================================")
         P()
-        input("  Press Enter to exit...")
+        _keep_open_pause()
