@@ -137,7 +137,7 @@ def build():
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onedir",
+        "--onefile",
         "--name", OUTPUT_NAME.replace(".exe", ""),
         "--distpath", DIST_DIR,
         "--workpath", BUILD_DIR,
@@ -181,7 +181,7 @@ def build():
 
     print(f"[INFO] Entry point : {ENTRY}")
     print(f"[INFO] Output dir  : {DIST_DIR}")
-    print(f"[INFO] Mode        : onedir (no self-extracting bootloader)")
+    print(f"[INFO] Mode        : onefile (single self-contained exe)")
     print(f"[INFO] Building with PyInstaller...")
     print()
 
@@ -196,9 +196,7 @@ def build():
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
 
-    folder_name = OUTPUT_NAME.replace(".exe", "")
-    output_folder = os.path.join(DIST_DIR, folder_name)
-    exe_path = os.path.join(output_folder, OUTPUT_NAME)
+    exe_path = os.path.join(DIST_DIR, OUTPUT_NAME)
 
     if not os.path.exists(exe_path):
         print(f"[ERROR] Output exe not found at {exe_path}")
@@ -207,21 +205,24 @@ def build():
     sign_exe(exe_path)
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
-    create_zip(output_folder, zip_dest)
 
     exe_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
     shutil.copy2(exe_path, exe_dest)
     print(f"[INFO] Copied exe to: {exe_dest}")
 
-    zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
+    zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
+    print(f"[INFO] Creating ZIP: {zip_dest}")
+    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(exe_dest, OUTPUT_NAME)
+
     exe_size_mb = os.path.getsize(exe_dest) / (1024 * 1024)
+    zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
     print()
     print("=" * 55)
     print(f"  Build successful!")
     print(f"  EXE    : {exe_dest} ({exe_size_mb:.1f} MB)")
     print(f"  ZIP    : {zip_dest} ({zip_size_mb:.1f} MB)")
-    verify_binary(zip_dest)
+    verify_binary(exe_dest)
     print("=" * 55)
 
     if client_created and os.path.exists(client_init):
