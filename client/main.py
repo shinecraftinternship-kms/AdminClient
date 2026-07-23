@@ -44,6 +44,14 @@ VERSION = "1.0.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
+def safe_input(prompt=""):
+    try:
+        return input(prompt)
+    except EOFError:
+        print()
+        return ""
+
+
 def print_header():
     print("=" * 55)
     print(f"  System Scanner Pro Client v{VERSION}")
@@ -431,34 +439,38 @@ def main():
     elif admin_url and admin_url != "http://localhost:80":
         print(f"  Current Admin Server: {admin_url}")
         print()
-        print("  " + "=" * 45)
-        print("  Options:")
-        print("  " + "=" * 45)
-        print("  [1] Add new admin server link")
-        print("  [2] Continue on localhost")
-        print("  [3] Exit")
-        print("  " + "=" * 45)
-        print()
-        choice = input("  Select option [1-3]: ").strip()
-        if choice == "1":
-            from AdminClient.client.config import prompt_admin_url
-            admin_url = prompt_admin_url()
-            config["admin_url"] = admin_url
-            save_config(config)
-            print(f"  Admin server updated to: {admin_url}")
+        if is_frozen():
+            print("  Continuing with current server (pass URL argument to change)...")
             print()
-        elif choice == "2":
-            admin_url = "http://localhost:80"
-            config["admin_url"] = admin_url
-            save_config(config)
-            print(f"  Using localhost: {admin_url}")
-            print()
-        elif choice == "3":
-            print("  Exiting...")
-            sys.exit(0)
         else:
-            print("  Invalid option. Continuing with current server.")
+            print("  " + "=" * 45)
+            print("  Options:")
+            print("  " + "=" * 45)
+            print("  [1] Add new admin server link")
+            print("  [2] Continue on localhost")
+            print("  [3] Exit")
+            print("  " + "=" * 45)
             print()
+            choice = safe_input("  Select option [1-3]: ").strip()
+            if choice == "1":
+                from AdminClient.client.config import prompt_admin_url
+                admin_url = prompt_admin_url()
+                config["admin_url"] = admin_url
+                save_config(config)
+                print(f"  Admin server updated to: {admin_url}")
+                print()
+            elif choice == "2":
+                admin_url = "http://localhost:80"
+                config["admin_url"] = admin_url
+                save_config(config)
+                print(f"  Using localhost: {admin_url}")
+                print()
+            elif choice == "3":
+                print("  Exiting...")
+                sys.exit(0)
+            else:
+                print("  Invalid option. Continuing with current server.")
+                print()
     else:
         from AdminClient.client.config import get_admin_url
         admin_url = get_admin_url()
@@ -509,7 +521,7 @@ def main():
         print("  [3] Exit")
         print("  " + "=" * 45)
         print()
-        choice = input("  Select option [1-3]: ").strip()
+        choice = safe_input("  Select option [1-3]: ").strip()
         if choice == "1":
             from AdminClient.client.config import prompt_admin_url
             admin_url = prompt_admin_url()
@@ -688,4 +700,4 @@ if __name__ == "__main__":
         traceback.print_exc()
         print("  ==========================================")
         print()
-        input("  Press Enter to exit...")
+        safe_input("  Press Enter to exit...")
