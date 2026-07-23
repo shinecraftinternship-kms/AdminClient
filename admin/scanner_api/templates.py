@@ -233,7 +233,13 @@ def download_client_view(request):
     exe_path = os.path.join(data_dir, "client_scanner.exe")
     zip_path = os.path.join(data_dir, "client_scanner.zip")
 
-    if os.path.exists(zip_path):
+    fmt = request.GET.get("format", "zip").lower()
+
+    if fmt == "exe" and os.path.exists(exe_path):
+        file_path = exe_path
+        filename = "client_scanner.exe"
+        content_type = "application/vnd.microsoft.portable-executable"
+    elif os.path.exists(zip_path):
         file_path = zip_path
         filename = "client_scanner.zip"
         content_type = "application/zip"
@@ -250,6 +256,9 @@ def download_client_view(request):
             sha256.update(chunk)
     file_hash = sha256.hexdigest()
 
+    file_size = os.path.getsize(file_path)
+    size_mb = round(file_size / (1024 * 1024), 1)
+
     response = FileResponse(
         open(file_path, "rb"),
         as_attachment=True,
@@ -257,5 +266,7 @@ def download_client_view(request):
         content_type=content_type,
     )
     response["Content-SHA256"] = file_hash
+    response["Content-Length"] = str(file_size)
     response["X-Content-Type-Options"] = "nosniff"
+    response["X-File-Size-MB"] = str(size_mb)
     return response

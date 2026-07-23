@@ -6,9 +6,17 @@
     <h4 class="mb-0"><i class="bi bi-grid me-2"></i>Client Dashboard</h4>
     <div class="d-flex gap-2 align-items-center">
         <span id="wsStatus" class="badge bg-secondary">Connecting...</span>
-        <a href="/download-client/" class="btn btn-outline-success" title="Download Client Scanner">
-            <i class="bi bi-download"></i> Download Client (.exe)
-        </a>
+        <div class="dropdown">
+            <a href="/download-client/" class="btn btn-outline-success dropdown-toggle" title="Download Client Scanner" data-bs-toggle="dropdown">
+                <i class="bi bi-download"></i> Download Client
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/download-client/?format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Download .zip (18 MB)</a></li>
+                <li><a class="dropdown-item" href="/download-client/?format=exe"><i class="bi bi-filetype-exe me-2"></i>Download .exe (6 MB)</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><small class="dropdown-item-text text-secondary px-3"><i class="bi bi-info-circle me-1"></i>v3.0 - System Scanner Pro Client</small></li>
+            </ul>
+        </div>
         <button class="btn btn-outline-info" onclick="exportCSV()" title="Export CSV">
             <i class="bi bi-download"></i> Export
         </button>
