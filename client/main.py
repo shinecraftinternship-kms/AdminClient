@@ -12,29 +12,28 @@ from pathlib import Path
 logger = logging.getLogger("client.main")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-from AdminClient.client.runtime import is_frozen, get_client_data_dir
-from AdminClient.client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
-from AdminClient.client.config import prompt_admin_url, discover_admin, load_config, save_config
-from AdminClient.client.communicator import Communicator, WebSocketClient
+from client.runtime import is_frozen, get_client_data_dir
+from client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
+from client.config import prompt_admin_url, discover_admin, load_config, save_config
+from client.communicator import Communicator, WebSocketClient
 
 try:
-    from AdminClient.client.discovery import discover_admin_url
+    from client.discovery import discover_admin_url
 except ImportError:
     discover_admin_url = None
-from AdminClient.client.scanner import collect_all
+from client.scanner import collect_all
 
 try:
-    from AdminClient.client.metrics import collect_metrics
+    from client.metrics import collect_metrics
 except ImportError:
     collect_metrics = None
 
 try:
-    from AdminClient.client.events.dispatcher import EventDispatcher
-    from AdminClient.client.events.usb_monitor import USBMonitor
-    from AdminClient.client.events.file_monitor import FileMonitor
-    from AdminClient.client.events.process_monitor import ProcessMonitor
-    from AdminClient.client.events.software_monitor import SoftwareMonitor
+    from client.events.dispatcher import EventDispatcher
+    from client.events.usb_monitor import USBMonitor
+    from client.events.file_monitor import FileMonitor
+    from client.events.process_monitor import ProcessMonitor
+    from client.events.software_monitor import SoftwareMonitor
     HAS_EVENT_MONITORS = True
 except ImportError:
     HAS_EVENT_MONITORS = False
@@ -453,7 +452,7 @@ def main():
             print()
             choice = safe_input("  Select option [1-3]: ").strip()
             if choice == "1":
-                from AdminClient.client.config import prompt_admin_url
+                from client.config import prompt_admin_url
                 admin_url = prompt_admin_url()
                 config["admin_url"] = admin_url
                 save_config(config)
@@ -472,7 +471,7 @@ def main():
                 print("  Invalid option. Continuing with current server.")
                 print()
     else:
-        from AdminClient.client.config import get_admin_url
+        from client.config import get_admin_url
         admin_url = get_admin_url()
         config["admin_url"] = admin_url
         save_config(config)
@@ -523,7 +522,7 @@ def main():
         print()
         choice = safe_input("  Select option [1-3]: ").strip()
         if choice == "1":
-            from AdminClient.client.config import prompt_admin_url
+            from client.config import prompt_admin_url
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
             save_config(config)

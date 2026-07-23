@@ -1,8 +1,8 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.client.runtime import is_frozen, get_client_data_dir
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from client.runtime import is_frozen, get_client_data_dir
 
 CONFIG_PATH = os.path.join(get_client_data_dir(), "client_config.json")
 LOCALHOST_URL = "http://localhost:80"
@@ -51,7 +51,7 @@ def get_admin_url():
     cached_url = config.get("admin_url", "")
 
     try:
-        from AdminClient.client.discovery import discover_admin_url
+        from client.discovery import discover_admin_url
         discovered = discover_admin_url()
         if discovered:
             if discovered != cached_url:

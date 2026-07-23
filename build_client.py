@@ -131,7 +131,6 @@ def build():
         print("[INFO] PyInstaller not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
-    root_init, root_created = ensure_adminclient_init()
     client_init, client_created = ensure_client_init()
 
     datas = collect_datas()
@@ -145,24 +144,25 @@ def build():
         "--noconfirm",
         "--clean",
         "--noupx",
-        f"--paths={ROOT_DIR}",
+        f"--paths={CLIENT_DIR}",
         "--hidden-import=websockets",
         "--hidden-import=watchdog",
         "--hidden-import=watchdog.observers",
         "--hidden-import=watchdog.events",
-        "--hidden-import=AdminClient.client.runtime",
-        "--hidden-import=AdminClient.client.key_manager",
-        "--hidden-import=AdminClient.client.config",
-        "--hidden-import=AdminClient.client.communicator",
-        "--hidden-import=AdminClient.client.scanner",
-        "--hidden-import=AdminClient.client.discovery",
-        "--hidden-import=AdminClient.client.metrics",
-        "--hidden-import=AdminClient.client.events",
-        "--hidden-import=AdminClient.client.events.dispatcher",
-        "--hidden-import=AdminClient.client.events.usb_monitor",
-        "--hidden-import=AdminClient.client.events.file_monitor",
-        "--hidden-import=AdminClient.client.events.process_monitor",
-        "--hidden-import=AdminClient.client.events.software_monitor",
+        "--hidden-import=client.runtime",
+        "--hidden-import=client.key_manager",
+        "--hidden-import=client.config",
+        "--hidden-import=client.communicator",
+        "--hidden-import=client.scanner",
+        "--hidden-import=client.discovery",
+        "--hidden-import=client.metrics",
+        "--hidden-import=client.fingerprint",
+        "--hidden-import=client.events",
+        "--hidden-import=client.events.dispatcher",
+        "--hidden-import=client.events.usb_monitor",
+        "--hidden-import=client.events.file_monitor",
+        "--hidden-import=client.events.process_monitor",
+        "--hidden-import=client.events.software_monitor",
         "--console",
     ]
 
@@ -219,9 +219,9 @@ def build():
     verify_binary(zip_dest)
     print("=" * 55)
 
-    if root_created and os.path.exists(root_init):
+    if client_created and os.path.exists(client_init):
         try:
-            os.remove(root_init)
+            os.remove(client_init)
         except OSError:
             pass
 

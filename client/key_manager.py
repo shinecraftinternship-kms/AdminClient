@@ -5,8 +5,8 @@ import random
 import string
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from AdminClient.client.runtime import is_frozen, get_client_data_dir
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from client.runtime import is_frozen, get_client_data_dir
 
 CLIENT_DATA_DIR = get_client_data_dir()
 KEY_FILE = os.path.join(CLIENT_DATA_DIR, "client_key.json")
@@ -50,7 +50,7 @@ def save_key(key):
 
 
 def load_or_create_fingerprint():
-    from AdminClient.client.fingerprint import generate_fingerprint
+    from client.fingerprint import generate_fingerprint
     data = _load_key_data()
     fp = data.get("device_fingerprint")
     if fp:
