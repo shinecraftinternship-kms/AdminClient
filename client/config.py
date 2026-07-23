@@ -77,11 +77,29 @@ def get_admin_url():
 
 def prompt_admin_url():
     print()
-    print("  Enter new admin server link:")
-    url = input("  URL (e.g., http://192.168.1.100:80): ").strip()
-    if not url:
-        url = LOCALHOST_URL
-    return url.rstrip("/")
+    print("  " + "=" * 50)
+    print("  Admin Server Configuration")
+    print("  " + "=" * 50)
+    print()
+    print("  1. Add new admin server link")
+    print("  2. Continue on localhost")
+    print("  3. Exit")
+    print()
+    while True:
+        choice = input("  Select option [1-3]: ").strip()
+        if choice == "1":
+            url = input("  URL (e.g., http://192.168.1.100:80): ").strip()
+            if not url:
+                print("  No URL entered. Using localhost.")
+                return LOCALHOST_URL
+            return url.rstrip("/")
+        elif choice == "2":
+            return LOCALHOST_URL
+        elif choice == "3":
+            print("  Exiting...")
+            sys.exit(0)
+        else:
+            print("  Invalid option. Please enter 1, 2, or 3.")
 
 
 DISCOVERY_PORT = 45000

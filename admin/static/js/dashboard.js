@@ -388,3 +388,22 @@ function loadActivityLog() {
 
 refreshClients();
 refreshInterval = setInterval(refreshClients, 10000);
+
+function checkServerStatus() {
+    const badge = document.getElementById('wsStatus');
+    if (!badge) return;
+    fetch('/api/clients').then(function(r) {
+        if (r.ok) {
+            badge.textContent = 'Online';
+            badge.className = 'badge bg-success';
+        } else {
+            badge.textContent = 'Error';
+            badge.className = 'badge bg-warning text-dark';
+        }
+    }).catch(function() {
+        badge.textContent = 'Offline';
+        badge.className = 'badge bg-danger';
+    });
+}
+checkServerStatus();
+setInterval(checkServerStatus, 15000);

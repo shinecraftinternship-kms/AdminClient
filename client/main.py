@@ -431,17 +431,33 @@ def main():
     elif admin_url and admin_url != "http://localhost:80":
         print(f"  Current Admin Server: {admin_url}")
         print()
-        print("  Program Change Options:")
-        print("  [1] New admin server link")
-        print("  [2] Continue")
+        print("  " + "=" * 45)
+        print("  Options:")
+        print("  " + "=" * 45)
+        print("  [1] Add new admin server link")
+        print("  [2] Continue on localhost")
+        print("  [3] Exit")
+        print("  " + "=" * 45)
         print()
-        choice = input("  Select option (1/2): ").strip()
+        choice = input("  Select option [1-3]: ").strip()
         if choice == "1":
             from AdminClient.client.config import prompt_admin_url
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
             save_config(config)
             print(f"  Admin server updated to: {admin_url}")
+            print()
+        elif choice == "2":
+            admin_url = "http://localhost:80"
+            config["admin_url"] = admin_url
+            save_config(config)
+            print(f"  Using localhost: {admin_url}")
+            print()
+        elif choice == "3":
+            print("  Exiting...")
+            sys.exit(0)
+        else:
+            print("  Invalid option. Continuing with current server.")
             print()
     else:
         from AdminClient.client.config import get_admin_url
@@ -483,11 +499,32 @@ def main():
             save_config(config)
             continue
 
-        print("  Auto-discovery failed. Enter URL manually.")
+        print("  Auto-discovery failed.")
         print()
-        admin_url = prompt_admin_url()
-        config["admin_url"] = admin_url
-        save_config(config)
+        print("  " + "=" * 45)
+        print("  Options:")
+        print("  " + "=" * 45)
+        print("  [1] Add new admin server link")
+        print("  [2] Continue on localhost")
+        print("  [3] Exit")
+        print("  " + "=" * 45)
+        print()
+        choice = input("  Select option [1-3]: ").strip()
+        if choice == "1":
+            from AdminClient.client.config import prompt_admin_url
+            admin_url = prompt_admin_url()
+            config["admin_url"] = admin_url
+            save_config(config)
+        elif choice == "2":
+            admin_url = "http://localhost:80"
+            config["admin_url"] = admin_url
+            save_config(config)
+        elif choice == "3":
+            print("  Exiting...")
+            sys.exit(0)
+        else:
+            print("  Invalid option. Continuing...")
+            print()
 
     print("  Connecting to admin server...")
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
