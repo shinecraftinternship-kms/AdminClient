@@ -51,11 +51,6 @@
         .toggle-password:hover {
             opacity: 1;
         }
-        .password-strength {
-            height: 4px;
-            border-radius: 2px;
-            transition: all 0.3s;
-        }
     </style>
 </head>
 <body>
@@ -104,14 +99,7 @@
                                 <i class="bi bi-eye" id="toggleIcon"></i>
                             </button>
                         </div>
-                        <div class="password-strength mt-2" id="passwordStrength" style="background: transparent;"></div>
-                        <div id="passwordHints" class="mt-1 small text-secondary d-none">
-                            <div id="hint-length"><i class="bi bi-x-circle me-1"></i>At least 8 characters</div>
-                            <div id="hint-upper"><i class="bi bi-x-circle me-1"></i>One uppercase letter</div>
-                            <div id="hint-lower"><i class="bi bi-x-circle me-1"></i>One lowercase letter</div>
-                            <div id="hint-number"><i class="bi bi-x-circle me-1"></i>One number</div>
-                            <div id="hint-special"><i class="bi bi-x-circle me-1"></i>One special character</div>
-                        </div>
+
                     </div>
                     <div class="mb-4">
                         <label class="form-label">Confirm Password</label>
@@ -145,39 +133,6 @@
                 icon.classList.replace('bi-eye-slash', 'bi-eye');
             }
         }
-
-        const passwordInput = document.getElementById('password');
-        const hints = document.getElementById('passwordHints');
-        const strengthBar = document.getElementById('passwordStrength');
-
-        passwordInput.addEventListener('focus', function() {
-            hints.classList.remove('d-none');
-        });
-
-        passwordInput.addEventListener('input', function() {
-            const p = this.value;
-            let score = 0;
-            const checks = {
-                'hint-length': p.length >= 8,
-                'hint-upper': /[A-Z]/.test(p),
-                'hint-lower': /[a-z]/.test(p),
-                'hint-number': /\d/.test(p),
-                'hint-special': /[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?`~]/.test(p),
-            };
-            for (const [id, ok] of Object.entries(checks)) {
-                const el = document.getElementById(id);
-                if (ok) {
-                    el.innerHTML = '<i class="bi bi-check-circle-fill text-success me-1"></i>' + el.textContent.substring(1);
-                    score++;
-                } else {
-                    el.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + el.textContent.substring(1);
-                }
-            }
-            const colors = ['#ef4444', '#ef4444', '#eab308', '#eab308', '#22c55e', '#22c55e'];
-            const widths = ['20%', '40%', '60%', '80%', '100%', '100%'];
-            strengthBar.style.background = colors[score];
-            strengthBar.style.width = widths[score];
-        });
 
         document.getElementById('signupForm').addEventListener('submit', function(e) {
             const username = document.getElementById('username').value.trim();

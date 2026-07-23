@@ -185,16 +185,14 @@ def signup_view(request):
             return render(request, "signup.html", {"error": "Passwords do not match"})
 
         from django.contrib.auth.models import User
-        from .validators import validate_strong_password, validate_email
+        from .validators import validate_email
         from .auth_utils import log_audit_event
         from .models import AdministratorProfile, ActivityLog
 
         if not validate_email(email):
             return render(request, "signup.html", {"error": "Please enter a valid email address"})
 
-        password_errors = validate_strong_password(password)
-        if password_errors:
-            return render(request, "signup.html", {"error": "; ".join(password_errors)})
+
 
         if User.objects.filter(username=username).exists():
             return render(request, "signup.html", {"error": "Username already exists"})
@@ -222,17 +220,17 @@ def download_client_view(request):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.path.join(base_dir, "data")
 
-    zip_path = os.path.join(data_dir, "client_scanner.zip")
     exe_path = os.path.join(data_dir, "client_scanner.exe")
+    zip_path = os.path.join(data_dir, "client_scanner.zip")
 
-    if os.path.exists(zip_path):
-        file_path = zip_path
-        filename = "client_scanner.zip"
-        content_type = "application/zip"
-    elif os.path.exists(exe_path):
+    if os.path.exists(exe_path):
         file_path = exe_path
         filename = "client_scanner.exe"
         content_type = "application/vnd.microsoft.portable-executable"
+    elif os.path.exists(zip_path):
+        file_path = zip_path
+        filename = "client_scanner.zip"
+        content_type = "application/zip"
     else:
         raise Http404("Client installer not found on the server. Run build_client.py first.")
 
