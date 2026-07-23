@@ -9,26 +9,89 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+_crash_log = None
+try:
+    _log_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "SystemScannerPro", "client")
+    os.makedirs(_log_dir, exist_ok=True)
+    _crash_log = open(os.path.join(_log_dir, "crash.log"), "a", encoding="utf-8")
+    _crash_log.write(f"\n{'='*60}\n")
+    _crash_log.write(f"Started: {datetime.now().isoformat()}\n")
+    _crash_log.write(f"Executable: {sys.executable}\n")
+    _crash_log.write(f"Args: {sys.argv}\n")
+    _crash_log.write(f"frozen={getattr(sys, 'frozen', False)}\n")
+    _crash_log.write(f"path={sys.path[:5]}\n")
+    _crash_log.flush()
+except Exception:
+    _crash_log = None
+
 logger = logging.getLogger("client.main")
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _script_dir)
+sys.path.insert(0, os.path.dirname(_script_dir))
+
+try:
+    if _crash_log:
+        _crash_log.write("Importing client.runtime...\n"); _crash_log.flush()
+except Exception:
+    pass
 from client.runtime import is_frozen, get_client_data_dir
+
+try:
+    if _crash_log:
+        _crash_log.write("Importing client.key_manager...\n"); _crash_log.flush()
+except Exception:
+    pass
 from client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
+
+try:
+    if _crash_log:
+        _crash_log.write("Importing client.config...\n"); _crash_log.flush()
+except Exception:
+    pass
 from client.config import prompt_admin_url, discover_admin, load_config, save_config
+
+try:
+    if _crash_log:
+        _crash_log.write("Importing client.communicator...\n"); _crash_log.flush()
+except Exception:
+    pass
 from client.communicator import Communicator, WebSocketClient
 
 try:
+    if _crash_log:
+        _crash_log.write("Importing client.discovery...\n"); _crash_log.flush()
     from client.discovery import discover_admin_url
 except ImportError:
     discover_admin_url = None
-from client.scanner import collect_all
+except Exception as e:
+    if _crash_log:
+        _crash_log.write(f"IMPORT ERROR (discovery): {e}\n"); _crash_log.flush()
+    discover_admin_url = None
 
 try:
+    if _crash_log:
+        _crash_log.write("Importing client.scanner...\n"); _crash_log.flush()
+    from client.scanner import collect_all
+except Exception as e:
+    if _crash_log:
+        _crash_log.write(f"IMPORT ERROR (scanner): {e}\n"); _crash_log.flush()
+    raise
+
+try:
+    if _crash_log:
+        _crash_log.write("Importing client.metrics...\n"); _crash_log.flush()
     from client.metrics import collect_metrics
 except ImportError:
     collect_metrics = None
+except Exception as e:
+    if _crash_log:
+        _crash_log.write(f"IMPORT ERROR (metrics): {e}\n"); _crash_log.flush()
+    collect_metrics = None
 
 try:
+    if _crash_log:
+        _crash_log.write("Importing client.events...\n"); _crash_log.flush()
     from client.events.dispatcher import EventDispatcher
     from client.events.usb_monitor import USBMonitor
     from client.events.file_monitor import FileMonitor
@@ -37,6 +100,13 @@ try:
     HAS_EVENT_MONITORS = True
 except ImportError:
     HAS_EVENT_MONITORS = False
+except Exception as e:
+    if _crash_log:
+        _crash_log.write(f"IMPORT ERROR (events): {e}\n"); _crash_log.flush()
+    HAS_EVENT_MONITORS = False
+
+if _crash_log:
+    _crash_log.write("All imports completed successfully.\n"); _crash_log.flush()
 
 DISCOVERY_PORT = 45000
 VERSION = "1.0.0"
@@ -435,13 +505,39 @@ def main():
         admin_url = sys.argv[1].rstrip("/")
         config["admin_url"] = admin_url
         save_config(config)
-    elif admin_url and admin_url != "http://localhost:80":
-        print(f"  Current Admin Server: {admin_url}")
-        print()
-        if is_frozen():
-            print("  Continuing with current server (pass URL argument to change)...")
-            print()
+    elif is_frozen():
+        if admin_url and admin_url != "http://localhost:80":
+            print(f"  Current Admin Server: {admin_url}")
         else:
+            print("  No admin server configured. Discovering...")
+            if discover_admin_url:
+                try:
+                    cloud_url = discover_admin_url()
+                    if cloud_url:
+                        admin_url = cloud_url
+                        config["admin_url"] = admin_url
+                        save_config(config)
+                        print(f"  [OK] Discovered admin server: {admin_url}")
+                except Exception:
+                    pass
+            if not admin_url or admin_url == "http://localhost:80":
+                udp_url = discover_admin(timeout=3)
+                if udp_url:
+                    admin_url = udp_url
+                    config["admin_url"] = admin_url
+                    save_config(config)
+                    print(f"  [OK] Discovered admin server: {admin_url}")
+            if not admin_url or admin_url == "http://localhost:80":
+                admin_url = "http://localhost:80"
+                config["admin_url"] = admin_url
+                save_config(config)
+                print(f"  Using default: {admin_url}")
+        print("  (pass URL as argument to change: client_scanner.exe http://server:port)")
+        print()
+    else:
+        if admin_url and admin_url != "http://localhost:80":
+            print(f"  Current Admin Server: {admin_url}")
+            print()
             print("  " + "=" * 45)
             print("  Options:")
             print("  " + "=" * 45)
@@ -470,14 +566,15 @@ def main():
             else:
                 print("  Invalid option. Continuing with current server.")
                 print()
-    else:
-        from client.config import get_admin_url
-        admin_url = get_admin_url()
-        config["admin_url"] = admin_url
-        save_config(config)
+        else:
+            from client.config import get_admin_url
+            admin_url = get_admin_url()
+            config["admin_url"] = admin_url
+            save_config(config)
 
     hostname = socket.gethostname()
 
+    retry_count = 0
     while True:
         comm = Communicator(admin_url)
 
@@ -490,6 +587,7 @@ def main():
         if comm.is_reachable():
             break
 
+        retry_count += 1
         print(f"  [ERROR] Cannot reach admin server at {admin_url}")
 
         if discover_admin_url:
@@ -499,6 +597,7 @@ def main():
                 admin_url = cloud_url
                 config["admin_url"] = admin_url
                 save_config(config)
+                retry_count = 0
                 continue
 
         print("  Trying UDP auto-discovery...")
@@ -508,6 +607,13 @@ def main():
             admin_url = discovered
             config["admin_url"] = admin_url
             save_config(config)
+            retry_count = 0
+            continue
+
+        if is_frozen():
+            wait_time = min(10 * retry_count, 60)
+            print(f"  Retrying in {wait_time}s... (attempt {retry_count})")
+            time.sleep(wait_time)
             continue
 
         print("  Auto-discovery failed.")
@@ -699,4 +805,11 @@ if __name__ == "__main__":
         traceback.print_exc()
         print("  ==========================================")
         print()
+        try:
+            if _crash_log:
+                _crash_log.write(f"FATAL: {e}\n")
+                traceback.print_exc(file=_crash_log)
+                _crash_log.flush()
+        except Exception:
+            pass
         safe_input("  Press Enter to exit...")

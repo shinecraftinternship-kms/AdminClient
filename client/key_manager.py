@@ -5,7 +5,9 @@ import random
 import string
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _this_dir)
+sys.path.insert(0, os.path.dirname(_this_dir))
 from client.runtime import is_frozen, get_client_data_dir
 
 CLIENT_DATA_DIR = get_client_data_dir()

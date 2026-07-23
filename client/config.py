@@ -1,7 +1,9 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _this_dir)
+sys.path.insert(0, os.path.dirname(_this_dir))
 from client.runtime import is_frozen, get_client_data_dir
 
 CONFIG_PATH = os.path.join(get_client_data_dir(), "client_config.json")
