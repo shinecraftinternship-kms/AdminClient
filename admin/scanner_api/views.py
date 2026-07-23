@@ -38,6 +38,17 @@ def get_user_company(request):
         profile.company = company
         profile.save(update_fields=["company"])
     return profile.company
+
+
+def get_admin_owned_clients(request):
+    """Return a base QuerySet of non-deleted clients owned by the current admin.
+
+    Superusers see all clients. Regular admins see only clients they own.
+    """
+    qs = Client.objects.filter(deleted=False).select_related("group", "owner")
+    if request.user.is_superuser:
+        return qs
+    return qs.filter(owner=request.user)
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
     ManualUpdateSerializer, ScanConfigSerializer,
@@ -99,19 +110,23 @@ class RegisterClientView(APIView):
                 return Response({"status": "ok", "auto_approved": same_device.approved})
 
         auto_approve = Setting.get("auto_approve", "false").lower() == "true"
-        admin_key = Setting.get("admin_client_key", "")
         company = None
+        owner = None
+        admin_key = Setting.get("admin_client_key", "")
         if admin_key:
             admin_client = Client.objects.filter(registration_key=admin_key).first()
             if admin_client:
                 company = admin_client.company
-        Client.objects.create(
+                owner = admin_client.owner
+
+        client = Client.objects.create(
             registration_key=key, hostname=hostname, platform=platform_name,
             client_version=client_version, device_fingerprint=fingerprint,
             status="online" if auto_approve else "pending",
             approved=auto_approve, last_seen=timezone.now(),
             last_ip=_client_ip(request),
             company=company,
+            owner=owner,
         )
         ActivityLog.objects.create(action="register", company=company, details=f"Client {hostname} registered with key {key}")
         return Response({"status": "ok", "auto_approved": auto_approve}, status=status.HTTP_201_CREATED)
@@ -123,13 +138,21 @@ class ApproveClientView(APIView):
         serializer = ApproveRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         key = serializer.validated_data["registration_key"]
+        company = get_user_company(request)
 
-        updated = Client.objects.filter(registration_key=key).update(approved=True, status="online")
-        if updated:
-            company = get_user_company(request)
-            ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved")
-            return Response({"status": "ok"})
-        return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            client = Client.objects.get(registration_key=key)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        client.approved = True
+        client.status = "online"
+        client.owner = request.user
+        if company:
+            client.company = company
+        client.save(update_fields=["approved", "status", "owner", "company"])
+        ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved by {request.user.username}")
+        return Response({"status": "ok"})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -138,10 +161,20 @@ class ApproveMultipleView(APIView):
         serializer = ApproveMultipleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         keys = serializer.validated_data["registration_keys"]
-
-        count = Client.objects.filter(registration_key__in=keys).update(approved=True, status="online")
         company = get_user_company(request)
-        ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients")
+
+        clients = Client.objects.filter(registration_key__in=keys)
+        count = 0
+        for client in clients:
+            client.approved = True
+            client.status = "online"
+            client.owner = request.user
+            if company:
+                client.company = company
+            client.save(update_fields=["approved", "status", "owner", "company"])
+            count += 1
+
+        ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients by {request.user.username}")
         return Response({"status": "ok", "count": count})
 
 
@@ -216,10 +249,7 @@ class SubmitScanView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class ClientListView(APIView):
     def get(self, request):
-        company = get_user_company(request)
-        qs = Client.objects.filter(deleted=False).select_related("group")
-        if company:
-            qs = qs.filter(company=company)
+        qs = get_admin_owned_clients(request)
         serializer = ClientListSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -238,9 +268,11 @@ class ClientStatusView(APIView):
 class ClientDetailView(APIView):
     def get(self, request, key):
         try:
-            client = Client.objects.prefetch_related("scans", "addons").select_related("group").get(registration_key=key)
+            client = Client.objects.prefetch_related("scans", "addons").select_related("group", "owner").get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         serializer = ClientDetailSerializer(client)
         data = serializer.data
 
@@ -254,6 +286,8 @@ class ClientDetailView(APIView):
     def delete(self, request, key):
         try:
             client = Client.objects.get(registration_key=key)
+            if not request.user.is_superuser and client.owner and client.owner != request.user:
+                return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
             hostname = client.hostname
             client.deleted = True
             client.save(update_fields=["deleted"])
@@ -267,11 +301,13 @@ class ClientDetailView(APIView):
 class DeleteMultipleView(APIView):
     def post(self, request):
         keys = request.data.get("registration_keys", [])
+        company = get_user_company(request)
         clients = Client.objects.filter(registration_key__in=keys)
+        if not request.user.is_superuser:
+            clients = clients.filter(owner=request.user)
         count = clients.count()
         clients.update(deleted=True)
-        company = get_user_company(request)
-        ActivityLog.objects.create(action="delete", company=company, details=f"Bulk deleted {count} clients")
+        ActivityLog.objects.create(action="delete", company=company, details=f"Bulk deleted {count} clients by {request.user.username}")
         return Response({"status": "ok", "count": count})
 
 
@@ -282,12 +318,18 @@ class ManualUpdateView(APIView):
         serializer.is_valid(raise_exception=True)
         data = {k: v for k, v in serializer.validated_data.items() if v is not None}
 
-        updated = Client.objects.filter(registration_key=key).update(**data)
-        if updated:
-            company = get_user_company(request)
-            ActivityLog.objects.create(action="update", company=company, details=f"Updated fields for client {key}")
-            return Response({"status": "ok"})
-        return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            client = Client.objects.get(registration_key=key)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        Client.objects.filter(registration_key=key).update(**data)
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="update", company=company, details=f"Updated fields for client {key}")
+        return Response({"status": "ok"})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -297,6 +339,8 @@ class AddonListView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response([])
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response([], status=status.HTTP_403_FORBIDDEN)
         return Response(AddonDeviceSerializer(client.addons.all(), many=True).data)
 
     def post(self, request, key):
@@ -304,6 +348,8 @@ class AddonListView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         serializer = AddonDeviceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(client=client)
@@ -330,12 +376,16 @@ class ScanConfigView(APIView):
         serializer = ScanConfigSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        updated = Client.objects.filter(registration_key=key).update(
-            scan_interval=data["interval_seconds"], scan_enabled=data["enabled"],
-        )
-        if updated:
-            return Response({"status": "ok"})
-        return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            client = Client.objects.get(registration_key=key)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+        client.scan_interval = data["interval_seconds"]
+        client.scan_enabled = data["enabled"]
+        client.save(update_fields=["scan_interval", "scan_enabled"])
+        return Response({"status": "ok"})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -345,6 +395,9 @@ class TriggerScanView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not request.user.is_superuser and client.owner and client.owner != request.user:
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         client.scan_requested = True
         client.save(update_fields=["scan_requested"])
@@ -357,10 +410,12 @@ class ScanAllView(APIView):
     def post(self, request):
         company = get_user_company(request)
         qs = Client.objects.filter(approved=True, deleted=False)
-        if company:
+        if not request.user.is_superuser:
+            qs = qs.filter(owner=request.user)
+        elif company:
             qs = qs.filter(company=company)
         count = qs.update(scan_requested=True)
-        ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients")
+        ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients by {request.user.username}")
         return Response({"status": "ok", "message": f"Scan queued for {count} client(s)"})
 
 
@@ -426,7 +481,9 @@ class ActivityLogView(APIView):
         limit = int(request.GET.get("limit", 50))
         company = get_user_company(request)
         logs = ActivityLog.objects.select_related("client")
-        if company:
+        if not request.user.is_superuser:
+            logs = logs.filter(client__owner=request.user)
+        elif company:
             logs = logs.filter(company=company)
         logs = logs[:limit]
         return Response(ActivityLogSerializer(logs, many=True).data)
@@ -437,7 +494,7 @@ class GroupListView(APIView):
     def get(self, request):
         company = get_user_company(request)
         groups = ClientGroup.objects.all()
-        if company:
+        if not request.user.is_superuser and company:
             groups = groups.filter(company=company)
         return Response(ClientGroupSerializer(groups, many=True).data)
 
@@ -537,7 +594,9 @@ class AdminStatsView(APIView):
         from .models import Client, ScanResult, ActivityLog
         company = get_user_company(request)
         base = Client.objects.all()
-        if company:
+        if not request.user.is_superuser:
+            base = base.filter(owner=request.user)
+        elif company:
             base = base.filter(company=company)
         total = base.count()
         online = base.filter(deleted=False, approved=True, status__in=["online", "pending"]).count()
@@ -546,7 +605,10 @@ class AdminStatsView(APIView):
         offline = total - online - pending
         scan_base = ScanResult.objects.all()
         log_base = ActivityLog.objects.all()
-        if company:
+        if not request.user.is_superuser:
+            scan_base = scan_base.filter(client__owner=request.user)
+            log_base = log_base.filter(client__owner=request.user)
+        elif company:
             scan_base = scan_base.filter(client__company=company)
             log_base = log_base.filter(company=company)
         return Response({
@@ -568,7 +630,9 @@ class ScanChangesView(APIView):
         company = get_user_company(request)
         changes = []
         clients = Client.objects.filter(approved=True, deleted=False, scans__isnull=False).distinct()
-        if company:
+        if not request.user.is_superuser:
+            clients = clients.filter(owner=request.user)
+        elif company:
             clients = clients.filter(company=company)
 
         for client in clients:
@@ -607,7 +671,9 @@ class ScanHistoryView(APIView):
 
         company = get_user_company(request)
         scans = ScanResult.objects.select_related("client").all().order_by("-created_at")
-        if company:
+        if not request.user.is_superuser:
+            scans = scans.filter(client__owner=request.user)
+        elif company:
             scans = scans.filter(client__company=company)
 
         if query:
@@ -667,10 +733,25 @@ def get_admin_client_key():
 def ensure_admin_client():
     from .scanner import get_hostname as scan_hostname, detect_platform
     key = get_admin_client_key()
+    hostname = scan_hostname()
+    platform_name = detect_platform()[0] or "Unknown"
     client, created = Client.objects.get_or_create(
         registration_key=key,
-        defaults={"hostname": scan_hostname(), "platform": detect_platform()[0] or "Unknown", "status": "online", "approved": True, "last_seen": timezone.now()},
+        defaults={"hostname": hostname, "platform": platform_name, "status": "online", "approved": True, "last_seen": timezone.now()},
     )
+    if not client.company:
+        from django.contrib.auth.models import User
+        superuser = User.objects.filter(is_superuser=True).first()
+        if superuser:
+            profile, _ = AdministratorProfile.objects.get_or_create(user=superuser)
+            if not profile.company:
+                from .models import Company
+                company, _ = Company.objects.get_or_create(name=superuser.username)
+                profile.company = company
+                profile.save(update_fields=["company"])
+            client.company = profile.company
+            client.owner = superuser
+            client.save(update_fields=["company", "owner"])
     Setting.set("admin_client_key", key)
     return key
 

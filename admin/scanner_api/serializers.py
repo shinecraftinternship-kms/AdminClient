@@ -50,6 +50,7 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 
 class ClientListSerializer(serializers.ModelSerializer):
     group_name = serializers.CharField(source="group.name", read_only=True, default=None)
+    owner_username = serializers.CharField(source="owner.username", read_only=True, default=None)
     tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
     is_stale = serializers.BooleanField(read_only=True)
 
@@ -60,6 +61,7 @@ class ClientListSerializer(serializers.ModelSerializer):
             "last_seen", "approved", "group", "group_name", "tags_list",
             "is_stale", "last_ip", "deleted", "client_version", "cpu_model", "ram_info",
             "purchase_cost", "vendor_name", "notes", "created_at",
+            "owner", "owner_username",
         ]
 
 

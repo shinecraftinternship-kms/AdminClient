@@ -1,8 +1,11 @@
 import uuid
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 from .api_key_auth import ApiKey  # noqa: F401 — registers ApiKey with Django ORM
+
+User = get_user_model()
 
 
 class Company(models.Model):
@@ -40,6 +43,8 @@ class Client(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     approved = models.BooleanField(default=False)
 
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_clients",
+        help_text="Admin user who owns this client")
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="clients", null=True, blank=True)
     group = models.ForeignKey(ClientGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="clients")
     tags = models.CharField(max_length=512, default="", blank=True, help_text="Comma-separated tags")
