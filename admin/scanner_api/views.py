@@ -32,6 +32,11 @@ def get_user_company(request):
     if not request.user or not request.user.is_authenticated:
         return None
     profile, _ = AdministratorProfile.objects.get_or_create(user=request.user)
+    if not profile.company:
+        from .models import Company
+        company, _ = Company.objects.get_or_create(name=request.user.username)
+        profile.company = company
+        profile.save(update_fields=["company"])
     return profile.company
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
@@ -757,8 +762,13 @@ class AuthLoginView(APIView):
         request.session["login_history_id"] = login_history.id
 
         login(request, user)
-        _profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
-        ActivityLog.objects.create(action="login", company=_profile.company if _profile else None, details=f"Admin user {user.username} logged in")
+        _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
+        if not _profile.company:
+            from .models import Company
+            company, _ = Company.objects.get_or_create(name=user.username)
+            _profile.company = company
+            _profile.save(update_fields=["company"])
+        ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")
 
         return Response({
             "status": "ok",

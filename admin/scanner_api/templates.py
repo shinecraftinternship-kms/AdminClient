@@ -82,6 +82,7 @@ def login_view(request):
         return redirect("/")
 
     timeout_msg = request.GET.get("timeout") == "1"
+    registered = request.GET.get("registered") == "1"
 
     if request.method == "POST":
         identifier = request.POST.get("identifier", "").strip()
@@ -104,6 +105,7 @@ def login_view(request):
             return render(request, "login.html", {
                 "error": f"Account is locked. Try again in {minutes_left} minutes",
                 "locked": True, "minutes_left": minutes_left,
+                "registered": registered,
             })
 
         user = None
@@ -130,10 +132,11 @@ def login_view(request):
             return render(request, "login.html", {
                 "error": "Invalid credentials",
                 "attempts_remaining": remaining,
+                "registered": registered,
             })
 
         if not user.is_active:
-            return render(request, "login.html", {"error": "Account is disabled"})
+            return render(request, "login.html", {"error": "Account is disabled", "registered": registered})
 
         record_login_attempt(identifier, ip, True)
         log_audit_event(user, "login_success", request, details=f"Login successful for {user.username}")
@@ -149,14 +152,18 @@ def login_view(request):
         request.session["last_activity"] = timezone.now().isoformat()
         request.session["login_history_id"] = login_history.id
 
-        from .models import ActivityLog, AdministratorProfile
-        _profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
-        ActivityLog.objects.create(action="login", company=_profile.company if _profile else None, details=f"Admin user {user.username} logged in")
+        from .models import ActivityLog, AdministratorProfile, Company
+        _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
+        if not _profile.company:
+            company, _ = Company.objects.get_or_create(name=user.username)
+            _profile.company = company
+            _profile.save(update_fields=["company"])
+        ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")
 
         next_url = request.POST.get("next", "/") or "/"
         return redirect(next_url)
 
-    return render(request, "login.html", {"timeout": timeout_msg})
+    return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
 
 
 def logout_view(request):
@@ -207,11 +214,14 @@ def signup_view(request):
         from .models import Company
         company_name = request.POST.get("company_name", "").strip() or username
         company, _ = Company.objects.get_or_create(name=company_name)
-        AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
+        profile, _ = AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
+        if profile.company != company:
+            profile.company = company
+            profile.save(update_fields=["company"])
         log_audit_event(user, "login_success", request, details=f"Admin account created: {username}", success=True)
         ActivityLog.objects.create(action="login", company=company, details=f"New admin account created: {username}")
 
-        return render(request, "signup.html", {"success": f"Account '{username}' created successfully! You can now sign in."})
+        return redirect("/login/?registered=1")
 
     return render(request, "signup.html")
 
