@@ -1,5 +1,19 @@
 import sys
 import os
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _script_dir)
+sys.path.insert(0, os.path.dirname(_script_dir))
+
+if getattr(sys, "frozen", False):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW("System Scanner Pro Client")
+    except Exception:
+        pass
+
 import time
 import json
 import socket
@@ -9,89 +23,35 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-_crash_log = None
-try:
-    _log_dir = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "SystemScannerPro", "client")
-    os.makedirs(_log_dir, exist_ok=True)
-    _crash_log = open(os.path.join(_log_dir, "crash.log"), "a", encoding="utf-8")
-    _crash_log.write(f"\n{'='*60}\n")
-    _crash_log.write(f"Started: {datetime.now().isoformat()}\n")
-    _crash_log.write(f"Executable: {sys.executable}\n")
-    _crash_log.write(f"Args: {sys.argv}\n")
-    _crash_log.write(f"frozen={getattr(sys, 'frozen', False)}\n")
-    _crash_log.write(f"path={sys.path[:5]}\n")
-    _crash_log.flush()
-except Exception:
-    _crash_log = None
-
 logger = logging.getLogger("client.main")
 
-_script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, _script_dir)
-sys.path.insert(0, os.path.dirname(_script_dir))
-
-try:
-    if _crash_log:
-        _crash_log.write("Importing client.runtime...\n"); _crash_log.flush()
-except Exception:
-    pass
 from client.runtime import is_frozen, get_client_data_dir
-
-try:
-    if _crash_log:
-        _crash_log.write("Importing client.key_manager...\n"); _crash_log.flush()
-except Exception:
-    pass
 from client.key_manager import load_or_create_key, load_config, save_config, load_or_create_fingerprint
-
-try:
-    if _crash_log:
-        _crash_log.write("Importing client.config...\n"); _crash_log.flush()
-except Exception:
-    pass
 from client.config import prompt_admin_url, discover_admin, load_config, save_config
-
-try:
-    if _crash_log:
-        _crash_log.write("Importing client.communicator...\n"); _crash_log.flush()
-except Exception:
-    pass
 from client.communicator import Communicator, WebSocketClient
 
 try:
-    if _crash_log:
-        _crash_log.write("Importing client.discovery...\n"); _crash_log.flush()
     from client.discovery import discover_admin_url
 except ImportError:
     discover_admin_url = None
-except Exception as e:
-    if _crash_log:
-        _crash_log.write(f"IMPORT ERROR (discovery): {e}\n"); _crash_log.flush()
+except Exception:
     discover_admin_url = None
 
 try:
-    if _crash_log:
-        _crash_log.write("Importing client.scanner...\n"); _crash_log.flush()
     from client.scanner import collect_all
 except Exception as e:
-    if _crash_log:
-        _crash_log.write(f"IMPORT ERROR (scanner): {e}\n"); _crash_log.flush()
-    raise
+    print(f"  FATAL: Cannot import scanner module: {e}", flush=True)
+    input("  Press Enter to exit...")
+    sys.exit(1)
 
 try:
-    if _crash_log:
-        _crash_log.write("Importing client.metrics...\n"); _crash_log.flush()
     from client.metrics import collect_metrics
 except ImportError:
     collect_metrics = None
-except Exception as e:
-    if _crash_log:
-        _crash_log.write(f"IMPORT ERROR (metrics): {e}\n"); _crash_log.flush()
+except Exception:
     collect_metrics = None
 
 try:
-    if _crash_log:
-        _crash_log.write("Importing client.events...\n"); _crash_log.flush()
     from client.events.dispatcher import EventDispatcher
     from client.events.usb_monitor import USBMonitor
     from client.events.file_monitor import FileMonitor
@@ -100,36 +60,35 @@ try:
     HAS_EVENT_MONITORS = True
 except ImportError:
     HAS_EVENT_MONITORS = False
-except Exception as e:
-    if _crash_log:
-        _crash_log.write(f"IMPORT ERROR (events): {e}\n"); _crash_log.flush()
+except Exception:
     HAS_EVENT_MONITORS = False
-
-if _crash_log:
-    _crash_log.write("All imports completed successfully.\n"); _crash_log.flush()
 
 DISCOVERY_PORT = 45000
 VERSION = "1.0.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
+def P(msg=""):
+    print(msg, flush=True)
+
+
 def safe_input(prompt=""):
     try:
         return input(prompt)
     except EOFError:
-        print()
+        print(flush=True)
         return ""
 
 
 def print_header():
-    print("=" * 55)
-    print(f"  System Scanner Pro Client v{VERSION}")
-    print("  Runs on this machine and reports to admin server")
-    print("  WebSocket + HTTP fallback communication")
+    P("=" * 55)
+    P(f"  System Scanner Pro Client v{VERSION}")
+    P("  Runs on this machine and reports to admin server")
+    P("  WebSocket + HTTP fallback communication")
     if HAS_EVENT_MONITORS:
-        print("  Event monitoring: USB, File, Process, Software")
-    print("=" * 55)
-    print()
+        P("  Event monitoring: USB, File, Process, Software")
+    P("=" * 55)
+    P()
 
 
 def save_output(data):
@@ -143,7 +102,7 @@ def save_output(data):
 
 def display_summary(data):
     if not data or not isinstance(data, dict):
-        print("  No scan data available.")
+        P("  No scan data available.")
         return
     scan_data = data.get("scan_data") or {}
     hostname = scan_data.get("hostname", "unknown")
@@ -155,24 +114,23 @@ def display_summary(data):
     gpu = scan_data.get("gpu", [])
     os_info = scan_data.get("os_info", {})
 
-    print(f"  Hostname:      {hostname}")
-    print(f"  Platform:      {plat}")
-    print(f"  Scanned at:    {ts}")
-    print(f"  CPU:           {processor.get('model', 'N/A')}")
-    print(f"  RAM:           {ram.get('capacity_gb', 'N/A')}")
-    print(f"  OS:            {os_info.get('version', 'N/A')}")
+    P(f"  Hostname:      {hostname}")
+    P(f"  Platform:      {plat}")
+    P(f"  Scanned at:    {ts}")
+    P(f"  CPU:           {processor.get('model', 'N/A')}")
+    P(f"  RAM:           {ram.get('capacity_gb', 'N/A')}")
+    P(f"  OS:            {os_info.get('version', 'N/A')}")
     gpus = gpu if isinstance(gpu, list) else []
-    print(f"  GPU(s):        {', '.join(g.get('name', '') for g in gpus) or 'N/A'}")
+    P(f"  GPU(s):        {', '.join(g.get('name', '') for g in gpus) or 'N/A'}")
     disks = storage.get("disks", [])
     for d in disks:
-        print(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
+        P(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
 
 
 CLOUD_DISCOVERY_INTERVAL = 300
 
 
 def cloud_discovery_loop(comm):
-    """Periodically check Supabase for admin IP changes."""
     while True:
         time.sleep(CLOUD_DISCOVERY_INTERVAL)
         try:
@@ -185,13 +143,12 @@ def cloud_discovery_loop(comm):
                         cfg["admin_url"] = new_url
                         save_config(cfg)
                         now = datetime.now().strftime('%H:%M:%S')
-                        print(f"  [{now}] [DISCOVERY] Admin moved to {new_url}")
+                        P(f"  [{now}] [DISCOVERY] Admin moved to {new_url}")
         except Exception:
             pass
 
 
 def listen_admin_broadcast(comm, hostname):
-    """Background: listen for ADMIN_HERE UDP broadcasts, update admin URL when discovered."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", DISCOVERY_PORT))
@@ -204,7 +161,7 @@ def listen_admin_broadcast(comm, hostname):
                 port = int(parts[1]) if len(parts) > 1 else 80
                 discovered = f"http://{ip}:{port}"
                 if discovered != comm.admin_url and comm.is_reachable(discovered):
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
                     comm.update_admin_url(discovered)
                     cfg = load_config()
                     cfg["admin_url"] = discovered
@@ -216,31 +173,29 @@ def listen_admin_broadcast(comm, hostname):
 
 
 def handle_ws_command(command):
-    """Callback for commands received via WebSocket."""
     cmd_type = command.get("command_type", "")
-    cmd_id = command.get("command_id", "")
     payload = command.get("payload", {})
     now = datetime.now().strftime('%H:%M:%S')
 
     if cmd_type == "scan_now":
-        print(f"  [{now}] [WS] Admin requested scan. Running...")
+        P(f"  [{now}] [WS] Admin requested scan. Running...")
         scan_data = collect_all()
         result = _global_comm.submit_scan(_global_key, scan_data)
         if result.get("status") == "ok":
-            print(f"  [{now}] [WS] Scan submitted successfully!")
+            P(f"  [{now}] [WS] Scan submitted successfully!")
             if _global_ws_client:
                 _global_ws_client.send_message("scan_result", {
                     "scan_type": "on_demand",
                     "scan_data": {"hostname": socket.gethostname(), "platform": platform.system()},
                 })
         else:
-            print(f"  [{now}] [WS] Scan failed: {result.get('message', 'Unknown')}")
+            P(f"  [{now}] [WS] Scan failed: {result.get('message', 'Unknown')}")
 
     elif cmd_type == "config_update":
         interval = payload.get("interval_seconds")
         enabled = payload.get("enabled")
         if interval is not None or enabled is not None:
-            print(f"  [{now}] [WS] Config update received")
+            P(f"  [{now}] [WS] Config update received")
             cfg = _global_comm.get_scan_config(_global_key)
             if interval is not None:
                 cfg["interval_seconds"] = interval
@@ -253,7 +208,7 @@ def handle_ws_command(command):
             _global_ws_client.send_message("pong")
 
     else:
-        print(f"  [{now}] [WS] Unknown command: {cmd_type}")
+        P(f"  [{now}] [WS] Unknown command: {cmd_type}")
 
 
 _global_comm = None
@@ -265,11 +220,6 @@ _global_event_monitors = []
 
 
 def heartbeat_loop(comm, key, hostname, fingerprint):
-    """HTTP heartbeat fallback loop (runs alongside WebSocket).
-
-    Includes exponential backoff on consecutive failures and
-    proactive offline queue flushing when connectivity returns.
-    """
     global _global_comm, _global_key
     _global_comm = comm
     _global_key = key
@@ -291,7 +241,7 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                 sent = comm.flush_offline_queue(key)
                 if sent:
                     now = datetime.now().strftime('%H:%M:%S')
-                    print(f"  [{now}] Flushed {sent} queued events")
+                    P(f"  [{now}] Flushed {sent} queued events")
 
             if collect_metrics:
                 metrics = collect_metrics()
@@ -332,25 +282,25 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
 
             if resp.get("trigger_scan"):
                 now = datetime.now().strftime('%H:%M:%S')
-                print(f"  [{now}] [HTTP] Admin requested scan. Running...")
+                P(f"  [{now}] [HTTP] Admin requested scan. Running...")
                 scan_data = collect_all()
                 result = comm.submit_scan(key, scan_data)
                 if result.get("status") == "ok":
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] [HTTP] Scan submitted successfully!")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] [HTTP] Scan submitted successfully!")
                 else:
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] [HTTP] Scan failed: {result.get('message', 'Unknown')}")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] [HTTP] Scan failed: {result.get('message', 'Unknown')}")
                 time.sleep(5)
                 continue
         except Exception as e:
             consecutive_errors += 1
             if consecutive_errors <= 3:
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
+                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
             elif consecutive_errors == 5:
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Multiple errors - trying cloud discovery...")
+                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Multiple errors - trying cloud discovery...")
                 if discover_admin_url:
                     discovered = discover_admin_url()
                     if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
+                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
                         comm.update_admin_url(discovered)
                         cfg = load_config()
                         cfg["admin_url"] = discovered
@@ -358,10 +308,10 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                         consecutive_errors = 0
                         backoff = 5
                     else:
-                        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Cloud discovery failed, trying UDP...")
+                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Cloud discovery failed, trying UDP...")
                         discovered = discover_admin(timeout=2)
                         if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                            print(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
+                            P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
                             comm.update_admin_url(discovered)
                             cfg = load_config()
                             cfg["admin_url"] = discovered
@@ -371,7 +321,7 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                 else:
                     discovered = discover_admin(timeout=2)
                     if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
+                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
                         comm.update_admin_url(discovered)
                         cfg = load_config()
                         cfg["admin_url"] = discovered
@@ -379,14 +329,12 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                         consecutive_errors = 0
                         backoff = 5
             elif consecutive_errors % 10 == 0:
-                print(f"  [{datetime.now().strftime('%H:%M:%S')}] Still disconnected ({consecutive_errors} errors). Retrying in {backoff}s...")
+                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Still disconnected ({consecutive_errors} errors). Retrying in {backoff}s...")
         time.sleep(min(backoff, 30))
         backoff = min(backoff * 2, 30)
 
 
 class HeartbeatWatchdog:
-    """Watchdog that monitors the heartbeat thread and restarts it if it dies."""
-
     def __init__(self, comm, key, hostname, fingerprint):
         self.comm = comm
         self.key = key
@@ -409,9 +357,9 @@ class HeartbeatWatchdog:
                 self._restart_count += 1
                 now = datetime.now().strftime('%H:%M:%S')
                 if self._restart_count > 5:
-                    print(f"  [{now}] [WATCHDOG] Too many restarts ({self._restart_count}). Giving up.")
+                    P(f"  [{now}] [WATCHDOG] Too many restarts ({self._restart_count}). Giving up.")
                     break
-                print(f"  [{now}] [WATCHDOG] Heartbeat thread died. Restarting (attempt {self._restart_count})...")
+                P(f"  [{now}] [WATCHDOG] Heartbeat thread died. Restarting (attempt {self._restart_count})...")
                 self._thread = threading.Thread(
                     target=heartbeat_loop,
                     args=(self.comm, self.key, self.hostname, self.fingerprint),
@@ -422,7 +370,6 @@ class HeartbeatWatchdog:
 
 
 def start_websocket_client(comm, monitoring_agent_id, monitoring_secret):
-    """Start the WebSocket client for real-time communication."""
     global _global_ws_client
 
     ws_client = WebSocketClient(
@@ -437,7 +384,6 @@ def start_websocket_client(comm, monitoring_agent_id, monitoring_secret):
 
 
 def _start_event_monitors(comm, key, ws_client):
-    """Initialize and start all event monitoring subsystems."""
     global _global_event_dispatchers, _global_event_monitors
 
     dispatcher = EventDispatcher(
@@ -460,9 +406,9 @@ def _start_event_monitors(comm, key, ws_client):
     try:
         file_monitor = FileMonitor(on_event=on_event)
     except Exception as e:
-        print(f"  [INFO] File monitor not available: {e}")
+        P(f"  [INFO] File monitor not available: {e}")
 
-    print("  [OK] Taking baselines for change detection...")
+    P("  [OK] Taking baselines for change detection...")
     usb_monitor.take_baseline()
     process_monitor.take_baseline()
     software_monitor.take_baseline()
@@ -482,9 +428,9 @@ def _start_event_monitors(comm, key, ws_client):
     if file_monitor:
         _global_event_monitors.append(("File", file_monitor))
 
-    print(f"  [OK] {len(_global_event_monitors)} event monitors active")
+    P(f"  [OK] {len(_global_event_monitors)} event monitors active")
     for name, _ in _global_event_monitors:
-        print(f"        - {name} monitor")
+        P(f"        - {name} monitor")
 
 
 def main():
@@ -494,9 +440,9 @@ def main():
 
     key = load_or_create_key()
     fingerprint = load_or_create_fingerprint()
-    print(f"  Your Registration Key: {key}")
-    print(f"  Device Fingerprint:    {fingerprint}")
-    print()
+    P(f"  Your Registration Key: {key}")
+    P(f"  Device Fingerprint:    {fingerprint}")
+    P()
 
     config = load_config()
     admin_url = config.get("admin_url", "")
@@ -507,9 +453,9 @@ def main():
         save_config(config)
     elif is_frozen():
         if admin_url and admin_url != "http://localhost:80":
-            print(f"  Current Admin Server: {admin_url}")
+            P(f"  Current Admin Server: {admin_url}")
         else:
-            print("  No admin server configured. Discovering...")
+            P("  No admin server configured. Discovering...")
             if discover_admin_url:
                 try:
                     cloud_url = discover_admin_url()
@@ -517,7 +463,7 @@ def main():
                         admin_url = cloud_url
                         config["admin_url"] = admin_url
                         save_config(config)
-                        print(f"  [OK] Discovered admin server: {admin_url}")
+                        P(f"  [OK] Discovered admin server: {admin_url}")
                 except Exception:
                     pass
             if not admin_url or admin_url == "http://localhost:80":
@@ -526,46 +472,46 @@ def main():
                     admin_url = udp_url
                     config["admin_url"] = admin_url
                     save_config(config)
-                    print(f"  [OK] Discovered admin server: {admin_url}")
+                    P(f"  [OK] Discovered admin server: {admin_url}")
             if not admin_url or admin_url == "http://localhost:80":
                 admin_url = "http://localhost:80"
                 config["admin_url"] = admin_url
                 save_config(config)
-                print(f"  Using default: {admin_url}")
-        print("  (pass URL as argument to change: client_scanner.exe http://server:port)")
-        print()
+                P(f"  Using default: {admin_url}")
+        P("  (pass URL as argument to change: client_scanner.exe http://server:port)")
+        P()
     else:
         if admin_url and admin_url != "http://localhost:80":
-            print(f"  Current Admin Server: {admin_url}")
-            print()
-            print("  " + "=" * 45)
-            print("  Options:")
-            print("  " + "=" * 45)
-            print("  [1] Add new admin server link")
-            print("  [2] Continue on localhost")
-            print("  [3] Exit")
-            print("  " + "=" * 45)
-            print()
+            P(f"  Current Admin Server: {admin_url}")
+            P()
+            P("  " + "=" * 45)
+            P("  Options:")
+            P("  " + "=" * 45)
+            P("  [1] Add new admin server link")
+            P("  [2] Continue on localhost")
+            P("  [3] Exit")
+            P("  " + "=" * 45)
+            P()
             choice = safe_input("  Select option [1-3]: ").strip()
             if choice == "1":
                 from client.config import prompt_admin_url
                 admin_url = prompt_admin_url()
                 config["admin_url"] = admin_url
                 save_config(config)
-                print(f"  Admin server updated to: {admin_url}")
-                print()
+                P(f"  Admin server updated to: {admin_url}")
+                P()
             elif choice == "2":
                 admin_url = "http://localhost:80"
                 config["admin_url"] = admin_url
                 save_config(config)
-                print(f"  Using localhost: {admin_url}")
-                print()
+                P(f"  Using localhost: {admin_url}")
+                P()
             elif choice == "3":
-                print("  Exiting...")
+                P("  Exiting...")
                 sys.exit(0)
             else:
-                print("  Invalid option. Continuing with current server.")
-                print()
+                P("  Invalid option. Continuing with current server.")
+                P()
         else:
             from client.config import get_admin_url
             admin_url = get_admin_url()
@@ -578,20 +524,20 @@ def main():
     while True:
         comm = Communicator(admin_url)
 
-        print(f"  Admin Server:  {admin_url}")
-        print(f"  Client Key:    {key}")
-        print(f"  Fingerprint:   {fingerprint}")
-        print(f"  Client Version: {VERSION}")
-        print()
+        P(f"  Admin Server:  {admin_url}")
+        P(f"  Client Key:    {key}")
+        P(f"  Fingerprint:   {fingerprint}")
+        P(f"  Client Version: {VERSION}")
+        P()
 
         if comm.is_reachable():
             break
 
         retry_count += 1
-        print(f"  [ERROR] Cannot reach admin server at {admin_url}")
+        P(f"  [ERROR] Cannot reach admin server at {admin_url}")
 
         if discover_admin_url:
-            print("  Trying cloud discovery...")
+            P("  Trying cloud discovery...")
             cloud_url = discover_admin_url()
             if cloud_url and cloud_url != admin_url:
                 admin_url = cloud_url
@@ -600,10 +546,10 @@ def main():
                 retry_count = 0
                 continue
 
-        print("  Trying UDP auto-discovery...")
+        P("  Trying UDP auto-discovery...")
         discovered = discover_admin(timeout=3)
         if discovered:
-            print(f"  [OK] Discovered admin server at {discovered}")
+            P(f"  [OK] Discovered admin server at {discovered}")
             admin_url = discovered
             config["admin_url"] = admin_url
             save_config(config)
@@ -612,20 +558,20 @@ def main():
 
         if is_frozen():
             wait_time = min(10 * retry_count, 60)
-            print(f"  Retrying in {wait_time}s... (attempt {retry_count})")
+            P(f"  Retrying in {wait_time}s... (attempt {retry_count})")
             time.sleep(wait_time)
             continue
 
-        print("  Auto-discovery failed.")
-        print()
-        print("  " + "=" * 45)
-        print("  Options:")
-        print("  " + "=" * 45)
-        print("  [1] Add new admin server link")
-        print("  [2] Continue on localhost")
-        print("  [3] Exit")
-        print("  " + "=" * 45)
-        print()
+        P("  Auto-discovery failed.")
+        P()
+        P("  " + "=" * 45)
+        P("  Options:")
+        P("  " + "=" * 45)
+        P("  [1] Add new admin server link")
+        P("  [2] Continue on localhost")
+        P("  [3] Exit")
+        P("  " + "=" * 45)
+        P()
         choice = safe_input("  Select option [1-3]: ").strip()
         if choice == "1":
             from client.config import prompt_admin_url
@@ -637,50 +583,50 @@ def main():
             config["admin_url"] = admin_url
             save_config(config)
         elif choice == "3":
-            print("  Exiting...")
+            P("  Exiting...")
             sys.exit(0)
         else:
-            print("  Invalid option. Continuing...")
-            print()
+            P("  Invalid option. Continuing...")
+            P()
 
-    print("  Connecting to admin server...")
+    P("  Connecting to admin server...")
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
 
     if result.get("status") in ("ok",):
         if result.get("auto_approved"):
-            print("  [OK] Auto-approved by admin server.")
+            P("  [OK] Auto-approved by admin server.")
         else:
-            print("  [WAITING] Registration sent. Waiting for admin approval...")
+            P("  [WAITING] Registration sent. Waiting for admin approval...")
             while True:
                 time.sleep(5)
                 status_res = comm.check_status(key)
                 if status_res.get("status") == "approved":
-                    print("  [OK] Admin approved registration.")
+                    P("  [OK] Admin approved registration.")
                     break
                 elif status_res.get("status") == "error":
                     pass
     elif result.get("status") == "pending":
-        print("  [WAITING] Registration pending admin approval...")
+        P("  [WAITING] Registration pending admin approval...")
         while True:
             time.sleep(5)
             status_res = comm.check_status(key)
             if status_res.get("status") == "approved":
-                print("  [OK] Admin approved registration.")
+                P("  [OK] Admin approved registration.")
                 break
             elif status_res.get("status") == "error":
                 pass
     else:
-        print(f"  [WARN] {result.get('message', 'Registration pending')}")
+        P(f"  [WARN] {result.get('message', 'Registration pending')}")
 
-    print()
-    print("  Performing initial scan...")
+    P()
+    P("  Performing initial scan...")
     initial_data = collect_all()
     init_result = comm.submit_scan(key, initial_data)
     if init_result.get("status") == "ok":
-        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan submitted successfully!")
+        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan submitted successfully!")
     else:
-        print(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan failed: {init_result.get('message', 'Unknown')}")
-    print()
+        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Initial scan failed: {init_result.get('message', 'Unknown')}")
+    P()
 
     monitoring_agent_id = None
     monitoring_secret = None
@@ -694,12 +640,12 @@ def main():
         )
         if reg_resp.get("secret_key"):
             monitoring_secret = reg_resp["secret_key"]
-            print(f"  [OK] Monitoring agent registered: {monitoring_agent_id[:16]}...")
+            P(f"  [OK] Monitoring agent registered: {monitoring_agent_id[:16]}...")
     except Exception as e:
-        print(f"  [WARN] Monitoring agent registration failed: {e}")
+        P(f"  [WARN] Monitoring agent registration failed: {e}")
 
-    print("  Starting communication channels...")
-    print()
+    P("  Starting communication channels...")
+    P()
 
     hb_thread = threading.Thread(
         target=heartbeat_loop,
@@ -710,28 +656,28 @@ def main():
 
     watchdog = HeartbeatWatchdog(comm, key, hostname, fingerprint)
     watchdog.start()
-    print("  [OK] Heartbeat watchdog started")
+    P("  [OK] Heartbeat watchdog started")
 
     cloud_thread = threading.Thread(target=cloud_discovery_loop, args=(comm,), daemon=True)
     cloud_thread.start()
-    print(f"  [OK] Cloud discovery refresh every {CLOUD_DISCOVERY_INTERVAL}s")
+    P(f"  [OK] Cloud discovery refresh every {CLOUD_DISCOVERY_INTERVAL}s")
 
     if monitoring_agent_id and monitoring_secret:
-        print("  Connecting WebSocket for real-time communication...")
+        P("  Connecting WebSocket for real-time communication...")
         ws_client = start_websocket_client(comm, monitoring_agent_id, monitoring_secret)
-        print("  WebSocket client started (auto-reconnect enabled)")
+        P("  WebSocket client started (auto-reconnect enabled)")
     else:
-        print("  [INFO] WebSocket not available (monitoring agent not registered)")
+        P("  [INFO] WebSocket not available (monitoring agent not registered)")
         ws_client = None
 
     if HAS_EVENT_MONITORS:
-        print()
-        print("  Starting event monitors...")
+        P()
+        P("  Starting event monitors...")
         _start_event_monitors(comm, key, ws_client)
 
-    print("  Starting heartbeat loop (every 30 seconds)...")
-    print("  Press Ctrl+C to stop.")
-    print()
+    P("  Starting heartbeat loop (every 30 seconds)...")
+    P("  Press Ctrl+C to stop.")
+    P()
 
     last_scan = time.time()
     while True:
@@ -744,28 +690,28 @@ def main():
 
             elapsed = time.time() - last_scan
             if enabled and elapsed >= interval:
-                print(f"  [{now}] Scheduled scan starting...")
+                P(f"  [{now}] Scheduled scan starting...")
                 scan_data = collect_all()
                 result = comm.submit_scan(key, scan_data)
                 if result.get("status") == "ok":
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scheduled scan submitted!")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] Scheduled scan submitted!")
                 else:
-                    print(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan failed: {result.get('message', 'Unknown')}")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] Scan failed: {result.get('message', 'Unknown')}")
                 last_scan = time.time()
 
             result = comm.fetch_latest_scan(key)
             if result and result.get("id"):
-                print(f"  [{now}] Scan data received.")
+                P(f"  [{now}] Scan data received.")
                 display_summary(result)
                 saved = save_output(result)
-                print(f"  Output saved to: {saved}")
+                P(f"  Output saved to: {saved}")
             else:
                 next_min = max(1, int((interval - elapsed) / 60)) if enabled else 30
-                print(f"  [{now}] Waiting... next scan in ~{next_min}m")
+                P(f"  [{now}] Waiting... next scan in ~{next_min}m")
 
         except Exception as e:
-            print(f"  [{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
-        print()
+            P(f"  [{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
+        P()
 
         if enabled:
             next_in = max(1, interval - (time.time() - last_scan))
@@ -778,38 +724,32 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n  Shutting down...")
+        P("\n  Shutting down...")
         for name, monitor in _global_event_monitors:
             try:
                 monitor.stop()
-                print(f"  [OK] {name} monitor stopped")
+                P(f"  [OK] {name} monitor stopped")
             except Exception:
                 pass
         for dispatcher in _global_event_dispatchers:
             try:
                 dispatcher.stop()
                 stats = dispatcher.get_stats()
-                print(f"  [OK] Event dispatcher stopped (sent: {stats['events_sent']}, failed: {stats['events_failed']})")
+                P(f"  [OK] Event dispatcher stopped (sent: {stats['events_sent']}, failed: {stats['events_failed']})")
             except Exception:
                 pass
         if _global_ws_client:
             _global_ws_client.stop()
-        print("  Stopped.")
+        P("  Stopped.")
     except Exception as e:
         import traceback
-        print("\n  ==========================================")
-        print("  FATAL ERROR - Client crashed")
-        print("  ==========================================")
-        print(f"  Error: {e}")
-        print()
+        P()
+        P("  ==========================================")
+        P("  FATAL ERROR - Client crashed")
+        P("  ==========================================")
+        P(f"  Error: {e}")
+        P()
         traceback.print_exc()
-        print("  ==========================================")
-        print()
-        try:
-            if _crash_log:
-                _crash_log.write(f"FATAL: {e}\n")
-                traceback.print_exc(file=_crash_log)
-                _crash_log.flush()
-        except Exception:
-            pass
-        safe_input("  Press Enter to exit...")
+        P("  ==========================================")
+        P()
+        input("  Press Enter to exit...")
