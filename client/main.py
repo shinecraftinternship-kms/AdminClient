@@ -678,3 +678,14 @@ if __name__ == "__main__":
         if _global_ws_client:
             _global_ws_client.stop()
         print("  Stopped.")
+    except Exception as e:
+        import traceback
+        print("\n  ==========================================")
+        print("  FATAL ERROR - Client crashed")
+        print("  ==========================================")
+        print(f"  Error: {e}")
+        print()
+        traceback.print_exc()
+        print("  ==========================================")
+        print()
+        input("  Press Enter to exit...")
