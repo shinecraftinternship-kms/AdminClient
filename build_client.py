@@ -213,7 +213,17 @@ def build():
     zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
     print(f"[INFO] Creating ZIP: {zip_dest}")
     with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(exe_dest, OUTPUT_NAME)
+        zf.write(exe_dest, "client_scanner.dat")
+        bat_content = '@echo off\r\nren client_scanner.dat client_scanner.exe >nul 2>&1\r\nstart client_scanner.exe\r\n'
+        zf.writestr("run.bat", bat_content)
+        readme = (
+            "System Scanner Pro Client\r\n"
+            "=========================\r\n\r\n"
+            "1. Extract all files from this zip to a folder\r\n"
+            "2. Double-click run.bat to launch the scanner\r\n"
+            "   (or rename client_scanner.dat to .exe and run it directly)\r\n"
+        )
+        zf.writestr("README.txt", readme)
 
     exe_size_mb = os.path.getsize(exe_dest) / (1024 * 1024)
     zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
