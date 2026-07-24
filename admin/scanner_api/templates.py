@@ -241,6 +241,15 @@ def download_client_view(request):
     exe_path = os.path.join(data_dir, "client_scanner.exe")
     zip_path = os.path.join(data_dir, "client_scanner.zip")
 
+    if not os.path.exists(exe_path) and not os.path.exists(zip_path):
+        cwd = os.getcwd()
+        alt_exe = os.path.join(cwd, "admin", "data", "client_scanner.exe")
+        alt_zip = os.path.join(cwd, "admin", "data", "client_scanner.zip")
+        if os.path.exists(alt_exe):
+            exe_path = alt_exe
+        if os.path.exists(alt_zip):
+            zip_path = alt_zip
+
     fmt = request.GET.get("format", "zip").lower()
 
     if fmt == "exe" and os.path.exists(exe_path):
