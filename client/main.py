@@ -627,7 +627,7 @@ def main():
             retry_count = 0
             continue
 
-        if is_frozen():
+        if is_frozen() and retry_count < 3:
             wait_time = min(10 * retry_count, 60)
             P(f"  Retrying in {wait_time}s... (attempt {retry_count})")
             time.sleep(wait_time)

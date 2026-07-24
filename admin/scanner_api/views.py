@@ -462,6 +462,13 @@ class AdminClientInfoView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class HealthCheckView(APIView):
+    """Lightweight health check for client reachability. No DB access required."""
+    def get(self, request):
+        return Response({"status": "ok", "server": "scanner-pro"})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class ClientScanResultsView(APIView):
     def get(self, request, key):
         try:

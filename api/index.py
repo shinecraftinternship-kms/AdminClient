@@ -76,6 +76,20 @@ def _setup_vercel_db():
     except Exception as e:
         _log.append(f"VERCEL_DB_USER_ERR: {e}")
 
+    try:
+        from scanner_api.views import ensure_admin_client
+        ensure_admin_client()
+        _log.append("VERCEL_DB: admin client ensured")
+    except Exception as e:
+        _log.append(f"VERCEL_DB_ADMIN_CLIENT_ERR: {e}")
+
+    try:
+        from scanner_api.supabase_client import register_server_in_registry
+        register_server_in_registry("admin-client-weld.vercel.app", 443, "https")
+        _log.append("VERCEL_DB: registered with cloud discovery")
+    except Exception as e:
+        _log.append(f"VERCEL_DB_CLOUD_REG_ERR: {e}")
+
 
 try:
     _real_app = _init()

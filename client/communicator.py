@@ -167,9 +167,10 @@ class Communicator:
     def is_reachable(self, url=None):
         try:
             target = url or self.admin_url
-            req = urllib.request.Request(f"{target}/api/clients", method="GET")
-            with urllib.request.urlopen(req, timeout=5):
-                return True
+            req = urllib.request.Request(f"{target}/api/health", method="GET")
+            req.add_header("User-Agent", "SystemScannerClient/1.0")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status == 200
         except Exception:
             return False
 

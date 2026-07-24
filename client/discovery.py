@@ -55,6 +55,8 @@ def discover_admin_url():
             protocol = row.get("protocol", "http")
             if not ip or ip == "0.0.0.0":
                 return None
+            if (protocol == "https" and port == 443) or (protocol == "http" and port == 80):
+                return f"{protocol}://{ip}"
             return f"{protocol}://{ip}:{port}"
     except Exception:
         return None
