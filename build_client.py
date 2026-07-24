@@ -231,7 +231,7 @@ def build():
         except OSError:
             pass
 
-    spec_file = os.path.join(ROOT_DIR, f"{folder_name}.spec")
+    spec_file = os.path.join(ROOT_DIR, "client_scanner.spec")
     if os.path.exists(spec_file):
         try:
             os.remove(spec_file)
