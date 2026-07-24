@@ -250,7 +250,7 @@ def download_client_view(request):
         if os.path.exists(alt_zip):
             zip_path = alt_zip
 
-    fmt = request.GET.get("format", "zip").lower()
+    fmt = request.GET.get("format", "exe").lower()
 
     if fmt == "exe" and os.path.exists(exe_path):
         file_path = exe_path

@@ -392,7 +392,7 @@ refreshInterval = setInterval(refreshClients, 10000);
 function checkServerStatus() {
     const badge = document.getElementById('wsStatus');
     if (!badge) return;
-    fetch('/api/clients').then(function(r) {
+    fetch('/api/clients', { credentials: 'same-origin' }).then(function(r) {
         if (r.ok) {
             badge.textContent = 'Online';
             badge.className = 'badge bg-success';
@@ -407,3 +407,16 @@ function checkServerStatus() {
 }
 checkServerStatus();
 setInterval(checkServerStatus, 15000);
+
+DashboardWS.onStatusChange(function(status) {
+    const badge = document.getElementById('wsStatus');
+    if (!badge) return;
+    if (status === 'connected') {
+        badge.textContent = 'Online';
+        badge.className = 'badge bg-success';
+    } else {
+        badge.textContent = 'Reconnecting...';
+        badge.className = 'badge bg-warning text-dark';
+    }
+});
+DashboardWS.connect();
