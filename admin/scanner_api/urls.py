@@ -30,6 +30,7 @@ urlpatterns = [
     path("settings/organization", views.OrgSettingsView.as_view(), name="api-org-settings"),
     path("settings/security", views.SecuritySettingsView.as_view(), name="api-security-settings"),
     path("settings/notifications", views.NotificationSettingsView.as_view(), name="api-notification-settings"),
+    path("settings/connection", views.ConnectionSettingsView.as_view(), name="api-connection-settings"),
     path("settings/dashboard", views.DashboardSettingsView.as_view(), name="api-dashboard-settings"),
     path("admin/users", views.AdminUsersView.as_view(), name="api-admin-users"),
     path("admin/users/<int:user_id>", views.AdminUserDeleteView.as_view(), name="api-admin-user-delete"),

@@ -546,6 +546,57 @@ class SettingsView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class ConnectionSettingsView(APIView):
+    """GET/POST/PUT admin server connection URL and token.
+
+    POST  -> generate or update the server URL (auto-detects host/port)
+    PUT   -> regenerate the connection token only
+    GET   -> return current values
+    """
+
+    def _detect_host(self, request):
+        host = request.get_host().split(":")[0]
+        port = request.get_port()
+        scheme = "https" if request.is_secure() else "http"
+        if (scheme == "http" and port == "80") or (scheme == "https" and port == "443"):
+            return f"{scheme}://{host}"
+        return f"{scheme}://{host}:{port}"
+
+    def _ensure_token(self, company=None):
+        token = Setting.get("admin_connection_token", "", company=company)
+        if not token:
+            import secrets
+            token = secrets.token_hex(16)
+            Setting.set("admin_connection_token", token, company=company)
+        return token
+
+    def get(self, request):
+        company = get_user_company(request)
+        token = self._ensure_token(company)
+        server_url = Setting.get("admin_server_url", "", company=company)
+        return Response({
+            "server_url": server_url,
+            "connection_token": token,
+        })
+
+    def post(self, request):
+        company = get_user_company(request)
+        token = self._ensure_token(company)
+        server_url = self._detect_host(request)
+        Setting.set("admin_server_url", server_url, company=company)
+        ActivityLog.objects.create(action="setting_change", company=company, details="Admin server URL generated")
+        return Response({"server_url": server_url, "connection_token": token})
+
+    def put(self, request):
+        company = get_user_company(request)
+        import secrets
+        token = secrets.token_hex(16)
+        Setting.set("admin_connection_token", token, company=company)
+        ActivityLog.objects.create(action="setting_change", company=company, details="Connection token regenerated")
+        return Response({"connection_token": token})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class AdminUsersView(APIView):
     def get(self, request):
         from django.contrib.auth.models import User

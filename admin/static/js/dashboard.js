@@ -7,11 +7,13 @@ let activityChart = null;
 let adminClientKey = null;
 let selectedClients = new Set();
 
+const _fetchOpts = { credentials: 'same-origin' };
+
 function refreshClients() {
     Promise.all([
-        fetch('/api/clients').then(r => r.json()),
-        fetch('/api/admin-client').then(r => r.json()).catch(() => ({})),
-        fetch('/api/groups').then(r => r.json()).catch(() => []),
+        fetch('/api/clients', _fetchOpts).then(r => r.json()),
+        fetch('/api/admin-client', _fetchOpts).then(r => r.json()).catch(() => ({})),
+        fetch('/api/groups', _fetchOpts).then(r => r.json()).catch(() => []),
     ]).then(([data, adminData, groupsData]) => {
         clients = data;
         groups = groupsData;
@@ -221,6 +223,7 @@ function bulkApprove() {
     const keys = Array.from(selectedClients);
     if (keys.length === 0) return;
     fetch('/api/approve-multiple', {
+        ..._fetchOpts,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_keys: keys })
     }).then(r => r.json()).then(() => {
@@ -235,7 +238,7 @@ function bulkScan() {
     if (keys.length === 0) return;
     let done = 0;
     keys.forEach(key => {
-        fetch(`/api/clients/${key}/scan-now`, { method: 'POST' })
+        fetch(`/api/clients/${key}/scan-now`, { ..._fetchOpts, method: 'POST' })
             .then(() => done++)
             .catch(() => {});
     });
@@ -248,6 +251,7 @@ function bulkDelete() {
     if (keys.length === 0) return;
     if (!confirm(`Delete ${keys.length} client(s)?`)) return;
     fetch('/api/clients/delete-multiple', {
+        ..._fetchOpts,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_keys: keys })
     }).then(r => r.json()).then(res => {
@@ -268,10 +272,12 @@ function registerClient() {
         return;
     }
     fetch('/api/register', {
+        ..._fetchOpts,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_key: key, hostname: 'Manual', platform: 'Unknown' })
     }).then(r => r.json()).then(() => {
         return fetch('/api/approve', {
+            ..._fetchOpts,
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ registration_key: key })
         });
@@ -289,6 +295,7 @@ function registerClient() {
 
 function approveClient(key) {
     fetch('/api/approve', {
+        ..._fetchOpts,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_key: key })
     }).then(r => r.json()).then(data => {
@@ -305,7 +312,7 @@ function scanClient(key) {
     const client = clients.find(c => c.registration_key === key);
     const name = client ? (client.hostname || key) : key;
     showToast(`Scan requested for ${name} — waiting for client...`, 'info');
-    fetch(`/api/clients/${key}/scan-now`, { method: 'POST' })
+    fetch(`/api/clients/${key}/scan-now`, { ..._fetchOpts, method: 'POST' })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'ok') {
@@ -313,7 +320,7 @@ function scanClient(key) {
                 const poll = setInterval(() => {
                     attempts++;
                     if (attempts > 40) { clearInterval(poll); refreshClients(); return; }
-                    fetch('/api/clients').then(r => r.json()).then(clientsData => {
+                    fetch('/api/clients', _fetchOpts).then(r => r.json()).then(clientsData => {
                         clients = clientsData;
                         renderStats(); renderCharts(); renderClients();
                         const updated = clients.find(c => c.registration_key === key);
@@ -328,13 +335,13 @@ function scanAll() {
     const approved = clients.filter(c => c.approved && !c.deleted);
     if (approved.length === 0) { showToast('No approved clients', 'warning'); return; }
     showToast(`Scan queued for ${approved.length} client(s)`, 'info');
-    fetch('/api/scan/all', { method: 'POST' }).then(r => r.json()).then(data => {
+    fetch('/api/scan/all', { ..._fetchOpts, method: 'POST' }).then(r => r.json()).then(data => {
         if (data.status === 'ok') {
             let attempts = 0;
             const poll = setInterval(() => {
                 attempts++;
                 if (attempts > 60) { clearInterval(poll); refreshClients(); return; }
-                fetch('/api/clients').then(r => r.json()).then(clientsData => {
+                fetch('/api/clients', _fetchOpts).then(r => r.json()).then(clientsData => {
                     clients = clientsData;
                     renderStats(); renderCharts(); renderClients();
                     if (clients.filter(c => c.approved).every(c => !c.scan_requested)) { clearInterval(poll); showToast('All clients reported back!', 'success'); }
@@ -346,7 +353,7 @@ function scanAll() {
 
 function scanAdminServer() {
     showToast('Scanning local server...', 'info');
-    fetch('/api/scan/local', { method: 'POST' }).then(r => r.json()).then(data => {
+    fetch('/api/scan/local', { ..._fetchOpts, method: 'POST' }).then(r => r.json()).then(data => {
         if (data.status === 'ok') {
             showToast('Server scan started!', 'success');
             setTimeout(refreshClients, 3000);
@@ -370,7 +377,7 @@ function exportCSV() {
 }
 
 function loadActivityLog() {
-    fetch('/api/activity-log?limit=50').then(r => r.json()).then(logs => {
+    fetch('/api/activity-log?limit=50', _fetchOpts).then(r => r.json()).then(logs => {
         const tbody = document.getElementById('activityLogBody');
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-secondary">No activity</td></tr>';
@@ -392,7 +399,7 @@ refreshInterval = setInterval(refreshClients, 10000);
 function checkServerStatus() {
     const badge = document.getElementById('wsStatus');
     if (!badge) return;
-    fetch('/api/clients', { credentials: 'same-origin' }).then(function(r) {
+    fetch('/api/health', _fetchOpts).then(function(r) {
         if (r.ok) {
             badge.textContent = 'Online';
             badge.className = 'badge bg-success';
@@ -412,7 +419,7 @@ DashboardWS.onStatusChange(function(status) {
     const badge = document.getElementById('wsStatus');
     if (!badge) return;
     if (status === 'connected') {
-        badge.textContent = 'Online';
+        badge.textContent = 'Connected';
         badge.className = 'badge bg-success';
     } else {
         badge.textContent = 'Reconnecting...';

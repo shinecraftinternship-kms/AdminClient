@@ -1,3 +1,10 @@
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+    if (opts === undefined) opts = {};
+    if (!opts.credentials) opts.credentials = 'same-origin';
+    return _origFetch(url, opts);
+};
+
 function showToast(message, type) {
     const container = document.querySelector('.toast-container');
     const toast = document.createElement('div');
