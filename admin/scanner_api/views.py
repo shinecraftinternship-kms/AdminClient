@@ -549,9 +549,9 @@ class SettingsView(APIView):
 class ConnectionSettingsView(APIView):
     """GET/POST/PUT admin server connection URL and token.
 
-    POST  -> generate or update the server URL (auto-detects host/port)
+    GET   -> return current values (auto-generates both URL and token if missing)
+    POST  -> force-regenerate the server URL (auto-detects host/port)
     PUT   -> regenerate the connection token only
-    GET   -> return current values
     """
 
     def _detect_host(self, request):
@@ -570,10 +570,17 @@ class ConnectionSettingsView(APIView):
             Setting.set("admin_connection_token", token, company=company)
         return token
 
+    def _ensure_url(self, request, company=None):
+        server_url = Setting.get("admin_server_url", "", company=company)
+        if not server_url:
+            server_url = self._detect_host(request)
+            Setting.set("admin_server_url", server_url, company=company)
+        return server_url
+
     def get(self, request):
         company = get_user_company(request)
         token = self._ensure_token(company)
-        server_url = Setting.get("admin_server_url", "", company=company)
+        server_url = self._ensure_url(request, company)
         return Response({
             "server_url": server_url,
             "connection_token": token,
