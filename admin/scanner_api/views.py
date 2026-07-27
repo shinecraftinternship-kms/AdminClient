@@ -886,7 +886,7 @@ class AuthLoginView(APIView):
                 user = authenticate(request, username=u.username, password=password)
             except User.DoesNotExist:
                 user = None
-        else:
+        if user is None:
             user = authenticate(request, username=identifier, password=password)
 
         ip = get_client_ip(request)
