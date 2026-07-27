@@ -84,29 +84,58 @@ def _setup_vercel_db():
         _log.append(f"VERCEL_DB_ADMIN_CLIENT_ERR: {e}")
 
     try:
-        from scanner_api.models import Setting, AdministratorProfile, Company
+        from scanner_api.models import Setting
         from django.contrib.auth.models import User
+        import secrets as _secrets
+
         vercel_url = os.getenv("VERCEL_URL", "")
         base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
-        server_url = Setting.get("admin_server_url", "")
+
+        server_url = ""
+        try:
+            server_url = Setting.get("admin_server_url", "")
+        except Exception as e:
+            _log.append(f"VERCEL_DB_CONN_GET_URL_ERR: {e}")
+
         if not server_url:
-            admin_user = User.objects.filter(is_superuser=True).first()
-            if admin_user:
-                profile = AdministratorProfile.objects.filter(user=admin_user).first()
-                if profile and profile.company:
-                    company_slug = profile.company.slug
-                    server_url = f"{base}/{admin_user.username}-{company_slug}"
+            try:
+                admin_user = User.objects.filter(is_superuser=True).first()
+                if admin_user:
+                    username = admin_user.username
+                    try:
+                        from scanner_api.models import AdministratorProfile
+                        profile = AdministratorProfile.objects.filter(user=admin_user).first()
+                        if profile and profile.company:
+                            server_url = f"{base}/{username}-{profile.company.slug}"
+                        else:
+                            server_url = f"{base}/{username}"
+                    except Exception:
+                        server_url = f"{base}/{username}"
                 else:
-                    server_url = f"{base}/{admin_user.username}"
-            else:
+                    server_url = base
+            except Exception as e:
+                _log.append(f"VERCEL_DB_CONN_BUILD_URL_ERR: {e}")
                 server_url = base
-            Setting.set("admin_server_url", server_url)
-        token = Setting.get("admin_connection_token", "")
+
+            try:
+                Setting.set("admin_server_url", server_url)
+            except Exception as e:
+                _log.append(f"VERCEL_DB_CONN_SET_URL_ERR: {e}")
+
+        token = ""
+        try:
+            token = Setting.get("admin_connection_token", "")
+        except Exception as e:
+            _log.append(f"VERCEL_DB_CONN_GET_TOKEN_ERR: {e}")
+
         if not token:
-            import secrets
-            token = secrets.token_hex(16)
-            Setting.set("admin_connection_token", token)
-        _log.append(f"VERCEL_DB: connection settings set url={server_url} token={token[:8]}...")
+            try:
+                token = _secrets.token_hex(16)
+                Setting.set("admin_connection_token", token)
+            except Exception as e:
+                _log.append(f"VERCEL_DB_CONN_SET_TOKEN_ERR: {e}")
+
+        _log.append(f"VERCEL_DB: connection settings set url={server_url} token={token[:8] if token else 'N/A'}...")
     except Exception as e:
         _log.append(f"VERCEL_DB_CONN_ERR: {e}")
 
