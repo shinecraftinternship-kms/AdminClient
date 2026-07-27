@@ -200,6 +200,7 @@ class AdministratorProfile(models.Model):
 
     class Meta:
         db_table = "administrator_profiles"
+        unique_together = [("company", "user")]
 
     def __str__(self):
         return f"Profile({self.user.username})"

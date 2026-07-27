@@ -624,6 +624,8 @@ class AdminUsersView(APIView):
         user.is_superuser = is_superuser
         user.save()
         company = get_user_company(request)
+        if AdministratorProfile.objects.filter(user=user, company=company).exists():
+            return Response({"status": "error", "message": "This admin is already registered with this company"}, status=status.HTTP_400_BAD_REQUEST)
         AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
         log_audit_event(user, "login_success", request, details=f"Admin user {username} created", success=True)
         ActivityLog.objects.create(action="login", company=company, details=f"Admin user {username} created")

@@ -94,9 +94,8 @@
                         <label class="form-label">Company Name</label>
                         <div class="signup-icon-input">
                             <i class="bi bi-building input-icon"></i>
-                            <input type="text" name="company_name" id="company_name" class="form-control" placeholder="Your company name (optional)" autocomplete="off">
+                            <input type="text" name="company_name" id="company_name" class="form-control" required placeholder="Your company name" autocomplete="off">
                         </div>
-                        <div class="form-text text-secondary small">Leave blank to use your username as company name</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Password</label>
@@ -145,11 +144,12 @@
         document.getElementById('signupForm').addEventListener('submit', function(e) {
             const username = document.getElementById('username').value.trim();
             const email = document.getElementById('email').value.trim();
+            const companyName = document.getElementById('company_name').value.trim();
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             const btn = document.getElementById('signupBtn');
 
-            if (!username || !email || !password || !confirmPassword) {
+            if (!username || !email || !companyName || !password || !confirmPassword) {
                 e.preventDefault();
                 return;
             }

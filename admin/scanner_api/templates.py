@@ -185,7 +185,9 @@ def signup_view(request):
         password = request.POST.get("password", "")
         confirm_password = request.POST.get("confirm_password", "")
 
-        if not username or not email or not password:
+        company_name = request.POST.get("company_name", "").strip()
+
+        if not username or not email or not password or not company_name:
             return render(request, "signup.html", {"error": "All fields are required"})
 
         if password != confirm_password:
@@ -214,7 +216,6 @@ def signup_view(request):
         from .models import Company
         from django.utils.text import slugify
         import uuid as _uuid
-        company_name = request.POST.get("company_name", "").strip() or username
         company_slug = slugify(company_name) or slugify(username)
         try:
             company = Company.objects.get(name=company_name)
@@ -222,6 +223,8 @@ def signup_view(request):
             if Company.objects.filter(slug=company_slug).exists():
                 company_slug = f"{company_slug}-{_uuid.uuid4().hex[:8]}"
             company = Company.objects.create(name=company_name, slug=company_slug)
+        if AdministratorProfile.objects.filter(user=user, company=company).exists():
+            return render(request, "signup.html", {"error": "This admin is already registered with this company"})
         profile, _ = AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
         if profile.company != company:
             profile.company = company
