@@ -168,10 +168,25 @@ def main():
         print(f"  Admin user created: {args.username} / {args.password}")
 
     from scanner_api.views import ensure_admin_client, admin_self_scan
+    from scanner_api.models import Setting
     admin_key = ensure_admin_client()
     import threading
     threading.Thread(target=admin_self_scan, daemon=True).start()
     print(f"  Admin client key: {admin_key}")
+
+    protocol = "https" if args.port == 443 else "http"
+    if args.host in ("0.0.0.0", ""):
+        startup_url = f"{protocol}://localhost:{args.port}" if args.port not in (80, 443) else f"{protocol}://localhost"
+    else:
+        startup_url = f"{protocol}://{args.host}:{args.port}" if args.port not in (80, 443) else f"{protocol}://{args.host}"
+    Setting.set("admin_server_url", startup_url)
+    token = Setting.get("admin_connection_token", "")
+    if not token:
+        import secrets
+        token = secrets.token_hex(16)
+        Setting.set("admin_connection_token", token)
+    print(f"  Server URL:  {startup_url}")
+    print(f"  Token:       {token[:8]}...")
     print()
 
     print(f"  Dashboard: http://{args.host}:{args.port}")

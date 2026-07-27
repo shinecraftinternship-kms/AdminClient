@@ -529,7 +529,7 @@ class SettingsView(APIView):
             "auto_approve": Setting.get("auto_approve", "false", company=company).lower() == "true",
             "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "120", company=company)),
             "scan_all_interval": int(Setting.get("scan_all_interval", "86400", company=company)),
-            "admin_client_key": Setting.get("admin_client_key", "", company=company),
+            "admin_client_key": Setting.get("admin_client_key", ""),
         })
 
     def put(self, request):
@@ -563,34 +563,42 @@ class ConnectionSettingsView(APIView):
         return f"{scheme}://{host}:{port}"
 
     def _ensure_token(self, company=None):
-        token = Setting.get("admin_connection_token", "", company=company)
+        token = Setting.get("admin_connection_token", "")
         if not token:
             import secrets
             token = secrets.token_hex(16)
-            Setting.set("admin_connection_token", token, company=company)
+            Setting.set("admin_connection_token", token)
         return token
 
-    def _ensure_url(self, request, company=None):
-        server_url = Setting.get("admin_server_url", "", company=company)
-        if not server_url:
-            server_url = self._detect_host(request)
-            Setting.set("admin_server_url", server_url, company=company)
+    def _ensure_url(self, company=None):
+        server_url = Setting.get("admin_server_url", "")
         return server_url
 
     def get(self, request):
-        company = get_user_company(request)
-        token = self._ensure_token(company)
-        server_url = self._ensure_url(request, company)
-        return Response({
-            "server_url": server_url,
-            "connection_token": token,
-        })
+        try:
+            company = get_user_company(request)
+            token = self._ensure_token(company)
+            server_url = self._ensure_url(company)
+            return Response({
+                "server_url": server_url,
+                "connection_token": token,
+            })
+        except Exception:
+            token = Setting.get("admin_connection_token", "")
+            server_url = Setting.get("admin_server_url", "")
+            return Response({
+                "server_url": server_url,
+                "connection_token": token,
+            })
 
     def post(self, request):
         company = get_user_company(request)
         token = self._ensure_token(company)
-        server_url = self._detect_host(request)
-        Setting.set("admin_server_url", server_url, company=company)
+        try:
+            server_url = self._detect_host(request)
+        except Exception:
+            server_url = Setting.get("admin_server_url", "")
+        Setting.set("admin_server_url", server_url)
         ActivityLog.objects.create(action="setting_change", company=company, details="Admin server URL generated")
         return Response({"server_url": server_url, "connection_token": token})
 
@@ -598,7 +606,7 @@ class ConnectionSettingsView(APIView):
         company = get_user_company(request)
         import secrets
         token = secrets.token_hex(16)
-        Setting.set("admin_connection_token", token, company=company)
+        Setting.set("admin_connection_token", token)
         ActivityLog.objects.create(action="setting_change", company=company, details="Connection token regenerated")
         return Response({"connection_token": token})
 
