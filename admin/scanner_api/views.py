@@ -879,15 +879,13 @@ class AuthLoginView(APIView):
             log_audit_event(None, "account_locked", request, details=f"Login attempt on locked account: {identifier}", success=False)
             return Response({"status": "error", "message": f"Account is locked. Try again in {minutes_left} minutes", "locked": True, "minutes_left": minutes_left}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        user = None
-        if validate_email(identifier):
+        user = authenticate(request, username=identifier, password=password)
+        if user is None and validate_email(identifier):
             try:
                 u = User.objects.get(email=identifier)
                 user = authenticate(request, username=u.username, password=password)
             except User.DoesNotExist:
-                user = None
-        if user is None:
-            user = authenticate(request, username=identifier, password=password)
+                pass
 
         ip = get_client_ip(request)
 

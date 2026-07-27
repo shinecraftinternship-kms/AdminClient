@@ -108,15 +108,13 @@ def login_view(request):
                 "registered": registered,
             })
 
-        user = None
-        if validate_email(identifier):
+        user = authenticate(request, username=identifier, password=password)
+        if user is None and validate_email(identifier):
             try:
                 u = User.objects.get(email=identifier)
                 user = authenticate(request, username=u.username, password=password)
             except User.DoesNotExist:
-                user = None
-        if user is None:
-            user = authenticate(request, username=identifier, password=password)
+                pass
 
         ip = get_client_ip(request)
 
