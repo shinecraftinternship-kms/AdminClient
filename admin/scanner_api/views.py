@@ -552,6 +552,8 @@ class ConnectionSettingsView(APIView):
     GET   -> return current values (auto-generates both URL and token if missing)
     POST  -> force-regenerate the server URL (auto-detects host/port)
     PUT   -> regenerate the connection token only
+
+    Server URL format: {scheme}://{host}/{admin-username}-{company-slug}
     """
 
     def _detect_host(self, request):
@@ -573,6 +575,21 @@ class ConnectionSettingsView(APIView):
             return f"{scheme}://{host}"
         return f"{scheme}://{host}:{port}"
 
+    def _build_full_url(self, base_url, request=None):
+        """Append /{username}-{company_slug} path to the base URL."""
+        username = ""
+        company_slug = ""
+        if request and request.user and request.user.is_authenticated:
+            username = request.user.username
+            company = get_user_company(request)
+            if company and company.slug:
+                company_slug = company.slug
+        if username and company_slug:
+            return f"{base_url}/{username}-{company_slug}"
+        elif username:
+            return f"{base_url}/{username}"
+        return base_url
+
     def _ensure_token(self, company=None):
         token = Setting.get("admin_connection_token", "")
         if not token:
@@ -587,13 +604,16 @@ class ConnectionSettingsView(APIView):
             import os
             if os.getenv("VERCEL", "0") == "1":
                 vercel_url = os.getenv("VERCEL_URL", "")
-                server_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+                base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
             elif request:
                 try:
-                    server_url = self._detect_host(request)
+                    base = self._detect_host(request)
                 except Exception:
-                    server_url = ""
-            if server_url:
+                    base = ""
+            else:
+                base = ""
+            if base:
+                server_url = self._build_full_url(base, request)
                 Setting.set("admin_server_url", server_url)
         return server_url
 
@@ -617,13 +637,16 @@ class ConnectionSettingsView(APIView):
                 import os
                 if os.getenv("VERCEL", "0") == "1":
                     vercel_url = os.getenv("VERCEL_URL", "")
-                    server_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+                    base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
                 elif request:
                     try:
-                        server_url = self._detect_host(request)
+                        base = self._detect_host(request)
                     except Exception:
-                        server_url = ""
-                if server_url:
+                        base = ""
+                else:
+                    base = ""
+                if base:
+                    server_url = self._build_full_url(base, request)
                     Setting.set("admin_server_url", server_url)
             return Response({
                 "server_url": server_url,
@@ -634,7 +657,8 @@ class ConnectionSettingsView(APIView):
         company = get_user_company(request)
         token = self._ensure_token(company)
         try:
-            server_url = self._detect_host(request)
+            base = self._detect_host(request)
+            server_url = self._build_full_url(base, request)
         except Exception:
             server_url = Setting.get("admin_server_url", "")
         Setting.set("admin_server_url", server_url)

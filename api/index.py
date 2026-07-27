@@ -84,13 +84,23 @@ def _setup_vercel_db():
         _log.append(f"VERCEL_DB_ADMIN_CLIENT_ERR: {e}")
 
     try:
-        from scanner_api.models import Setting
+        from scanner_api.models import Setting, AdministratorProfile, Company
+        from django.contrib.auth.models import User
         vercel_url = os.getenv("VERCEL_URL", "")
-        admin_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+        base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
         server_url = Setting.get("admin_server_url", "")
         if not server_url:
-            Setting.set("admin_server_url", admin_url)
-            server_url = admin_url
+            admin_user = User.objects.filter(is_superuser=True).first()
+            if admin_user:
+                profile = AdministratorProfile.objects.filter(user=admin_user).first()
+                if profile and profile.company:
+                    company_slug = profile.company.slug
+                    server_url = f"{base}/{admin_user.username}-{company_slug}"
+                else:
+                    server_url = f"{base}/{admin_user.username}"
+            else:
+                server_url = base
+            Setting.set("admin_server_url", server_url)
         token = Setting.get("admin_connection_token", "")
         if not token:
             import secrets
