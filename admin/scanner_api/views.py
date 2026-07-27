@@ -555,9 +555,20 @@ class ConnectionSettingsView(APIView):
     """
 
     def _detect_host(self, request):
-        host = request.get_host().split(":")[0]
+        import os
+        vercel_url = os.getenv("VERCEL_URL", "")
+        if vercel_url:
+            return f"https://{vercel_url}"
+        forwarded_host = request.META.get("HTTP_X_FORWARDED_HOST", "")
+        if forwarded_host:
+            host = forwarded_host.split(",")[0].strip().split(":")[0]
+        else:
+            host = request.get_host().split(":")[0]
         port = request.get_port()
         scheme = "https" if request.is_secure() else "http"
+        forwarded_proto = request.META.get("HTTP_X_FORWARDED_PROTO", "")
+        if forwarded_proto:
+            scheme = forwarded_proto.split(",")[0].strip()
         if (scheme == "http" and port == "80") or (scheme == "https" and port == "443"):
             return f"{scheme}://{host}"
         return f"{scheme}://{host}:{port}"
@@ -570,15 +581,27 @@ class ConnectionSettingsView(APIView):
             Setting.set("admin_connection_token", token)
         return token
 
-    def _ensure_url(self, company=None):
+    def _ensure_url(self, request=None, company=None):
         server_url = Setting.get("admin_server_url", "")
+        if not server_url:
+            import os
+            if os.getenv("VERCEL", "0") == "1":
+                vercel_url = os.getenv("VERCEL_URL", "")
+                server_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+            elif request:
+                try:
+                    server_url = self._detect_host(request)
+                except Exception:
+                    server_url = ""
+            if server_url:
+                Setting.set("admin_server_url", server_url)
         return server_url
 
     def get(self, request):
         try:
             company = get_user_company(request)
             token = self._ensure_token(company)
-            server_url = self._ensure_url(company)
+            server_url = self._ensure_url(request, company)
             return Response({
                 "server_url": server_url,
                 "connection_token": token,
@@ -586,6 +609,22 @@ class ConnectionSettingsView(APIView):
         except Exception:
             token = Setting.get("admin_connection_token", "")
             server_url = Setting.get("admin_server_url", "")
+            if not token:
+                import secrets
+                token = secrets.token_hex(16)
+                Setting.set("admin_connection_token", token)
+            if not server_url:
+                import os
+                if os.getenv("VERCEL", "0") == "1":
+                    vercel_url = os.getenv("VERCEL_URL", "")
+                    server_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+                elif request:
+                    try:
+                        server_url = self._detect_host(request)
+                    except Exception:
+                        server_url = ""
+                if server_url:
+                    Setting.set("admin_server_url", server_url)
             return Response({
                 "server_url": server_url,
                 "connection_token": token,

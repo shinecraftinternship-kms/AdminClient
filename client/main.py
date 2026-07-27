@@ -516,7 +516,12 @@ def main():
     config = load_config()
     admin_url = config.get("admin_url", "")
 
-    if len(sys.argv) > 1 and sys.argv[1].startswith("http"):
+    env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
+    if env_url:
+        admin_url = env_url.rstrip("/")
+        config["admin_url"] = admin_url
+        save_config(config)
+    elif len(sys.argv) > 1 and sys.argv[1].startswith("http"):
         admin_url = sys.argv[1].rstrip("/")
         config["admin_url"] = admin_url
         save_config(config)

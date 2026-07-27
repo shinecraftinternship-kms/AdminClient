@@ -44,11 +44,16 @@ def get_admin_url():
     """Resolve the admin URL using a multi-source fallback chain.
 
     Priority:
+      0. ADMIN_SERVER_URL environment variable (if set)
       1. Cloud discovery via Supabase (works across any network)
       2. Cached URL from client_config.json
       3. UDP broadcast discovery (LAN only)
       4. Manual prompt (first-time fallback)
     """
+    env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+
     config = load_config()
     cached_url = config.get("admin_url", "")
 
