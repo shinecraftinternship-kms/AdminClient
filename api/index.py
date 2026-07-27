@@ -84,6 +84,21 @@ def _setup_vercel_db():
         _log.append(f"VERCEL_DB_ADMIN_CLIENT_ERR: {e}")
 
     try:
+        from scanner_api.models import Setting
+        server_url = Setting.get("admin_server_url", "")
+        if not server_url:
+            Setting.set("admin_server_url", "https://admin-client-weld.vercel.app")
+            server_url = "https://admin-client-weld.vercel.app"
+        token = Setting.get("admin_connection_token", "")
+        if not token:
+            import secrets
+            token = secrets.token_hex(16)
+            Setting.set("admin_connection_token", token)
+        _log.append(f"VERCEL_DB: connection settings set url={server_url} token={token[:8]}...")
+    except Exception as e:
+        _log.append(f"VERCEL_DB_CONN_ERR: {e}")
+
+    try:
         from scanner_api.supabase_client import register_server_in_registry
         register_server_in_registry("admin-client-weld.vercel.app", 443, "https")
         _log.append("VERCEL_DB: registered with cloud discovery")
