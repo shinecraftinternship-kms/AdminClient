@@ -28,6 +28,11 @@ def settings_page(request):
 
 
 @login_required
+def admin_server_page(request):
+    return render(request, "admin_server.html")
+
+
+@login_required
 def admin_page(request):
     return render(request, "admin_page.html")
 

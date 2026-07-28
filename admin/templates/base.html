@@ -118,6 +118,11 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">System</small>
                 </li>
                 <li class="nav-item">
+                    <a href="/admin-server/" class="nav-link {% if request.path == '/admin-server/' %}active{% endif %}">
+                        <i class="bi bi-link-45deg me-2"></i>Admin Server
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a href="/settings" class="nav-link {% if request.path == '/settings' %}active{% endif %}">
                         <i class="bi bi-gear me-2"></i>Settings
                     </a>

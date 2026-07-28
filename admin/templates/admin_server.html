@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Admin Server Connection{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h4 class="mb-1"><i class="bi bi-link-45deg me-2"></i>Admin Server Connection</h4>
+            <p class="text-secondary mb-0">Generate a unique URL and token for clients to connect to this admin server.</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Server URL</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-dark border-secondary"><i class="bi bi-globe"></i></span>
+                            <a id="adminServerUrl" class="form-control bg-dark border-secondary text-info text-decoration-none" href="#" target="_blank" style="overflow:hidden;text-overflow:ellipsis;">Not configured</a>
+                            <button class="btn btn-outline-secondary" onclick="copyServerUrl()" title="Copy URL"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="form-text">Clients use this URL to register with the admin server</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Connection Token</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-dark border-secondary"><i class="bi bi-key"></i></span>
+                            <code id="connectionToken" class="form-control bg-dark border-secondary text-warning" style="font-size:1.1rem;letter-spacing:2px;">---</code>
+                            <button class="btn btn-outline-secondary" onclick="copyToken()" title="Copy Token"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="form-text">Clients use this token to authenticate with the server</div>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-primary btn-lg" onclick="generateBoth()" id="btnGenerate">
+                            <i class="bi bi-magic me-1"></i> Generate URL & Token
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="regenerateToken()" id="btnRegenToken">
+                            <i class="bi bi-arrow-repeat me-1"></i> Regenerate Token
+                        </button>
+                    </div>
+
+                    <div id="statusMsg" class="mt-3 d-none">
+                        <div class="alert" role="alert"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title mb-3"><i class="bi bi-info-circle me-2"></i>How It Works</h5>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-start mb-3">
+                            <span class="badge bg-primary me-2 mt-1">1</span>
+                            <div>
+                                <strong>Generate</strong>
+                                <p class="text-secondary small mb-0">Click the button to generate a unique server URL and connection token.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-start mb-3">
+                            <span class="badge bg-primary me-2 mt-1">2</span>
+                            <div>
+                                <strong>Share</strong>
+                                <p class="text-secondary small mb-0">Copy the URL and token, then share with clients or embed in the installer.</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-start">
+                            <span class="badge bg-primary me-2 mt-1">3</span>
+                            <div>
+                                <strong>Connect</strong>
+                                <p class="text-secondary small mb-0">Clients use these credentials to register and communicate with this server.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="mb-2">
+                        <span class="text-secondary small">Admin Server Key:</span>
+                        <code id="adminClientKey" class="ms-1 small">---</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const _fetchOpts = { credentials: 'same-origin' };
+
+    function showMsg(text, type) {
+        const el = document.getElementById('statusMsg');
+        el.className = 'mt-3';
+        el.innerHTML = '<div class="alert alert-' + type + ' mb-0">' + text + '</div>';
+        setTimeout(() => { el.className = 'mt-3 d-none'; }, 5000);
+    }
+
+    function showLoading(btn, loading) {
+        if (loading) {
+            btn.disabled = true;
+            btn.dataset.origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Working...';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = btn.dataset.origHtml || btn.innerHTML;
+        }
+    }
+
+    function setUrl(val) {
+        const el = document.getElementById('adminServerUrl');
+        if (val) {
+            el.textContent = val;
+            el.href = val;
+        } else {
+            el.textContent = 'Not configured';
+            el.removeAttribute('href');
+        }
+    }
+
+    function setToken(val) {
+        document.getElementById('connectionToken').textContent = val || '---';
+    }
+
+    window.generateBoth = function() {
+        const btn = document.getElementById('btnGenerate');
+        showLoading(btn, true);
+
+        fetch('/api/settings/connection', { ..._fetchOpts, method: 'POST' })
+            .then(r => r.json())
+            .then(res => {
+                showLoading(btn, false);
+                if (res.server_url) {
+                    setUrl(res.server_url);
+                    setToken(res.connection_token);
+                    showMsg('Server URL and token generated successfully!', 'success');
+                } else {
+                    showMsg('Error: ' + (res.detail || res.message || 'Failed to generate'), 'danger');
+                }
+            })
+            .catch(err => {
+                showLoading(btn, false);
+                showMsg('Network error: ' + err.message, 'danger');
+            });
+    };
+
+    window.regenerateToken = function() {
+        if (!confirm('Regenerate the connection token? Clients using the old token will need to reconfigure.'))
+            return;
+
+        const btn = document.getElementById('btnRegenToken');
+        showLoading(btn, true);
+
+        fetch('/api/settings/connection', { ..._fetchOpts, method: 'PUT' })
+            .then(r => r.json())
+            .then(res => {
+                showLoading(btn, false);
+                if (res.connection_token) {
+                    setToken(res.connection_token);
+                    showMsg('Token regenerated!', 'success');
+                } else {
+                    showMsg('Error: ' + (res.detail || res.message || 'Failed'), 'danger');
+                }
+            })
+            .catch(err => {
+                showLoading(btn, false);
+                showMsg('Network error: ' + err.message, 'danger');
+            });
+    };
+
+    window.copyServerUrl = function() {
+        const url = document.getElementById('adminServerUrl').textContent;
+        if (!url || url === 'Not configured') {
+            showMsg('Generate a server URL first', 'warning');
+            return;
+        }
+        navigator.clipboard.writeText(url).then(() => {
+            showMsg('Server URL copied!', 'success');
+        }).catch(() => {
+            showMsg('Copy failed - select and copy manually', 'warning');
+        });
+    };
+
+    window.copyToken = function() {
+        const token = document.getElementById('connectionToken').textContent;
+        if (!token || token === '---') {
+            showMsg('No token to copy', 'warning');
+            return;
+        }
+        navigator.clipboard.writeText(token).then(() => {
+            showMsg('Token copied!', 'success');
+        }).catch(() => {
+            showMsg('Copy failed - select and copy manually', 'warning');
+        });
+    };
+
+    // Load existing values on page load
+    fetch('/api/settings/connection', _fetchOpts)
+        .then(r => r.json())
+        .then(res => {
+            setUrl(res.server_url);
+            setToken(res.connection_token);
+        })
+        .catch(() => {});
+
+    fetch('/api/admin-client', _fetchOpts)
+        .then(r => r.json())
+        .then(res => {
+            if (res.registration_key) {
+                document.getElementById('adminClientKey').textContent = res.registration_key;
+            }
+        })
+        .catch(() => {});
+})();
+</script>
+{% endblock %}

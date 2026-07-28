@@ -19,7 +19,9 @@ class Communicator:
     """
 
     def __init__(self, admin_url, max_retries=3, base_delay=1.0, max_delay=30.0):
-        self.admin_url = admin_url.rstrip("/")
+        from urllib.parse import urlparse
+        parsed = urlparse(admin_url.rstrip("/"))
+        self.admin_url = f"{parsed.scheme}://{parsed.netloc}"
         self.max_retries = max_retries
         self.base_delay = base_delay
         self.max_delay = max_delay

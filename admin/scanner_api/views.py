@@ -46,6 +46,8 @@ def get_admin_owned_clients(request):
     Superusers see all clients. Regular admins see only clients they own.
     """
     qs = Client.objects.filter(deleted=False).select_related("group", "owner")
+    if not request.user or not request.user.is_authenticated:
+        return qs.none()
     if request.user.is_superuser:
         return qs
     return qs.filter(owner=request.user)
@@ -576,21 +578,24 @@ class ConnectionSettingsView(APIView):
         return f"{scheme}://{host}:{port}"
 
     def _build_full_url(self, base_url, request=None):
-        """Append /{username}-{company_slug} path to the base URL."""
-        username = ""
-        company_slug = ""
-        if request and request.user and request.user.is_authenticated:
-            username = request.user.username
-            try:
-                company = get_user_company(request)
-                if company and company.slug:
-                    company_slug = company.slug
-            except Exception:
-                pass
-        if username and company_slug:
-            return f"{base_url}/{username}-{company_slug}"
-        elif username:
-            return f"{base_url}/{username}"
+        """Return display URL with path: {base_url}/{username}-{company_slug}.
+
+        Client communicator strips the path automatically, so this is
+        only for display in the admin UI.
+        """
+        if not request or not getattr(request, "user", None):
+            return base_url
+        if not getattr(request.user, "is_authenticated", False):
+            return base_url
+        try:
+            company = get_user_company(request)
+            if company:
+                from django.utils.text import slugify
+                user_part = slugify(request.user.username) or "admin"
+                company_part = slugify(company.slug) or slugify(company.name) or "default"
+                return f"{base_url}/{user_part}-{company_part}"
+        except Exception:
+            pass
         return base_url
 
     def _ensure_token(self, company=None):
@@ -606,20 +611,26 @@ class ConnectionSettingsView(APIView):
             return secrets.token_hex(16)
 
     def _ensure_url(self, request=None, company=None):
+        import os
+        vercel_url = os.getenv("VERCEL_URL", "")
+        is_vercel = os.getenv("VERCEL", "0") == "1"
+
+        def _detect_base():
+            if is_vercel and vercel_url:
+                return f"https://{vercel_url}"
+            elif is_vercel:
+                return "https://admin-client-weld.vercel.app"
+            elif request:
+                try:
+                    return self._detect_host(request)
+                except Exception:
+                    return ""
+            return ""
+
         try:
             server_url = Setting.get("admin_server_url", "")
-            if not server_url:
-                import os
-                if os.getenv("VERCEL", "0") == "1":
-                    vercel_url = os.getenv("VERCEL_URL", "")
-                    base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
-                elif request:
-                    try:
-                        base = self._detect_host(request)
-                    except Exception:
-                        base = ""
-                else:
-                    base = ""
+            if not server_url or "/" not in server_url.split("//", 1)[-1]:
+                base = _detect_base()
                 if base:
                     server_url = self._build_full_url(base, request)
                     try:
@@ -628,16 +639,7 @@ class ConnectionSettingsView(APIView):
                         pass
             return server_url
         except Exception:
-            import os
-            if os.getenv("VERCEL", "0") == "1":
-                vercel_url = os.getenv("VERCEL_URL", "")
-                return f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
-            elif request:
-                try:
-                    return self._detect_host(request)
-                except Exception:
-                    pass
-            return ""
+            return _detect_base()
 
     def get(self, request):
         try:
@@ -694,21 +696,40 @@ class ConnectionSettingsView(APIView):
             })
 
     def post(self, request):
-        company = get_user_company(request)
-        token = self._ensure_token(company)
+        import os
+        import secrets
+
+        company = None
+        try:
+            company = get_user_company(request)
+        except Exception:
+            pass
+
+        token = secrets.token_hex(16)
+        try:
+            Setting.set("admin_connection_token", token)
+        except Exception:
+            pass
+
+        server_url = ""
         try:
             base = self._detect_host(request)
             server_url = self._build_full_url(base, request)
         except Exception:
-            server_url = ""
+            pass
+
         if not server_url:
-            try:
-                server_url = Setting.get("admin_server_url", "")
-            except Exception:
-                import os
-                if os.getenv("VERCEL", "0") == "1":
-                    vercel_url = os.getenv("VERCEL_URL", "")
-                    server_url = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
+            if os.getenv("VERCEL", "0") == "1":
+                vercel_url = os.getenv("VERCEL_URL", "")
+                base = f"https://{vercel_url}" if vercel_url else ""
+                if base:
+                    server_url = self._build_full_url(base, request)
+            if not server_url:
+                try:
+                    server_url = Setting.get("admin_server_url", "")
+                except Exception:
+                    pass
+
         try:
             Setting.set("admin_server_url", server_url)
         except Exception:
@@ -720,7 +741,11 @@ class ConnectionSettingsView(APIView):
         return Response({"server_url": server_url, "connection_token": token})
 
     def put(self, request):
-        company = get_user_company(request)
+        company = None
+        try:
+            company = get_user_company(request)
+        except Exception:
+            pass
         import secrets
         token = secrets.token_hex(16)
         try:

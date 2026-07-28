@@ -122,26 +122,17 @@ JWT_REFRESH_EXPIRY_DAYS = 7
 JWT_ISSUER = "system-scanner-pro"
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-if IS_VERCEL:
+if DATABASE_URL:
+    import dj_database_url
+    DATABASES = {
+        "default": dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
+    }
+elif IS_VERCEL:
     _vdb = os.path.join("/tmp", "vercel.db")
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": _vdb,
-        }
-    }
-elif DATABASE_URL:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", ""),
-            "USER": os.getenv("DB_USER", ""),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", ""),
-            "PORT": os.getenv("DB_PORT", "5432"),
-            "OPTIONS": {
-                "connect_timeout": 10,
-            },
         }
     }
 else:
