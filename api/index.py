@@ -57,7 +57,6 @@ def _init():
 
 
 def _setup_vercel_db():
-    import django
     from django.core.management import call_command
 
     try:
@@ -65,6 +64,7 @@ def _setup_vercel_db():
         _log.append("VERCEL_DB: migrate ok")
     except Exception as e:
         _log.append(f"VERCEL_DB_MIGRATE_ERR: {e}")
+        return
 
     try:
         from django.contrib.auth.models import User
@@ -85,7 +85,6 @@ def _setup_vercel_db():
 
     try:
         from scanner_api.models import Setting
-        from django.contrib.auth.models import User
         import secrets as _secrets
 
         vercel_url = os.getenv("VERCEL_URL", "")

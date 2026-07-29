@@ -34,7 +34,9 @@ def get_user_company(request):
     profile, _ = AdministratorProfile.objects.get_or_create(user=request.user)
     if not profile.company:
         from .models import Company
-        company, _ = Company.objects.get_or_create(name=request.user.username)
+        from django.utils.text import slugify as _slugify
+        _slug = _slugify(request.user.username) or request.user.username.lower().replace(" ", "-")
+        company, _ = Company.objects.get_or_create(name=request.user.username, defaults={"slug": _slug})
         profile.company = company
         profile.save(update_fields=["company"])
     return profile.company
@@ -969,7 +971,9 @@ def ensure_admin_client():
             profile, _ = AdministratorProfile.objects.get_or_create(user=superuser)
             if not profile.company:
                 from .models import Company
-                company, _ = Company.objects.get_or_create(name=superuser.username)
+                from django.utils.text import slugify as _slugify
+                _slug = _slugify(superuser.username) or superuser.username.lower().replace(" ", "-")
+                company, _ = Company.objects.get_or_create(name=superuser.username, defaults={"slug": _slug})
                 profile.company = company
                 profile.save(update_fields=["company"])
             client.company = profile.company
@@ -1067,7 +1071,9 @@ class AuthLoginView(APIView):
         _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
         if not _profile.company:
             from .models import Company
-            company, _ = Company.objects.get_or_create(name=user.username)
+            from django.utils.text import slugify as _slugify
+            _slug = _slugify(user.username) or user.username.lower().replace(" ", "-")
+            company, _ = Company.objects.get_or_create(name=user.username, defaults={"slug": _slug})
             _profile.company = company
             _profile.save(update_fields=["company"])
         ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")

@@ -158,7 +158,9 @@ def login_view(request):
         from .models import ActivityLog, AdministratorProfile, Company
         _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
         if not _profile.company:
-            company, _ = Company.objects.get_or_create(name=user.username)
+            from django.utils.text import slugify as _slugify
+            _slug = _slugify(user.username) or user.username.lower().replace(" ", "-")
+            company, _ = Company.objects.get_or_create(name=user.username, defaults={"slug": _slug})
             _profile.company = company
             _profile.save(update_fields=["company"])
         ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")

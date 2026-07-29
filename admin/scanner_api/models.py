@@ -10,7 +10,7 @@ User = get_user_model()
 
 class Company(models.Model):
     name = models.CharField(max_length=255, unique=True)
-    slug = models.SlugField(max_length=128, unique=True)
+    slug = models.SlugField(max_length=128, unique=True, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -19,6 +19,12 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name) or self.name.lower().replace(" ", "-")
+        super().save(*args, **kwargs)
 
 
 class ClientGroup(models.Model):
