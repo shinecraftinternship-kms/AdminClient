@@ -61,14 +61,24 @@ def _ensure_init():
 
 
 def _diag_response(start_response):
-    body = "\n".join(_init_log).encode() if _init_log else b"OK"
+    import os
+    parts = []
+    if _init_log:
+        parts.append("=== INIT LOG ===")
+        parts.extend(_init_log)
+    parts.append("=== ENV ===")
+    for k, v in sorted(os.environ.items()):
+        if any(s in k.lower() for s in ("key", "secret", "token", "password", "auth", "cred")):
+            v = "***"
+        parts.append(f"{k}={v}")
+    body = "\n".join(parts).encode()
     start_response("200 OK", [("Content-Type", "text/plain")])
     return [body]
 
 
 def _error_response(start_response, status="503 Service Unavailable"):
     msg = _init_error or "initializing"
-    body = f"Service unavailable: {msg[:500]}".encode()
+    body = f"Service unavailable: {msg}".encode()
     start_response(status, [("Content-Type", "text/plain")])
     return [body]
 
