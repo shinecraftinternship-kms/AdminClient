@@ -2,12 +2,11 @@ import json
 import logging
 import asyncio
 
-from channels.layers import get_channel_layer
-
 logger = logging.getLogger("monitoring")
 
 
 def _get_channel_layer():
+    from channels.layers import get_channel_layer
     return get_channel_layer()
 
 

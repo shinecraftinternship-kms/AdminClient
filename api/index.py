@@ -1,149 +1,82 @@
 import os
 import sys
-import types
 import traceback
 
-_log = []
+_init_log = []
+_initialized = False
 
-IS_VERCEL = os.getenv("VERCEL", "0") == "1"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
 
+for p in [PROJECT_ROOT, ADMIN_DIR]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-def _diag(environ, start_response):
-    body = "\n".join(_log).encode()
-    start_response("200 OK", [
-        ("Content-Type", "text/plain"),
-        ("Content-Length", str(len(body))),
-    ])
-    return [body]
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
+os.environ.setdefault("SCANNER_DATA_DIR", "/tmp")
 
+import django
+django.setup()
 
-def _init():
-    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
-
-    for p in [PROJECT_ROOT, ADMIN_DIR, os.path.dirname(PROJECT_ROOT)]:
-        if p not in sys.path:
-            sys.path.insert(0, p)
-
-    def _make_package(name, path):
-        if name in sys.modules:
-            return sys.modules[name]
-        mod = types.ModuleType(name)
-        mod.__path__ = [path]
-        mod.__package__ = name
-        mod.__file__ = os.path.join(path, "__init__.py")
-        sys.modules[name] = mod
-        return mod
-
-    _make_package("AdminClient", PROJECT_ROOT)
-    _make_package("AdminClient.admin", ADMIN_DIR)
-
-    for sub in sorted(os.listdir(ADMIN_DIR)):
-        sub_path = os.path.join(ADMIN_DIR, sub)
-        if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, "__init__.py")):
-            _make_package(f"AdminClient.admin.{sub}", sub_path)
-
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_admin.settings")
-    os.environ.setdefault("SCANNER_DATA_DIR", "/tmp")
-
-    import django
-    django.setup()
-
-    if IS_VERCEL:
-        _setup_vercel_db()
-
-    from django.core.handlers.wsgi import WSGIHandler
-    return WSGIHandler()
+from django.core.handlers.wsgi import WSGIHandler
+_handler = WSGIHandler()
 
 
-def _setup_vercel_db():
+def _initialize():
     from django.core.management import call_command
+    from django.contrib.auth.models import User
+    from scanner_api.models import Setting
+    import secrets
 
-    try:
-        call_command("migrate", "--run-syncdb", verbosity=0)
-        _log.append("VERCEL_DB: migrate ok")
-    except Exception as e:
-        _log.append(f"VERCEL_DB_MIGRATE_ERR: {e}")
-        return
+    _init_log.append("VERCEL_DB: starting migration")
+    call_command("migrate", "--run-syncdb", verbosity=0)
+    _init_log.append("VERCEL_DB: migrate ok")
 
-    try:
-        from django.contrib.auth.models import User
-        if not User.objects.filter(username="admin").exists():
-            User.objects.create_superuser("admin", "admin@example.com", "admin123")
-            _log.append("VERCEL_DB: created admin superuser")
-        else:
-            _log.append("VERCEL_DB: admin user exists")
-    except Exception as e:
-        _log.append(f"VERCEL_DB_USER_ERR: {e}")
+    if not User.objects.filter(username="admin").exists():
+        User.objects.create_superuser("admin", "admin@example.com", "admin123")
+        _init_log.append("VERCEL_DB: admin created")
+    else:
+        _init_log.append("VERCEL_DB: admin exists")
 
-    try:
-        from scanner_api.views import ensure_admin_client
-        ensure_admin_client()
-        _log.append("VERCEL_DB: admin client ensured")
-    except Exception as e:
-        _log.append(f"VERCEL_DB_ADMIN_CLIENT_ERR: {e}")
+    vercel_url = os.getenv("VERCEL_URL", "admin-client-weld.vercel.app")
+    server_url = f"https://{vercel_url}"
+    Setting.set("admin_server_url", server_url)
+    _init_log.append(f"VERCEL_DB: url set to {server_url}")
 
-    try:
-        from scanner_api.models import Setting
-        import secrets as _secrets
+    if not Setting.get("admin_connection_token", ""):
+        Setting.set("admin_connection_token", secrets.token_hex(16))
+        _init_log.append("VERCEL_DB: token set")
 
-        vercel_url = os.getenv("VERCEL_URL", "")
-        base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
-
-        server_url = ""
-        try:
-            server_url = Setting.get("admin_server_url", "")
-        except Exception as e:
-            _log.append(f"VERCEL_DB_CONN_GET_URL_ERR: {e}")
-
-        if not server_url:
-            server_url = base
-
-            try:
-                Setting.set("admin_server_url", server_url)
-            except Exception as e:
-                _log.append(f"VERCEL_DB_CONN_SET_URL_ERR: {e}")
-
-        token = ""
-        try:
-            token = Setting.get("admin_connection_token", "")
-        except Exception as e:
-            _log.append(f"VERCEL_DB_CONN_GET_TOKEN_ERR: {e}")
-
-        if not token:
-            try:
-                token = _secrets.token_hex(16)
-                Setting.set("admin_connection_token", token)
-            except Exception as e:
-                _log.append(f"VERCEL_DB_CONN_SET_TOKEN_ERR: {e}")
-
-        _log.append(f"VERCEL_DB: connection settings set url={server_url} token={token[:8] if token else 'N/A'}...")
-    except Exception as e:
-        _log.append(f"VERCEL_DB_CONN_ERR: {e}")
-
-    try:
-        from scanner_api.supabase_client import register_server_in_registry
-        vercel_url = os.getenv("VERCEL_URL", "admin-client-weld.vercel.app")
-        register_server_in_registry(vercel_url, 443, "https")
-        _log.append("VERCEL_DB: registered with cloud discovery")
-    except Exception as e:
-        _log.append(f"VERCEL_DB_CLOUD_REG_ERR: {e}")
-
-
-try:
-    _real_app = _init()
-except Exception:
-    _log.append("INIT_CRASH: " + traceback.format_exc())
-    _real_app = None
+    _init_log.append("VERCEL_DB: initialization complete")
 
 
 def application(environ, start_response):
-    if environ.get("PATH_INFO", "") == "/__diag":
-        return _diag(environ, start_response)
-    if _real_app is None:
-        return _diag(environ, start_response)
-    try:
-        return _real_app(environ, start_response)
-    except Exception:
-        _log.append("REQ_CRASH: " + traceback.format_exc())
-        return _diag(environ, start_response)
+    global _initialized
+
+    path = environ.get("PATH_INFO", "")
+
+    if path == "/__diag":
+        body = "\n".join(_init_log).encode() if _init_log else b"OK"
+        start_response("200 OK", [
+            ("Content-Type", "text/plain"),
+            ("Content-Length", str(len(body))),
+        ])
+        return [body]
+
+    if not _initialized:
+        try:
+            _initialize()
+            _initialized = True
+        except Exception as e:
+            _init_log.append("INIT_CRASH: " + traceback.format_exc())
+            body = (
+                "Server initializing... please refresh in a moment.\n"
+                "Error: " + str(e)[:200]
+            ).encode()
+            start_response("503 Service Unavailable", [
+                ("Content-Type", "text/plain"),
+                ("Content-Length", str(len(body))),
+            ])
+            return [body]
+
+    return _handler(environ, start_response)
