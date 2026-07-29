@@ -1,15 +1,17 @@
 import os
 import sys
+import json
 import traceback
 import threading
+from io import BytesIO
 
-_init_lock = threading.Lock()
 _handler = None
+_init_lock = threading.Lock()
 _init_log = []
 _init_error = None
 
 
-def _init():
+def _bootstrap():
     global _handler
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ADMIN_DIR = os.path.join(PROJECT_ROOT, "admin")
@@ -41,36 +43,93 @@ def _init():
         Setting.set("admin_connection_token", secrets.token_hex(16))
     _init_log.append("settings done")
 
-    from django.core.handlers.wsgi import WSGIHandler
-    _handler = WSGIHandler()
+    from django.core.wsgi import get_wsgi_application
+    _handler = get_wsgi_application()
     _init_log.append("ready")
 
 
-def application(environ, start_response):
+def _ensure_init():
     global _handler, _init_error
-
     if _handler is None:
         with _init_lock:
             if _handler is None:
                 try:
-                    _init()
+                    _bootstrap()
                 except Exception as e:
                     _init_error = traceback.format_exc()
                     _init_log.append("FAIL: " + _init_error)
 
+
+def _diag_response(start_response):
+    body = "\n".join(_init_log).encode() if _init_log else b"OK"
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return [body]
+
+
+def _error_response(start_response, status="503 Service Unavailable"):
+    msg = _init_error or "initializing"
+    body = f"Service unavailable: {msg[:500]}".encode()
+    start_response(status, [("Content-Type", "text/plain")])
+    return [body]
+
+
+def app(environ, start_response):
+    _ensure_init()
     if environ.get("PATH_INFO") == "/__diag":
-        body = "\n".join(_init_log).encode()
-        start_response("200 OK", [
-            ("Content-Type", "text/plain"),
-        ])
-        return [body]
+        return _diag_response(start_response)
+    if _handler is None:
+        return _error_response(start_response)
+    return _handler(environ, start_response)
+
+
+def handler(event, context):
+    _ensure_init()
+
+    if event.get("path") == "/__diag":
+        body = "\n".join(_init_log).encode() if _init_log else b"OK"
+        return {"statusCode": 200, "headers": {"Content-Type": "text/plain"}, "body": body.decode()}
 
     if _handler is None:
         msg = _init_error or "initializing"
-        body = f"Service unavailable - {msg[:500]}".encode()
-        start_response("503 Service Unavailable", [
-            ("Content-Type", "text/plain"),
-        ])
-        return [body]
+        return {"statusCode": 503, "headers": {"Content-Type": "text/plain"}, "body": msg[:500]}
 
-    return _handler(environ, start_response)
+    body = event.get("body") or ""
+    if isinstance(body, str):
+        body = body.encode()
+    query = event.get("queryStringParameters") or {}
+    qs = "&".join(f"{k}={v}" for k, v in query.items()) if query else ""
+
+    environ = {
+        "REQUEST_METHOD": event.get("httpMethod", "GET"),
+        "PATH_INFO": event.get("path", "/"),
+        "QUERY_STRING": qs,
+        "SERVER_NAME": event.get("headers", {}).get("host", "vercel"),
+        "SERVER_PORT": "443",
+        "HTTP_HOST": event.get("headers", {}).get("host", "vercel"),
+        "wsgi.url_scheme": event.get("headers", {}).get("x-forwarded-proto", "https"),
+        "wsgi.input": BytesIO(body),
+        "wsgi.errors": sys.stderr,
+        "wsgi.multithread": False,
+        "wsgi.multiprocess": True,
+        "wsgi.run_once": False,
+    }
+    for k, v in (event.get("headers") or {}).items():
+        environ["HTTP_" + k.upper().replace("-", "_")] = v
+
+    status = [None]
+    resp_headers = [None]
+
+    def start_response(s, h):
+        status[0] = s
+        resp_headers[0] = h
+
+    body_parts = _handler(environ, start_response)
+    body_bytes = b"".join(body_parts)
+
+    return {
+        "statusCode": int(status[0].split()[0]) if status[0] else 500,
+        "headers": {k: v for k, v in (resp_headers[0] or [])},
+        "body": body_bytes.decode("utf-8", errors="replace"),
+    }
+
+application = app  # alias for WSGI auto-detection
