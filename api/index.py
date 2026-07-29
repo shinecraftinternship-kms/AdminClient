@@ -26,9 +26,22 @@ def _bootstrap():
     import django
     django.setup()
 
+    db_url = os.getenv("DATABASE_URL", "")
+    if db_url:
+        _init_log.append(f"DATABASE_URL is set, resolves to host in URL")
+    else:
+        _init_log.append("DATABASE_URL not set, will use SQLite")
+
     from django.core.management import call_command
-    call_command("migrate", "--run-syncdb", verbosity=0)
-    _init_log.append("migrate ok")
+    try:
+        call_command("migrate", "--run-syncdb", verbosity=0)
+        _init_log.append("migrate ok")
+    except Exception as e:
+        _init_log.append(f"migrate skipped: {e}")
+        from django.core.wsgi import get_wsgi_application
+        _handler = get_wsgi_application()
+        _init_log.append("ready (no db)")
+        return
 
     from django.contrib.auth.models import User
     if not User.objects.filter(username="admin").exists():
