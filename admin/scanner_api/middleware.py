@@ -2,6 +2,7 @@ import time
 import re
 from django.contrib.auth import logout
 from django.shortcuts import redirect
+from django.urls import resolve, Resolver404
 from .models import Setting
 
 
@@ -11,7 +12,15 @@ class CompanyPrefixMiddleware:
 
     def __call__(self, request):
         path = request.path_info
-        prefix = request.session.get("url_prefix", "")
+
+        skip_paths = ("/api/", "/static/", "/download-client/", "/favicon")
+        if any(path.startswith(p) for p in skip_paths):
+            return self.get_response(request)
+
+        if path in ("/login/", "/signup/", "/logout/"):
+            return self.get_response(request)
+
+        prefix = self._get_prefix(request, path)
 
         if prefix:
             expected = "/" + prefix
@@ -22,16 +31,40 @@ class CompanyPrefixMiddleware:
                 request.META["SCRIPT_NAME"] = expected
                 request.path_info = suffix or "/"
                 request.path = suffix or "/"
-            elif request.user.is_authenticated:
-                if not any(path.startswith(p) for p in ("/api/", "/static/", "/download-client/", "/favicon")):
-                    if path not in ("/login/", "/signup/", "/logout/"):
-                        target = expected + path
-                        if target.endswith("//"):
-                            target = target.rstrip("/") + "/"
-                        return redirect(target)
+                request.session["url_prefix"] = prefix
+                return self.get_response(request)
+            if request.user.is_authenticated:
+                target = expected + path
+                if target.endswith("//"):
+                    target = target.rstrip("/") + "/"
+                return redirect(target)
 
-        response = self.get_response(request)
-        return response
+        return self.get_response(request)
+
+    def _get_prefix(self, request, path):
+        prefix_from_session = request.session.get("url_prefix", "")
+        if prefix_from_session:
+            return prefix_from_session
+
+        prefix_from_url = self._extract_prefix_from_url(path)
+        if prefix_from_url:
+            return prefix_from_url
+
+        return ""
+
+    def _extract_prefix_from_url(self, path):
+        if path.count("/") >= 2:
+            first_slash = path.index("/", 1)
+            if first_slash > 0:
+                candidate = path[1:first_slash]
+                if candidate and "/" not in candidate:
+                    suffix = path[first_slash:]
+                    try:
+                        resolve(suffix)
+                        return candidate
+                    except Resolver404:
+                        pass
+        return ""
 
 
 def url_prefix_context(request):
