@@ -96,6 +96,54 @@ def _error_response(start_response, status="503 Service Unavailable"):
     return [body]
 
 
+def _build_environ_for_request(method, path, query_string, headers, body):
+    env = {
+        "REQUEST_METHOD": method,
+        "PATH_INFO": path,
+        "QUERY_STRING": query_string,
+        "SERVER_NAME": (headers or {}).get("host", "vercel"),
+        "SERVER_PORT": "443",
+        "HTTP_HOST": (headers or {}).get("host", "vercel"),
+        "wsgi.url_scheme": "https",
+        "wsgi.input": BytesIO(body),
+        "wsgi.errors": sys.stderr,
+        "wsgi.multithread": False,
+        "wsgi.multiprocess": True,
+        "wsgi.run_once": False,
+    }
+    for k, v in (headers or {}).items():
+        env["HTTP_" + k.upper().replace("-", "_")] = v
+    if "HTTP_X_FORWARDED_PROTO" not in env:
+        env["HTTP_X_FORWARDED_PROTO"] = "https"
+    return env
+
+
+def _response_from_wsgi(body_parts, status_line, resp_headers_list):
+    headers = {}
+    multi_value_headers = {}
+    for k, v in (resp_headers_list or []):
+        if k.lower() == "set-cookie":
+            multi_value_headers.setdefault("Set-Cookie", []).append(v)
+        else:
+            if k in headers:
+                existing = headers[k]
+                if isinstance(existing, list):
+                    existing.append(v)
+                else:
+                    headers[k] = [existing, v]
+            else:
+                headers[k] = v
+    body_bytes = b"".join(body_parts)
+    response = {
+        "statusCode": int(status_line.split()[0]) if status_line else 500,
+        "headers": headers,
+        "body": body_bytes.decode("utf-8", errors="replace"),
+    }
+    if multi_value_headers:
+        response["multiValueHeaders"] = multi_value_headers
+    return response
+
+
 def app(environ, start_response):
     _ensure_init()
     if environ.get("PATH_INFO") == "/__diag":
@@ -122,22 +170,13 @@ def handler(event, context):
     query = event.get("queryStringParameters") or {}
     qs = "&".join(f"{k}={v}" for k, v in query.items()) if query else ""
 
-    environ = {
-        "REQUEST_METHOD": event.get("httpMethod", "GET"),
-        "PATH_INFO": event.get("path", "/"),
-        "QUERY_STRING": qs,
-        "SERVER_NAME": event.get("headers", {}).get("host", "vercel"),
-        "SERVER_PORT": "443",
-        "HTTP_HOST": event.get("headers", {}).get("host", "vercel"),
-        "wsgi.url_scheme": event.get("headers", {}).get("x-forwarded-proto", "https"),
-        "wsgi.input": BytesIO(body),
-        "wsgi.errors": sys.stderr,
-        "wsgi.multithread": False,
-        "wsgi.multiprocess": True,
-        "wsgi.run_once": False,
-    }
-    for k, v in (event.get("headers") or {}).items():
-        environ["HTTP_" + k.upper().replace("-", "_")] = v
+    environ = _build_environ_for_request(
+        method=event.get("httpMethod", "GET"),
+        path=event.get("path", "/"),
+        query_string=qs,
+        headers=event.get("headers", {}),
+        body=body,
+    )
 
     status = [None]
     resp_headers = [None]
@@ -147,30 +186,6 @@ def handler(event, context):
         resp_headers[0] = h
 
     body_parts = _handler(environ, start_response)
-    body_bytes = b"".join(body_parts)
+    return _response_from_wsgi(body_parts, status[0], resp_headers[0])
 
-    headers = {}
-    multi_value_headers = {}
-    for k, v in (resp_headers[0] or []):
-        if k.lower() == "set-cookie":
-            multi_value_headers.setdefault("Set-Cookie", []).append(v)
-        else:
-            if k in headers:
-                existing = headers[k]
-                if isinstance(existing, list):
-                    existing.append(v)
-                else:
-                    headers[k] = [existing, v]
-            else:
-                headers[k] = v
-
-    response = {
-        "statusCode": int(status[0].split()[0]) if status[0] else 500,
-        "headers": headers,
-        "body": body_bytes.decode("utf-8", errors="replace"),
-    }
-    if multi_value_headers:
-        response["multiValueHeaders"] = multi_value_headers
-    return response
-
-application = app  # alias for WSGI auto-detection
+application = app

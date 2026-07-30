@@ -20,14 +20,15 @@ class CompanyPrefixMiddleware:
             if path.startswith(expected + "/"):
                 suffix = path[len(expected):]
                 request.META["SCRIPT_NAME"] = expected
-                request.path_info = suffix
-                request.path = suffix
+                request.path_info = suffix or "/"
+                request.path = suffix or "/"
             elif request.user.is_authenticated:
                 if not any(path.startswith(p) for p in ("/api/", "/static/", "/download-client/", "/favicon")):
                     if path not in ("/login/", "/signup/", "/logout/"):
-                        return redirect(expected + path)
-                    elif path == "/":
-                        return redirect(expected + "/")
+                        target = expected + path
+                        if target.endswith("//"):
+                            target = target.rstrip("/") + "/"
+                        return redirect(target)
 
         response = self.get_response(request)
         return response

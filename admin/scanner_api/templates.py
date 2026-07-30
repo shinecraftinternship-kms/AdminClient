@@ -176,10 +176,8 @@ def login_view(request):
         next_url = request.POST.get("next", "/") or "/"
         if next_url == "/":
             next_url = f"/{_prefix_val}/"
-        elif next_url.startswith("/"):
-            _check = "/" + _prefix_val + "/"
-            if not next_url.startswith(_check):
-                next_url = f"/{_prefix_val}{next_url}"
+        elif next_url.startswith("/") and not next_url.startswith(f"/{_prefix_val}/"):
+            next_url = f"/{_prefix_val}{next_url}"
         return redirect(next_url)
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
