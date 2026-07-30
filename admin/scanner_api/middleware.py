@@ -47,12 +47,13 @@ class SessionTimeoutMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated:
-            timeout_str = Setting.get("session_timeout_minutes", "120")
+            timeout_seconds = 7200
             try:
+                timeout_str = Setting.get("session_timeout_minutes", "120")
                 timeout_seconds = int(timeout_str) * 60
-            except (ValueError, TypeError):
-                timeout_seconds = 7200
-            if timeout_seconds < 60:
+                if timeout_seconds < 60:
+                    timeout_seconds = 7200
+            except Exception:
                 timeout_seconds = 7200
 
             last_activity = request.session.get("last_activity_ts")

@@ -165,6 +165,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 if IS_VERCEL:
     SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = "Lax"
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
     SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30

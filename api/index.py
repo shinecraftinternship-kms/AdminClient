@@ -150,20 +150,27 @@ def handler(event, context):
     body_bytes = b"".join(body_parts)
 
     headers = {}
+    multi_value_headers = {}
     for k, v in (resp_headers[0] or []):
-        if k in headers:
-            existing = headers[k]
-            if isinstance(existing, list):
-                existing.append(v)
-            else:
-                headers[k] = [existing, v]
+        if k.lower() == "set-cookie":
+            multi_value_headers.setdefault("Set-Cookie", []).append(v)
         else:
-            headers[k] = v
+            if k in headers:
+                existing = headers[k]
+                if isinstance(existing, list):
+                    existing.append(v)
+                else:
+                    headers[k] = [existing, v]
+            else:
+                headers[k] = v
 
-    return {
+    response = {
         "statusCode": int(status[0].split()[0]) if status[0] else 500,
         "headers": headers,
         "body": body_bytes.decode("utf-8", errors="replace"),
     }
+    if multi_value_headers:
+        response["multiValueHeaders"] = multi_value_headers
+    return response
 
 application = app  # alias for WSGI auto-detection
