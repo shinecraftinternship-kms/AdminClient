@@ -73,86 +73,6 @@ def _ensure_init():
                     _init_log.append("FAIL: " + _init_error)
 
 
-def _diag_response(start_response):
-    import os
-    parts = []
-    if _init_log:
-        parts.append("=== INIT LOG ===")
-        parts.extend(_init_log)
-    parts.append("=== ENV ===")
-    for k, v in sorted(os.environ.items()):
-        if any(s in k.lower() for s in ("key", "secret", "token", "password", "auth", "cred")):
-            v = "***"
-        parts.append(f"{k}={v}")
-    body = "\n".join(parts).encode()
-    start_response("200 OK", [("Content-Type", "text/plain")])
-    return [body]
-
-
-def _error_response(start_response, status="503 Service Unavailable"):
-    msg = _init_error or "initializing"
-    body = f"Service unavailable: {msg}".encode()
-    start_response(status, [("Content-Type", "text/plain")])
-    return [body]
-
-
-def _build_environ_for_request(method, path, query_string, headers, body):
-    env = {
-        "REQUEST_METHOD": method,
-        "PATH_INFO": path,
-        "QUERY_STRING": query_string,
-        "SERVER_NAME": (headers or {}).get("host", "vercel"),
-        "SERVER_PORT": "443",
-        "HTTP_HOST": (headers or {}).get("host", "vercel"),
-        "wsgi.url_scheme": "https",
-        "wsgi.input": BytesIO(body),
-        "wsgi.errors": sys.stderr,
-        "wsgi.multithread": False,
-        "wsgi.multiprocess": True,
-        "wsgi.run_once": False,
-    }
-    for k, v in (headers or {}).items():
-        env["HTTP_" + k.upper().replace("-", "_")] = v
-    if "HTTP_X_FORWARDED_PROTO" not in env:
-        env["HTTP_X_FORWARDED_PROTO"] = "https"
-    return env
-
-
-def _response_from_wsgi(body_parts, status_line, resp_headers_list):
-    headers = {}
-    multi_value_headers = {}
-    for k, v in (resp_headers_list or []):
-        if k.lower() == "set-cookie":
-            multi_value_headers.setdefault("Set-Cookie", []).append(v)
-        else:
-            if k in headers:
-                existing = headers[k]
-                if isinstance(existing, list):
-                    existing.append(v)
-                else:
-                    headers[k] = [existing, v]
-            else:
-                headers[k] = v
-    body_bytes = b"".join(body_parts)
-    response = {
-        "statusCode": int(status_line.split()[0]) if status_line else 500,
-        "headers": headers,
-        "body": body_bytes.decode("utf-8", errors="replace"),
-    }
-    if multi_value_headers:
-        response["multiValueHeaders"] = multi_value_headers
-    return response
-
-
-def app(environ, start_response):
-    _ensure_init()
-    if environ.get("PATH_INFO") == "/__diag":
-        return _diag_response(start_response)
-    if _handler is None:
-        return _error_response(start_response)
-    return _handler(environ, start_response)
-
-
 def handler(event, context):
     _ensure_init()
 
@@ -169,14 +89,25 @@ def handler(event, context):
         body = body.encode()
     query = event.get("queryStringParameters") or {}
     qs = "&".join(f"{k}={v}" for k, v in query.items()) if query else ""
+    headers = event.get("headers") or {}
 
-    environ = _build_environ_for_request(
-        method=event.get("httpMethod", "GET"),
-        path=event.get("path", "/"),
-        query_string=qs,
-        headers=event.get("headers", {}),
-        body=body,
-    )
+    environ = {
+        "REQUEST_METHOD": event.get("httpMethod", "GET"),
+        "PATH_INFO": event.get("path", "/"),
+        "QUERY_STRING": qs,
+        "SERVER_NAME": headers.get("host", "vercel"),
+        "SERVER_PORT": "443",
+        "HTTP_HOST": headers.get("host", "vercel"),
+        "wsgi.url_scheme": "https",
+        "wsgi.input": BytesIO(body),
+        "wsgi.errors": sys.stderr,
+        "wsgi.multithread": False,
+        "wsgi.multiprocess": True,
+        "wsgi.run_once": False,
+    }
+    for k, v in headers.items():
+        environ["HTTP_" + k.upper().replace("-", "_")] = v
+    environ.setdefault("HTTP_X_FORWARDED_PROTO", "https")
 
     status = [None]
     resp_headers = [None]
@@ -186,6 +117,28 @@ def handler(event, context):
         resp_headers[0] = h
 
     body_parts = _handler(environ, start_response)
-    return _response_from_wsgi(body_parts, status[0], resp_headers[0])
+    body_bytes = b"".join(body_parts)
 
-application = app
+    cookies = []
+    other_headers = {}
+    for k, v in (resp_headers[0] or []):
+        if k.lower() == "set-cookie":
+            cookies.append(v)
+        else:
+            if k in other_headers:
+                existing = other_headers[k]
+                if isinstance(existing, list):
+                    existing.append(v)
+                else:
+                    other_headers[k] = [existing, v]
+            else:
+                other_headers[k] = v
+
+    response = {
+        "statusCode": int(status[0].split()[0]) if status[0] else 500,
+        "headers": other_headers,
+        "body": body_bytes.decode("utf-8", errors="replace"),
+    }
+    if cookies:
+        response["multiValueHeaders"] = {"Set-Cookie": cookies}
+    return response

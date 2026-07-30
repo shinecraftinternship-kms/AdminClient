@@ -1,6 +1,7 @@
 from django.urls import path, include, re_path
 from django.contrib.auth.views import redirect_to_login
-from django.http import Http404, HttpResponseNotFound
+from django.http import Http404, HttpResponseNotFound, HttpResponseRedirect
+from django.shortcuts import redirect
 from scanner_api import templates
 from monitoring import templates as mon_templates
 from maintenance import templates as mnt_templates
@@ -47,7 +48,7 @@ urlpatterns = [
     path("maintenance/", mnt_templates.maintenance_page, name="maintenance"),
     path("licenses/", mnt_templates.licenses_page, name="licenses"),
     path("maintenance-alerts/", mnt_templates.maintenance_alerts_page, name="maintenance-alerts"),
-    re_path(r"^.*/$", lambda request: redirect_to_login(request.get_full_path()) if not request.user.is_authenticated else HttpResponseNotFound("Not found")),
+    re_path(r"^.*/$", lambda request: redirect_to_login(request.get_full_path()) if not request.user.is_authenticated else redirect("/")),
 ]
 
 # WebSocket routes are handled by ASGI/Channels (monitoring/routing.py)

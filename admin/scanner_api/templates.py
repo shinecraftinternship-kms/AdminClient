@@ -5,6 +5,7 @@ from django.http import HttpResponseRedirect, FileResponse, Http404
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.urls import resolve, Resolver404
 from django.utils import timezone
 
 
@@ -176,8 +177,15 @@ def login_view(request):
         next_url = request.POST.get("next", "/") or "/"
         if next_url == "/":
             next_url = f"/{_prefix_val}/"
-        elif next_url.startswith("/") and not next_url.startswith(f"/{_prefix_val}/"):
-            next_url = f"/{_prefix_val}{next_url}"
+        elif next_url.startswith("/"):
+            if next_url.startswith(f"/{_prefix_val}/"):
+                pass
+            else:
+                try:
+                    resolve(next_url)
+                    next_url = f"/{_prefix_val}{next_url}"
+                except Resolver404:
+                    next_url = f"/{_prefix_val}/"
         return redirect(next_url)
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
