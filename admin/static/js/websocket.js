@@ -29,6 +29,10 @@ const DashboardWS = (() => {
     }
 
     function connect() {
+        if (typeof window.IS_VERCEL !== 'undefined' && window.IS_VERCEL) {
+            console.log('[WS] Vercel detected, WebSocket unavailable - using HTTP polling');
+            return;
+        }
         if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
             return;
         }

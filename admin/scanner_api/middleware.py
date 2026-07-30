@@ -34,7 +34,11 @@ class CompanyPrefixMiddleware:
 
 
 def url_prefix_context(request):
-    return {"url_prefix": request.session.get("url_prefix", "")}
+    from django.conf import settings
+    return {
+        "url_prefix": request.session.get("url_prefix", ""),
+        "IS_VERCEL": getattr(settings, "IS_VERCEL", False),
+    }
 
 
 class SessionTimeoutMiddleware:

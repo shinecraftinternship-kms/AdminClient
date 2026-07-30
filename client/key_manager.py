@@ -65,7 +65,7 @@ def load_or_create_fingerprint():
 
 def load_config():
     defaults = {
-        "admin_url": "http://localhost:80",
+        "admin_url": "",
         "scan_interval": 3600,
         "auto_start": True,
     }

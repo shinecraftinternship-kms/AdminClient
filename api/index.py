@@ -149,9 +149,20 @@ def handler(event, context):
     body_parts = _handler(environ, start_response)
     body_bytes = b"".join(body_parts)
 
+    headers = {}
+    for k, v in (resp_headers[0] or []):
+        if k in headers:
+            existing = headers[k]
+            if isinstance(existing, list):
+                existing.append(v)
+            else:
+                headers[k] = [existing, v]
+        else:
+            headers[k] = v
+
     return {
         "statusCode": int(status[0].split()[0]) if status[0] else 500,
-        "headers": {k: v for k, v in (resp_headers[0] or [])},
+        "headers": headers,
         "body": body_bytes.decode("utf-8", errors="replace"),
     }
 
