@@ -73,72 +73,17 @@ def _ensure_init():
                     _init_log.append("FAIL: " + _init_error)
 
 
-def handler(event, context):
+def app(environ, start_response):
     _ensure_init()
 
-    if event.get("path") == "/__diag":
+    if environ.get("PATH_INFO") == "/__diag":
         body = "\n".join(_init_log).encode() if _init_log else b"OK"
-        return {"statusCode": 200, "headers": {"Content-Type": "text/plain"}, "body": body.decode()}
+        start_response("200 OK", [("Content-Type", "text/plain")])
+        return [body]
 
     if _handler is None:
         msg = _init_error or "initializing"
-        return {"statusCode": 503, "headers": {"Content-Type": "text/plain"}, "body": msg[:500]}
+        start_response("503 Service Unavailable", [("Content-Type", "text/plain")])
+        return [msg[:500].encode()]
 
-    body = event.get("body") or ""
-    if isinstance(body, str):
-        body = body.encode()
-    query = event.get("queryStringParameters") or {}
-    qs = "&".join(f"{k}={v}" for k, v in query.items()) if query else ""
-    headers = event.get("headers") or {}
-
-    environ = {
-        "REQUEST_METHOD": event.get("httpMethod", "GET"),
-        "PATH_INFO": event.get("path", "/"),
-        "QUERY_STRING": qs,
-        "SERVER_NAME": headers.get("host", "vercel"),
-        "SERVER_PORT": "443",
-        "HTTP_HOST": headers.get("host", "vercel"),
-        "wsgi.url_scheme": "https",
-        "wsgi.input": BytesIO(body),
-        "wsgi.errors": sys.stderr,
-        "wsgi.multithread": False,
-        "wsgi.multiprocess": True,
-        "wsgi.run_once": False,
-    }
-    for k, v in headers.items():
-        environ["HTTP_" + k.upper().replace("-", "_")] = v
-    environ.setdefault("HTTP_X_FORWARDED_PROTO", "https")
-
-    status = [None]
-    resp_headers = [None]
-
-    def start_response(s, h):
-        status[0] = s
-        resp_headers[0] = h
-
-    body_parts = _handler(environ, start_response)
-    body_bytes = b"".join(body_parts)
-
-    cookies = []
-    other_headers = {}
-    for k, v in (resp_headers[0] or []):
-        if k.lower() == "set-cookie":
-            cookies.append(v)
-        else:
-            if k in other_headers:
-                existing = other_headers[k]
-                if isinstance(existing, list):
-                    existing.append(v)
-                else:
-                    other_headers[k] = [existing, v]
-            else:
-                other_headers[k] = v
-
-    response = {
-        "statusCode": int(status[0].split()[0]) if status[0] else 500,
-        "headers": other_headers,
-        "body": body_bytes.decode("utf-8", errors="replace"),
-    }
-    if cookies:
-        response["multiValueHeaders"] = {"Set-Cookie": cookies}
-    return response
+    return _handler(environ, start_response)
