@@ -5,6 +5,7 @@ from django.http import HttpResponseRedirect, FileResponse, Http404
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
 from django.urls import resolve, Resolver404
 from django.utils import timezone
 
@@ -84,6 +85,7 @@ def asset_dashboard_page(request):
     return render(request, "asset_dashboard.html")
 
 
+@csrf_exempt
 def login_view(request):
     if request.user.is_authenticated:
         _p = request.session.get("url_prefix", "")
