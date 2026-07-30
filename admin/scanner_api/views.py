@@ -15,6 +15,7 @@ from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, S
 from .models import Location, Department, Employee, EmployeeAssetAssignment, OrgAuditLog
 from .models import AssetCategory, AssetVendor, Asset, AssetAssignment, AssetTransfer, AssetHistory, AssetDocument
 from .diff_utils import compute_scan_diff
+from monitoring.event_bus import Event, EventType, event_bus
 from .serializers import (
     AdminUserCreateSerializer, ProfileUpdateSerializer,
     LoginHistorySerializer, AuditLogSerializer,
@@ -297,6 +298,18 @@ class ClientDetailView(APIView):
             client.deleted = True
             client.save(update_fields=["deleted"])
             ActivityLog.objects.create(action="delete", company=client.company, details=f"Deleted client {hostname} ({key})")
+
+            event_bus.publish(Event(
+                event_type=EventType.DEVICE_DELETED,
+                client_id=client.id,
+                client_key=key,
+                hostname=hostname,
+                severity="critical",
+                title=f"Client deleted: {hostname}",
+                description=f"Client {hostname} ({key}) was deleted by {request.user.username}",
+                data={"deleted_by": request.user.username, "registration_key": key},
+                source="admin",
+            ))
         except Client.DoesNotExist:
             pass
         return Response({"status": "ok"})
@@ -311,7 +324,20 @@ class DeleteMultipleView(APIView):
         if not request.user.is_superuser:
             clients = clients.filter(owner=request.user)
         count = clients.count()
-        clients.update(deleted=True)
+        for client in clients:
+            client.deleted = True
+            client.save(update_fields=["deleted"])
+            event_bus.publish(Event(
+                event_type=EventType.DEVICE_DELETED,
+                client_id=client.id,
+                client_key=client.registration_key,
+                hostname=client.hostname,
+                severity="critical",
+                title=f"Client deleted: {client.hostname}",
+                description=f"Client {client.hostname} ({client.registration_key}) was deleted by {request.user.username}",
+                data={"deleted_by": request.user.username, "registration_key": client.registration_key},
+                source="admin",
+            ))
         ActivityLog.objects.create(action="delete", company=company, details=f"Bulk deleted {count} clients by {request.user.username}")
         return Response({"status": "ok", "count": count})
 
@@ -576,6 +602,22 @@ class ConnectionSettingsView(APIView):
             return f"{scheme}://{host}"
         return f"{scheme}://{host}:{port}"
 
+    def _build_full_url(self, base_url, request=None):
+        if not request or not getattr(request, "user", None):
+            return base_url
+        if not getattr(request.user, "is_authenticated", False):
+            return base_url
+        try:
+            company = get_user_company(request)
+            if company:
+                from django.utils.text import slugify
+                user_part = slugify(request.user.username) or "admin"
+                company_part = slugify(company.slug) or slugify(company.name) or "default"
+                return f"{base_url.rstrip('/')}/{user_part}-{company_part}"
+        except Exception:
+            pass
+        return base_url
+
     def get(self, request):
         server_url = Setting.get("admin_server_url", "")
         token = Setting.get("admin_connection_token", "")
@@ -599,7 +641,7 @@ class ConnectionSettingsView(APIView):
         server_url = ""
         try:
             base = self._detect_host(request)
-            server_url = base
+            server_url = self._build_full_url(base, request)
         except Exception:
             pass
 

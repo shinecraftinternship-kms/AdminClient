@@ -319,9 +319,25 @@ class AgentConsumer(AsyncWebsocketConsumer):
         )
         from monitoring.health import calculate_health_score
         from monitoring.alerts import check_and_create_alerts
+        from monitoring.event_bus import Event, EventType, event_bus
         from django.db.models import F
 
         client = self.agent_secret_obj.client
+
+        old_version = client.client_version
+        new_version = metrics.get("agent_version", "")
+        if new_version and old_version and old_version != new_version:
+            event_bus.publish(Event(
+                event_type=EventType.AGENT_VERSION_CHANGED,
+                client_id=client.id,
+                client_key=client.registration_key,
+                hostname=client.hostname,
+                severity="info",
+                title=f"Agent version changed: {old_version} → {new_version}",
+                description=f"Agent on {client.hostname} updated from v{old_version} to v{new_version}",
+                data={"old_version": old_version, "new_version": new_version},
+                source="heartbeat",
+            ))
 
         hb = DeviceHeartbeat.objects.create(
             client=client,
@@ -333,13 +349,13 @@ class AgentConsumer(AsyncWebsocketConsumer):
             network_connected=metrics.get("network_connected", True),
             uptime_seconds=metrics.get("uptime_seconds", 0),
             load_average=metrics.get("load_average", 0),
-            agent_version=metrics.get("agent_version", ""),
+            agent_version=new_version,
         )
 
         client.status = "online"
         client.last_seen = tz.now()
-        if metrics.get("agent_version"):
-            client.client_version = metrics["agent_version"]
+        if new_version:
+            client.client_version = new_version
         client.save(update_fields=["status", "last_seen", "client_version"])
 
         sw_data = list(SoftwareInventory.objects.filter(

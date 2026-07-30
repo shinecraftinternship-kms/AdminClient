@@ -7,23 +7,24 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="/static/css/app.css" rel="stylesheet">
+    <script>window.URL_PREFIX = "{{ url_prefix }}";</script>
 </head>
 <body>
     <div class="d-flex">
         <nav class="sidebar d-flex flex-column flex-shrink-0 p-3">
-            <a href="/" class="sidebar-brand d-flex align-items-center mb-4 text-decoration-none">
+            <a href="{{ url_prefix }}/" class="sidebar-brand d-flex align-items-center mb-4 text-decoration-none">
                 <i class="bi bi-hdd-rack fs-4 me-2"></i>
                 <span class="fs-6 fw-semibold">Scanner Pro</span>
             </a>
             <hr>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item">
-                    <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/" class="nav-link {% if request.path == '/' %}active{% endif %}">
                         <i class="bi bi-grid me-2"></i>Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/executive-dashboard/" class="nav-link {% if request.path == '/executive-dashboard/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/executive-dashboard/" class="nav-link {% if request.path == '/executive-dashboard/' %}active{% endif %}">
                         <i class="bi bi-speedometer2 me-2"></i>Executive Dashboard
                     </a>
                 </li>
@@ -31,17 +32,17 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Organization</small>
                 </li>
                 <li class="nav-item">
-                    <a href="/employees" class="nav-link {% if request.path == '/employees' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/employees" class="nav-link {% if request.path == '/employees' %}active{% endif %}">
                         <i class="bi bi-people me-2"></i>Employees
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/departments" class="nav-link {% if request.path == '/departments' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/departments" class="nav-link {% if request.path == '/departments' %}active{% endif %}">
                         <i class="bi bi-diagram-3 me-2"></i>Departments
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/locations" class="nav-link {% if request.path == '/locations' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/locations" class="nav-link {% if request.path == '/locations' %}active{% endif %}">
                         <i class="bi bi-geo-alt me-2"></i>Locations
                     </a>
                 </li>
@@ -49,12 +50,12 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Asset Management</small>
                 </li>
                 <li class="nav-item">
-                    <a href="/assets/" class="nav-link {% if '/assets' in request.path %}active{% endif %}">
+                    <a href="{{ url_prefix }}/assets/" class="nav-link {% if '/assets' in request.path %}active{% endif %}">
                         <i class="bi bi-box-seam me-2"></i>Assets
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/asset-dashboard/" class="nav-link {% if request.path == '/asset-dashboard/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/asset-dashboard/" class="nav-link {% if request.path == '/asset-dashboard/' %}active{% endif %}">
                         <i class="bi bi-graph-up me-2"></i>Asset Analytics
                     </a>
                 </li>
@@ -62,17 +63,17 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Maintenance</small>
                 </li>
                 <li class="nav-item">
-                    <a href="/maintenance/" class="nav-link {% if '/maintenance' in request.path %}active{% endif %}">
+                    <a href="{{ url_prefix }}/maintenance/" class="nav-link {% if '/maintenance' in request.path %}active{% endif %}">
                         <i class="bi bi-wrench me-2"></i>Maintenance
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/licenses/" class="nav-link {% if '/licenses' in request.path %}active{% endif %}">
+                    <a href="{{ url_prefix }}/licenses/" class="nav-link {% if '/licenses' in request.path %}active{% endif %}">
                         <i class="bi bi-key me-2"></i>Licenses
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/maintenance-alerts/" class="nav-link {% if request.path == '/maintenance-alerts/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/maintenance-alerts/" class="nav-link {% if request.path == '/maintenance-alerts/' %}active{% endif %}">
                         <i class="bi bi-bell me-2"></i>Maintenance Alerts
                     </a>
                 </li>
@@ -80,37 +81,37 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">Intelligence</small>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/" class="nav-link {% if '/intelligence/' in request.path and '/audit-logs/' not in request.path and '/compliance/' not in request.path and '/scheduled-reports/' not in request.path %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/" class="nav-link {% if '/intelligence/' in request.path and '/audit-logs/' not in request.path and '/compliance/' not in request.path and '/scheduled-reports/' not in request.path %}active{% endif %}">
                         <i class="bi bi-cpu me-2"></i>Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/alerts/" class="nav-link {% if request.path == '/intelligence/alerts/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/alerts/" class="nav-link {% if request.path == '/intelligence/alerts/' %}active{% endif %}">
                         <i class="bi bi-bell-fill me-2"></i>Alerts
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/notifications/" class="nav-link {% if request.path == '/intelligence/notifications/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/notifications/" class="nav-link {% if request.path == '/intelligence/notifications/' %}active{% endif %}">
                         <i class="bi bi-envelope me-2"></i>Notifications
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/reports/" class="nav-link {% if request.path == '/intelligence/reports/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/reports/" class="nav-link {% if request.path == '/intelligence/reports/' %}active{% endif %}">
                         <i class="bi bi-file-earmark-bar-graph me-2"></i>Reports
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/scheduled-reports/" class="nav-link {% if request.path == '/intelligence/scheduled-reports/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/scheduled-reports/" class="nav-link {% if request.path == '/intelligence/scheduled-reports/' %}active{% endif %}">
                         <i class="bi bi-clock-history me-2"></i>Scheduled Reports
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/audit-logs/" class="nav-link {% if request.path == '/intelligence/audit-logs/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/audit-logs/" class="nav-link {% if request.path == '/intelligence/audit-logs/' %}active{% endif %}">
                         <i class="bi bi-journal-text me-2"></i>Audit Logs
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/intelligence/compliance/" class="nav-link {% if request.path == '/intelligence/compliance/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/intelligence/compliance/" class="nav-link {% if request.path == '/intelligence/compliance/' %}active{% endif %}">
                         <i class="bi bi-shield-check me-2"></i>Compliance
                     </a>
                 </li>
@@ -118,33 +119,33 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">System</small>
                 </li>
                 <li class="nav-item">
-                    <a href="/admin-server/" class="nav-link {% if request.path == '/admin-server/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/admin-server/" class="nav-link {% if request.path == '/admin-server/' %}active{% endif %}">
                         <i class="bi bi-link-45deg me-2"></i>Admin Server
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/settings" class="nav-link {% if request.path == '/settings' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/settings" class="nav-link {% if request.path == '/settings' %}active{% endif %}">
                         <i class="bi bi-gear me-2"></i>Settings
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/admin-page" class="nav-link {% if request.path == '/admin-page' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/admin-page" class="nav-link {% if request.path == '/admin-page' %}active{% endif %}">
                         <i class="bi bi-shield-lock me-2"></i>Admin
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/monitoring/" class="nav-link {% if request.path == '/monitoring/' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/monitoring/" class="nav-link {% if request.path == '/monitoring/' %}active{% endif %}">
                         <i class="bi bi-heart-pulse me-2"></i>Monitoring
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="/scans" class="nav-link {% if request.path == '/scans' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/scans" class="nav-link {% if request.path == '/scans' %}active{% endif %}">
                         <i class="bi bi-activity me-2"></i>Scan History
                     </a>
                 </li>
 
                 <li class="nav-item">
-                    <a href="/account" class="nav-link {% if request.path == '/account' %}active{% endif %}">
+                    <a href="{{ url_prefix }}/account" class="nav-link {% if request.path == '/account' %}active{% endif %}">
                         <i class="bi bi-person-circle me-2"></i>Account
                     </a>
                 </li>
@@ -157,7 +158,7 @@
                 </a>
             </div>
             <div class="small mb-2">
-                <a href="/logout/" class="nav-link text-secondary">
+                <a href="{{ url_prefix }}/logout/" class="nav-link text-secondary">
                     <i class="bi bi-box-arrow-right me-2"></i>Sign Out
                 </a>
             </div>

@@ -566,3 +566,38 @@ label {
     background: var(--accent);
     border: 2px solid var(--bg-card);
 }
+
+/* ── Notification System Styles ──────────────────────────────────────────── */
+
+.notif-dropdown {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.notif-item {
+    transition: background 0.15s;
+}
+
+.notif-item:hover {
+    background: rgba(79, 140, 255, 0.08);
+}
+
+.notif-unread {
+    background: rgba(79, 140, 255, 0.04);
+}
+
+.notif-list {
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.notif-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.notif-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}

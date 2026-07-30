@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    f"{_API}.middleware.CompanyPrefixMiddleware",
     f"{_API}.middleware.SessionTimeoutMiddleware",
     f"{_API}.middleware.SecurityHeadersMiddleware",
 ]
@@ -68,6 +69,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                f"{_API}.middleware.url_prefix_context",
             ],
         },
     },

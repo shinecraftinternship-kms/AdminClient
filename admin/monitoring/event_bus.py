@@ -53,8 +53,12 @@ class EventType(str, Enum):
     DEVICE_STATUS_CHANGED = "device_status_changed"
     DEVICE_APPROVED = "device_approved"
     DEVICE_BLOCKED = "device_blocked"
+    DEVICE_DELETED = "device_deleted"
     DEVICE_OFFLINE = "device_offline"
     DEVICE_ONLINE = "device_online"
+
+    # Agent version
+    AGENT_VERSION_CHANGED = "agent_version_changed"
 
     # Heartbeat
     HEARTBEAT_RECEIVED = "heartbeat_received"

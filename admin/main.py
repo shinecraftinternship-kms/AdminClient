@@ -168,7 +168,7 @@ def main():
         print(f"  Admin user created: {args.username} / {args.password}")
 
     from scanner_api.views import ensure_admin_client, admin_self_scan
-    from scanner_api.models import Setting
+    from scanner_api.models import Setting, AdministratorProfile, Company
     admin_key = ensure_admin_client()
     import threading
     threading.Thread(target=admin_self_scan, daemon=True).start()
@@ -179,9 +179,26 @@ def main():
         startup_url = f"{protocol}://localhost:{args.port}" if args.port not in (80, 443) else f"{protocol}://localhost"
     else:
         startup_url = f"{protocol}://{args.host}:{args.port}" if args.port not in (80, 443) else f"{protocol}://{args.host}"
+
+    def _make_url_with_path(base):
+        try:
+            su = User.objects.filter(is_superuser=True).first()
+            if su:
+                from django.utils.text import slugify
+                profile = AdministratorProfile.objects.filter(user=su).first()
+                company = profile.company if profile and profile.company else Company.objects.filter(name=su.username).first()
+                if company:
+                    user_part = slugify(su.username) or "admin"
+                    company_part = slugify(company.slug) or slugify(company.name) or "default"
+                    return f"{base.rstrip('/')}/{user_part}-{company_part}"
+        except Exception:
+            pass
+        return base
+
     if not Setting.get("admin_server_url", ""):
-        Setting.set("admin_server_url", startup_url)
-        print(f"  Server URL set to: {startup_url}")
+        full_url = _make_url_with_path(startup_url)
+        Setting.set("admin_server_url", full_url)
+        print(f"  Server URL set to: {full_url}")
     else:
         print(f"  Server URL (stored): {Setting.get('admin_server_url', '')}")
     token = Setting.get("admin_connection_token", "")

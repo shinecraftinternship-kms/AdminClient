@@ -688,7 +688,7 @@ function deleteClient() {
     }
     if (!confirm('Delete this client? It will be hidden and counted as offline.')) return;
     fetch(`/api/clients/${CLIENT_KEY}`, { method: 'DELETE' }).then(r => r.json()).then(res => {
-        if (res.status === 'ok') { showToast('Client deleted', 'success'); window.location.href = '/'; }
+        if (res.status === 'ok') { showToast('Client deleted', 'success'); window.location.href = (window.URL_PREFIX||'')+'/'; }
         else { showToast('Delete failed: ' + (res.message || 'Unknown error'), 'danger'); }
     }).catch(err => showToast('Delete failed: ' + err.message, 'danger'));
 }

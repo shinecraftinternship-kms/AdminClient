@@ -85,7 +85,8 @@ def asset_dashboard_page(request):
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("/")
+        _p = request.session.get("url_prefix", "")
+        return redirect(f"/{_p}/" if _p else "/")
 
     timeout_msg = request.GET.get("timeout") == "1"
     registered = request.GET.get("registered") == "1"
@@ -166,7 +167,19 @@ def login_view(request):
             _profile.save(update_fields=["company"])
         ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")
 
+        from django.utils.text import slugify as _slugify2
+        _user_part = _slugify2(user.username) or "admin"
+        _company_part = _slugify2(_profile.company.slug) or _slugify2(_profile.company.name) or "default"
+        _prefix_val = f"{_user_part}-{_company_part}"
+        request.session["url_prefix"] = _prefix_val
+
         next_url = request.POST.get("next", "/") or "/"
+        if next_url == "/":
+            next_url = f"/{_prefix_val}/"
+        elif next_url.startswith("/"):
+            _check = "/" + _prefix_val + "/"
+            if not next_url.startswith(_check):
+                next_url = f"/{_prefix_val}{next_url}"
         return redirect(next_url)
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
@@ -183,7 +196,8 @@ def logout_view(request):
 
 def signup_view(request):
     if request.user.is_authenticated:
-        return redirect("/")
+        _p = request.session.get("url_prefix", "")
+        return redirect(f"/{_p}/" if _p else "/")
 
     if request.method == "POST":
         username = request.POST.get("username", "").strip()

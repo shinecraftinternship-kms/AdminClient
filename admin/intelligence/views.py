@@ -423,6 +423,22 @@ class NotificationMarkAllReadView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class NotificationCountView(APIView):
+    """Lightweight endpoint for unread notification count (used by dashboard bell)."""
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return Response({"unread_count": 0, "recent": []})
+        unread_count = Notification.objects.filter(user=request.user, status="unread").count()
+        recent = list(Notification.objects.filter(
+            user=request.user
+        ).order_by("-created_time")[:5].values(
+            "id", "title", "message", "severity", "status", "module", "source_url", "created_time"
+        ))
+        return Response({"unread_count": unread_count, "recent": recent})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class NotificationPreferenceView(APIView):
     def get(self, request):
         if not request.user.is_authenticated:

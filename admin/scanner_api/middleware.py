@@ -1,7 +1,40 @@
 import time
+import re
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from .models import Setting
+
+
+class CompanyPrefixMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path_info
+        prefix = request.session.get("url_prefix", "")
+
+        if prefix:
+            expected = "/" + prefix
+            if path == expected:
+                return redirect(expected + "/")
+            if path.startswith(expected + "/"):
+                suffix = path[len(expected):]
+                request.META["SCRIPT_NAME"] = expected
+                request.path_info = suffix
+                request.path = suffix
+            elif request.user.is_authenticated:
+                if not any(path.startswith(p) for p in ("/api/", "/static/", "/download-client/", "/favicon")):
+                    if path not in ("/login/", "/signup/", "/logout/"):
+                        return redirect(expected + path)
+                    elif path == "/":
+                        return redirect(expected + "/")
+
+        response = self.get_response(request)
+        return response
+
+
+def url_prefix_context(request):
+    return {"url_prefix": request.session.get("url_prefix", "")}
 
 
 class SessionTimeoutMiddleware:

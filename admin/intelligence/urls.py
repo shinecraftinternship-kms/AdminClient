@@ -29,6 +29,7 @@ urlpatterns = [
 
     # Notification Center
     path("notifications", views.NotificationListView.as_view(), name="intel-notifications"),
+    path("notifications/count", views.NotificationCountView.as_view(), name="intel-notifications-count"),
     path("notifications/mark-all-read", views.NotificationMarkAllReadView.as_view(), name="intel-notifications-mark-all-read"),
     path("notifications/preferences", views.NotificationPreferenceView.as_view(), name="intel-notification-preferences"),
     path("notifications/<uuid:key>/action", views.NotificationActionView.as_view(), name="intel-notification-action"),

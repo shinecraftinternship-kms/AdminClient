@@ -180,11 +180,26 @@ class AgentHeartbeatView(APIView):
             ip_address=data.get("ip_address") or get_client_ip(request),
         )
 
+        old_version = client.client_version
+        new_version = data.get("agent_version", "")
+        if new_version and old_version and old_version != new_version:
+            event_bus.publish(Event(
+                event_type=EventType.AGENT_VERSION_CHANGED,
+                client_id=client.id,
+                client_key=str(client.key),
+                hostname=client.hostname,
+                severity="info",
+                title=f"Agent version changed: {old_version} → {new_version}",
+                description=f"Agent on {client.hostname} updated from v{old_version} to v{new_version}",
+                data={"old_version": old_version, "new_version": new_version},
+                source="heartbeat",
+            ))
+
         client.status = "online"
         client.last_seen = tz.now()
         client.last_ip = get_client_ip(request)
-        if data.get("agent_version"):
-            client.client_version = data["agent_version"]
+        if new_version:
+            client.client_version = new_version
         client.save(update_fields=["status", "last_seen", "last_ip", "client_version"])
 
         info = _get_or_create_monitoring_info(client)

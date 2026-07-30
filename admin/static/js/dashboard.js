@@ -173,7 +173,7 @@ function renderClients() {
         return `<div class="col-xl-3 col-lg-4 col-md-6 mb-3 client-card-wrapper">
             <div class="client-card p-3 ${isAdmin ? 'border-primary' : ''} ${isSelected ? 'border-success' : ''} ${c.deleted ? 'opacity-50' : ''}" style="cursor:pointer;">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="flex-grow-1" onclick="window.location='/client/${c.registration_key}'">
+                    <div class="flex-grow-1" onclick="window.location=(window.URL_PREFIX||'')+'/client/${c.registration_key}'">
                         <div>
                             <span class="fw-semibold">${escapeHtml(c.hostname || 'Unknown')}</span>
                             <span class="badge bg-dark ms-1" style="font-family:monospace;font-size:0.7rem;">${c.registration_key}</span>
@@ -426,9 +426,128 @@ function checkServerStatus() {
 checkServerStatus();
 setInterval(checkServerStatus, 15000);
 
+// ── Notification System ─────────────────────────────────────────────────────
+
+function loadNotifCount() {
+    fetch('/api/intelligence/notifications/count', _fetchOpts)
+        .then(r => r.json())
+        .then(data => {
+            const badge = document.getElementById('notifBadge');
+            if (!badge) return;
+            if (data.unread_count > 0) {
+                badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+        })
+        .catch(() => {});
+}
+
+function loadNotifDropdown() {
+    fetch('/api/intelligence/notifications/count', _fetchOpts)
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('notifList');
+            if (!list) return;
+            if (!data.recent || data.recent.length === 0) {
+                list.innerHTML = '<div class="text-center text-secondary small py-3">No notifications</div>';
+                return;
+            }
+            list.innerHTML = data.recent.map(n => {
+                const sevIcon = n.severity === 'critical' ? 'bi-exclamation-triangle-fill text-danger' :
+                    n.severity === 'warning' ? 'bi-exclamation-circle-fill text-warning' :
+                    'bi-info-circle-fill text-info';
+                const isUnread = n.status === 'unread';
+                return `<div class="px-3 py-2 border-bottom border-secondary notif-item ${isUnread ? 'notif-unread' : ''}" style="cursor:pointer;" onclick="window.location='${n.source_url || '/intelligence/notifications/'}'">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi ${sevIcon} mt-1 flex-shrink-0"></i>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="small fw-semibold text-truncate">${escapeHtml(n.title)}</div>
+                            <div class="text-secondary" style="font-size:0.7rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(n.message || '')}</div>
+                            <div class="text-secondary" style="font-size:0.6rem;">${timeAgo(n.created_time)}</div>
+                        </div>
+                        ${isUnread ? '<span class="badge bg-primary rounded-pill" style="font-size:0.5rem;width:6px;height:6px;padding:0;"></span>' : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        })
+        .catch(() => {});
+}
+
+function markAllNotifRead() {
+    fetch('/api/intelligence/notifications/mark-all-read', { ..._fetchOpts, method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                loadNotifCount();
+                loadNotifDropdown();
+                showToast('All notifications marked as read', 'success');
+            }
+        })
+        .catch(() => {});
+}
+
+// ── Toast notification for real-time events ─────────────────────────────────
+
+function showNotifToast(title, message, severity) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const bgClass = severity === 'critical' ? 'bg-danger' : severity === 'warning' ? 'bg-warning text-dark' : 'bg-info';
+    const icon = severity === 'critical' ? 'bi-exclamation-triangle-fill' :
+        severity === 'warning' ? 'bi-exclamation-circle-fill' : 'bi-info-circle-fill';
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white ${bgClass} border-0 mb-2`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `<div class="d-flex">
+        <div class="toast-body"><i class="bi ${icon} me-2"></i><strong>${escapeHtml(title)}</strong><br><small>${escapeHtml(message)}</small></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>`;
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 6000 });
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+// ── WebSocket event handler for real-time notifications ─────────────────────
+
+function handleDashboardEvent(data) {
+    const type = data.type || data.event_type || '';
+    if (type === 'device_deleted') {
+        loadNotifCount();
+        showNotifToast('Client Deleted', data.hostname ? `${data.hostname} was deleted` : 'A client was deleted', 'critical');
+        refreshClients();
+    } else if (type === 'agent_version_changed') {
+        loadNotifCount();
+        const host = data.hostname || 'Unknown';
+        showNotifToast('Agent Updated', `${host} version changed`, 'info');
+    } else if (type.includes('hw_') || type.includes('sw_')) {
+        loadNotifCount();
+    } else if (type === 'alert_created' || type === 'new_alert') {
+        loadNotifCount();
+        if (data.severity === 'critical' || data.severity === 'warning') {
+            showNotifToast(data.title || 'Alert', data.message || '', data.severity);
+        }
+    }
+}
+
+// ── Initialize notification system ──────────────────────────────────────────
+
+loadNotifCount();
+setInterval(loadNotifCount, 30000);
+
+// Load dropdown content when bell is clicked (lazy load on first hover/click)
+document.addEventListener('click', function(e) {
+    const bell = document.getElementById('notifBell');
+    if (bell && bell.contains(e.target)) {
+        loadNotifDropdown();
+    }
+});
+
 try {
     if (typeof DashboardWS !== 'undefined') {
         DashboardWS.connect();
+        DashboardWS.on('*', handleDashboardEvent);
     }
 } catch (e) {
     console.log('[Dashboard] WebSocket unavailable, using health polling');
