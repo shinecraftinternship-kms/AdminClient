@@ -1,3 +1,4 @@
+import time
 import logging
 import socket
 import threading
@@ -551,13 +552,9 @@ class SettingsView(APIView):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class ConnectionSettingsView(APIView):
-    """GET/POST/PUT admin server connection URL and token.
-
-    GET   -> return current values (auto-generates both URL and token if missing)
-    POST  -> force-regenerate the server URL (auto-detects host/port)
-    PUT   -> regenerate the connection token only
-
-    Server URL format: {scheme}://{host}/{admin-username}-{company-slug}
+    """GET  -> return stored URL + token (never auto-generates)
+    POST -> explicitly generate new URL + token
+    PUT  -> regenerate token only
     """
 
     def _detect_host(self, request):
@@ -579,126 +576,15 @@ class ConnectionSettingsView(APIView):
             return f"{scheme}://{host}"
         return f"{scheme}://{host}:{port}"
 
-    def _build_full_url(self, base_url, request=None):
-        """Return display URL with path: {base_url}/{username}-{company_slug}.
-
-        Client communicator strips the path automatically, so this is
-        only for display in the admin UI.
-        """
-        if not request or not getattr(request, "user", None):
-            return base_url
-        if not getattr(request.user, "is_authenticated", False):
-            return base_url
-        try:
-            company = get_user_company(request)
-            if company:
-                from django.utils.text import slugify
-                user_part = slugify(request.user.username) or "admin"
-                company_part = slugify(company.slug) or slugify(company.name) or "default"
-                return f"{base_url}/{user_part}-{company_part}"
-        except Exception:
-            pass
-        return base_url
-
-    def _ensure_token(self, company=None):
-        try:
-            token = Setting.get("admin_connection_token", "")
-            if not token:
-                import secrets
-                token = secrets.token_hex(16)
-                Setting.set("admin_connection_token", token)
-            return token
-        except Exception:
-            import secrets
-            return secrets.token_hex(16)
-
-    def _ensure_url(self, request=None, company=None):
-        import os
-        vercel_url = os.getenv("VERCEL_URL", "")
-        is_vercel = os.getenv("VERCEL", "0") == "1"
-
-        def _detect_base():
-            if is_vercel and vercel_url:
-                return f"https://{vercel_url}"
-            elif is_vercel:
-                return "https://admin-client-weld.vercel.app"
-            elif request:
-                try:
-                    return self._detect_host(request)
-                except Exception:
-                    return ""
-            return ""
-
-        try:
-            server_url = Setting.get("admin_server_url", "")
-            if not server_url or "/" not in server_url.split("//", 1)[-1]:
-                base = _detect_base()
-                if base:
-                    server_url = self._build_full_url(base, request)
-                    try:
-                        Setting.set("admin_server_url", server_url)
-                    except Exception:
-                        pass
-            return server_url
-        except Exception:
-            return _detect_base()
-
     def get(self, request):
-        try:
-            company = get_user_company(request)
-            token = self._ensure_token(company)
-            server_url = self._ensure_url(request, company)
-            return Response({
-                "server_url": server_url,
-                "connection_token": token,
-            })
-        except Exception:
-            token = ""
-            server_url = ""
-            try:
-                token = Setting.get("admin_connection_token", "")
-            except Exception:
-                pass
-            try:
-                server_url = Setting.get("admin_server_url", "")
-            except Exception:
-                pass
-
-            if not token:
-                try:
-                    import secrets
-                    token = secrets.token_hex(16)
-                    Setting.set("admin_connection_token", token)
-                except Exception:
-                    import secrets
-                    token = secrets.token_hex(16)
-
-            if not server_url:
-                import os
-                if os.getenv("VERCEL", "0") == "1":
-                    vercel_url = os.getenv("VERCEL_URL", "")
-                    base = f"https://{vercel_url}" if vercel_url else "https://admin-client-weld.vercel.app"
-                elif request:
-                    try:
-                        base = self._detect_host(request)
-                    except Exception:
-                        base = ""
-                else:
-                    base = ""
-                if base:
-                    try:
-                        server_url = self._build_full_url(base, request)
-                        Setting.set("admin_server_url", server_url)
-                    except Exception:
-                        server_url = base
-
-            return Response({
-                "server_url": server_url,
-                "connection_token": token,
-            })
+        server_url = Setting.get("admin_server_url", "")
+        token = Setting.get("admin_connection_token", "")
+        return Response({
+            "server_url": server_url,
+            "connection_token": token,
+        })
 
     def post(self, request):
-        import os
         import secrets
 
         company = None
@@ -708,34 +594,23 @@ class ConnectionSettingsView(APIView):
             pass
 
         token = secrets.token_hex(16)
-        try:
-            Setting.set("admin_connection_token", token)
-        except Exception:
-            pass
+        Setting.set("admin_connection_token", token)
 
         server_url = ""
         try:
             base = self._detect_host(request)
-            server_url = self._build_full_url(base, request)
+            server_url = base
         except Exception:
             pass
 
         if not server_url:
-            if os.getenv("VERCEL", "0") == "1":
-                vercel_url = os.getenv("VERCEL_URL", "")
-                base = f"https://{vercel_url}" if vercel_url else ""
-                if base:
-                    server_url = self._build_full_url(base, request)
-            if not server_url:
-                try:
-                    server_url = Setting.get("admin_server_url", "")
-                except Exception:
-                    pass
+            try:
+                server_url = Setting.get("admin_server_url", "")
+            except Exception:
+                pass
 
-        try:
+        if server_url:
             Setting.set("admin_server_url", server_url)
-        except Exception:
-            pass
         try:
             ActivityLog.objects.create(action="setting_change", company=company, details="Admin server URL generated")
         except Exception:
@@ -750,10 +625,7 @@ class ConnectionSettingsView(APIView):
             pass
         import secrets
         token = secrets.token_hex(16)
-        try:
-            Setting.set("admin_connection_token", token)
-        except Exception:
-            pass
+        Setting.set("admin_connection_token", token)
         try:
             ActivityLog.objects.create(action="setting_change", company=company, details="Connection token regenerated")
         except Exception:
@@ -1064,7 +936,7 @@ class AuthLoginView(APIView):
         else:
             request.session.set_expiry(0)
 
-        request.session["last_activity"] = timezone.now().isoformat()
+        request.session["last_activity_ts"] = str(time.time())
         request.session["login_history_id"] = login_history.id
 
         login(request, user)

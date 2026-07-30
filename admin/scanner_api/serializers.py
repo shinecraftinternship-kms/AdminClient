@@ -61,7 +61,7 @@ class ClientListSerializer(serializers.ModelSerializer):
             "last_seen", "approved", "group", "group_name", "tags_list",
             "is_stale", "last_ip", "deleted", "client_version", "cpu_model", "ram_info",
             "purchase_cost", "vendor_name", "notes", "created_at",
-            "owner", "owner_username",
+            "owner", "owner_username", "scan_requested",
         ]
 
 

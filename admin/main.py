@@ -179,7 +179,11 @@ def main():
         startup_url = f"{protocol}://localhost:{args.port}" if args.port not in (80, 443) else f"{protocol}://localhost"
     else:
         startup_url = f"{protocol}://{args.host}:{args.port}" if args.port not in (80, 443) else f"{protocol}://{args.host}"
-    Setting.set("admin_server_url", startup_url)
+    if not Setting.get("admin_server_url", ""):
+        Setting.set("admin_server_url", startup_url)
+        print(f"  Server URL set to: {startup_url}")
+    else:
+        print(f"  Server URL (stored): {Setting.get('admin_server_url', '')}")
     token = Setting.get("admin_connection_token", "")
     if not token:
         import secrets

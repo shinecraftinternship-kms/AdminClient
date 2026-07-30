@@ -1,4 +1,4 @@
-from django.utils import timezone
+import time
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from .models import Setting
@@ -10,20 +10,24 @@ class SessionTimeoutMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated:
-            timeout_minutes = int(Setting.get("session_timeout_minutes", "30"))
-            last_activity = request.session.get("last_activity")
+            timeout_str = Setting.get("session_timeout_minutes", "120")
+            try:
+                timeout_seconds = int(timeout_str) * 60
+            except (ValueError, TypeError):
+                timeout_seconds = 7200
+            if timeout_seconds < 60:
+                timeout_seconds = 7200
+
+            last_activity = request.session.get("last_activity_ts")
             if last_activity:
-                from datetime import datetime
                 try:
-                    last = datetime.fromisoformat(last_activity)
-                    elapsed = (timezone.now() - timezone.make_aware(last) if timezone.is_naive(last)
-                               else timezone.now() - last)
-                    if elapsed.total_seconds() > timeout_minutes * 60:
+                    elapsed = time.time() - float(last_activity)
+                    if elapsed > timeout_seconds:
                         logout(request)
                         return redirect("/login/?timeout=1")
                 except (ValueError, TypeError):
                     pass
-            request.session["last_activity"] = timezone.now().isoformat()
+            request.session["last_activity_ts"] = str(time.time())
 
         response = self.get_response(request)
         return response

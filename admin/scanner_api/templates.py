@@ -1,3 +1,4 @@
+import time
 import os
 import hashlib
 from django.http import HttpResponseRedirect, FileResponse, Http404
@@ -152,7 +153,7 @@ def login_view(request):
         else:
             request.session.set_expiry(0)
 
-        request.session["last_activity"] = timezone.now().isoformat()
+        request.session["last_activity_ts"] = str(time.time())
         request.session["login_history_id"] = login_history.id
 
         from .models import ActivityLog, AdministratorProfile, Company

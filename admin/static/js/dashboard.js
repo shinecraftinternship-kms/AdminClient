@@ -10,19 +10,25 @@ let selectedClients = new Set();
 const _fetchOpts = { credentials: 'same-origin' };
 
 function refreshClients() {
-    Promise.all([
-        fetch('/api/clients', _fetchOpts).then(r => r.json()),
-        fetch('/api/admin-client', _fetchOpts).then(r => r.json()).catch(() => ({})),
-        fetch('/api/groups', _fetchOpts).then(r => r.json()).catch(() => []),
-    ]).then(([data, adminData, groupsData]) => {
-        clients = data;
-        groups = groupsData;
-        if (adminData.registered) adminClientKey = adminData.registration_key;
-        renderStats();
-        renderCharts();
-        renderGroupFilter();
-        renderClients();
-    }).catch(err => showToast('Failed to load data: ' + err.message, 'danger'));
+    fetch('/api/clients', _fetchOpts)
+        .then(r => { if (!r.ok) throw new Error('Status ' + r.status); return r.json(); })
+        .then(function(data) {
+            clients = data;
+            return Promise.all([
+                fetch('/api/admin-client', _fetchOpts).then(r => r.json()).catch(() => ({})),
+                fetch('/api/groups', _fetchOpts).then(r => r.json()).catch(() => []),
+            ]).then(function([adminData, groupsData]) {
+                groups = groupsData;
+                if (adminData.registered) adminClientKey = adminData.registration_key;
+                renderStats();
+                renderCharts();
+                renderGroupFilter();
+                renderClients();
+            });
+        })
+        .catch(function(err) {
+            showToast('Failed to load data: ' + err.message, 'danger');
+        });
 }
 
 function renderStats() {
@@ -275,17 +281,22 @@ function registerClient() {
         ..._fetchOpts,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registration_key: key, hostname: 'Manual', platform: 'Unknown' })
-    }).then(r => r.json()).then(() => {
+    }).then(r => r.json()).then(regRes => {
+        if (regRes.status === 'error') {
+            throw new Error(regRes.message || 'Registration failed');
+        }
         return fetch('/api/approve', {
             ..._fetchOpts,
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ registration_key: key })
-        });
-    }).then(r => r.json()).then(data => {
+        }).then(r => r.json());
+    }).then(data => {
         if (data.status === 'ok') {
             showToast('Client registered and approved!', 'success');
             document.getElementById('regKeyInput').value = '';
-            bootstrap.Modal.getInstance(document.getElementById('registerModal')).hide();
+            const modalEl = document.getElementById('registerModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
             refreshClients();
         } else {
             showToast('Error: ' + (data.message || 'Unknown'), 'danger');
@@ -399,7 +410,7 @@ refreshInterval = setInterval(refreshClients, 10000);
 function checkServerStatus() {
     const badge = document.getElementById('wsStatus');
     if (!badge) return;
-    fetch('/api/health', _fetchOpts).then(function(r) {
+    fetch('/api/health', { ..._fetchOpts, cache: 'no-store' }).then(function(r) {
         if (r.ok) {
             badge.textContent = 'Online';
             badge.className = 'badge bg-success';
@@ -415,15 +426,10 @@ function checkServerStatus() {
 checkServerStatus();
 setInterval(checkServerStatus, 15000);
 
-DashboardWS.onStatusChange(function(status) {
-    const badge = document.getElementById('wsStatus');
-    if (!badge) return;
-    if (status === 'connected') {
-        badge.textContent = 'Connected';
-        badge.className = 'badge bg-success';
-    } else {
-        badge.textContent = 'Reconnecting...';
-        badge.className = 'badge bg-warning text-dark';
+try {
+    if (typeof DashboardWS !== 'undefined') {
+        DashboardWS.connect();
     }
-});
-DashboardWS.connect();
+} catch (e) {
+    console.log('[Dashboard] WebSocket unavailable, using health polling');
+}
