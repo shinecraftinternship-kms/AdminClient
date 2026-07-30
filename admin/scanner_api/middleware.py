@@ -53,12 +53,19 @@ class CompanyPrefixMiddleware:
         return ""
 
     def _extract_prefix_from_url(self, path):
+        try:
+            resolve(path)
+            return ""
+        except Resolver404:
+            pass
         if path.count("/") >= 2:
             first_slash = path.index("/", 1)
             if first_slash > 0:
                 candidate = path[1:first_slash]
                 if candidate and "/" not in candidate:
                     suffix = path[first_slash:]
+                    if suffix in ("", "/"):
+                        return ""
                     try:
                         resolve(suffix)
                         return candidate
