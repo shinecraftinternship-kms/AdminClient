@@ -1,9 +1,41 @@
+import json
 import time
 import re
-from django.contrib.auth import logout
+from django.contrib.auth import logout, get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from django.shortcuts import redirect
 from django.urls import resolve, Resolver404
 from .models import Setting
+
+
+class CookieAuthMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if not getattr(request, "user", None):
+            request.user = AnonymousUser()
+
+        if not getattr(request.user, "is_authenticated", False):
+            cookie_value = request.COOKIES.get("scanner_auth")
+            if cookie_value:
+                try:
+                    signer = TimestampSigner(salt="scanner-auth-cookie")
+                    data = signer.unsign(cookie_value, max_age=60 * 60 * 24 * 30)
+                    payload = json.loads(data)
+                    user_id = payload.get("user_id")
+                    if user_id:
+                        User = get_user_model()
+                        user = User.objects.filter(pk=user_id).first()
+                        if user and user.is_active:
+                            request.user = user
+                            request._cached_user = user
+                except (BadSignature, SignatureExpired, TypeError, ValueError, json.JSONDecodeError):
+                    pass
+
+        response = self.get_response(request)
+        return response
 
 
 class CompanyPrefixMiddleware:

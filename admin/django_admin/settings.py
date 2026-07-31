@@ -39,11 +39,12 @@ if not IS_VERCEL:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "scanner_api.middleware.CookieAuthMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     f"{_API}.middleware.CompanyPrefixMiddleware",
     f"{_API}.middleware.SessionTimeoutMiddleware",

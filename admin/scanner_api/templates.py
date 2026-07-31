@@ -188,6 +188,20 @@ def login_view(request):
         request.session["last_activity_ts"] = str(time.time())
         request.session["login_history_id"] = login_history.id
 
+        from django.core.signing import TimestampSigner
+        import json
+        signer = TimestampSigner(salt="scanner-auth-cookie")
+        payload = signer.sign(json.dumps({"user_id": user.pk, "username": user.username}))
+        response = redirect(normalize_next_url(next_url, _prefix_val))
+        response.set_cookie(
+            "scanner_auth",
+            payload,
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            samesite="Lax",
+            secure=request.is_secure() or getattr(__import__("django.conf", fromlist=["settings"]).conf.settings, "IS_VERCEL", False),
+        )
+
         from .models import ActivityLog, AdministratorProfile, Company
         _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
         if not _profile.company:
@@ -205,7 +219,7 @@ def login_view(request):
         request.session["url_prefix"] = _prefix_val
 
         next_url = request.POST.get("next") or request.GET.get("next") or "/"
-        return redirect(normalize_next_url(next_url, _prefix_val))
+        return response
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
 
@@ -216,7 +230,9 @@ def logout_view(request):
         log_audit_event(request.user, "logout", request, details="User logged out")
         close_login_history(request.user)
     logout(request)
-    return redirect("/login/")
+    response = redirect("/login/")
+    response.delete_cookie("scanner_auth")
+    return response
 
 
 def signup_view(request):
