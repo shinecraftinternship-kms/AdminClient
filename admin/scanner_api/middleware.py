@@ -9,6 +9,22 @@ from django.urls import resolve, Resolver404
 from .models import Setting
 
 
+def build_url_prefix_path(prefix, path=""):
+    if not prefix:
+        return f"/{path.lstrip('/')}" if path else "/"
+
+    clean_prefix = str(prefix).strip().strip("/")
+    if not clean_prefix:
+        return f"/{path.lstrip('/')}" if path else "/"
+
+    clean_path = path.strip()
+    if not clean_path:
+        return f"/{clean_prefix}/"
+    if clean_path.startswith("/"):
+        clean_path = clean_path[1:]
+    return f"/{clean_prefix}/{clean_path.lstrip('/')}"
+
+
 class CookieAuthMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

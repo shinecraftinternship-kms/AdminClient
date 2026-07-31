@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import resolve, Resolver404
 from django.utils import timezone
+from .middleware import build_url_prefix_path
 
 
 def normalize_next_url(next_url, prefix):

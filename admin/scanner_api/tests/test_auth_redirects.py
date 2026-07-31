@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import RequestFactory, SimpleTestCase
 
-from scanner_api import templates
+from scanner_api import middleware, templates
 
 
 class AuthRedirectTests(SimpleTestCase):
@@ -19,6 +19,10 @@ class AuthRedirectTests(SimpleTestCase):
 
     def test_redirects_login_pages_to_prefixed_dashboard(self):
         self.assertEqual(templates.normalize_next_url("/login/", "user-company"), "/user-company/")
+
+    def test_build_url_prefix_path_handles_empty_and_prefixed_values(self):
+        self.assertEqual(middleware.build_url_prefix_path(""), "/")
+        self.assertEqual(middleware.build_url_prefix_path("user-company"), "/user-company/")
 
     def test_login_redirect_uses_next_value_without_crashing(self):
         factory = RequestFactory()
