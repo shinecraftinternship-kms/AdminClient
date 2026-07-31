@@ -546,6 +546,13 @@ document.addEventListener('click', function(e) {
 
 try {
     if (typeof DashboardWS !== 'undefined') {
+        DashboardWS.onStatusChange(function(status) {
+            const badge = document.getElementById('wsStatus');
+            if (badge) {
+                badge.textContent = status === 'connected' ? 'Online' : 'Offline';
+                badge.className = status === 'connected' ? 'badge bg-success' : 'badge bg-danger';
+            }
+        });
         DashboardWS.connect();
         DashboardWS.on('*', handleDashboardEvent);
     }

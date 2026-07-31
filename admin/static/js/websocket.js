@@ -20,6 +20,7 @@ const DashboardWS = (() => {
     let reconnectDelay = 2;
     const maxReconnectDelay = 60;
     let reconnectTimer = null;
+    let pollTimer = null;
     let handlers = {};
     let statusCallback = null;
 
@@ -28,9 +29,30 @@ const DashboardWS = (() => {
         return `${proto}//${location.host}/ws/dashboard/`;
     }
 
+    function checkHttpHealth() {
+        fetch('/api/health', { credentials: 'same-origin', cache: 'no-store' })
+            .then(r => {
+                if (r.ok) {
+                    connected = true;
+                    if (statusCallback) statusCallback('connected');
+                } else {
+                    connected = false;
+                    if (statusCallback) statusCallback('disconnected');
+                }
+            })
+            .catch(() => {
+                connected = false;
+                if (statusCallback) statusCallback('disconnected');
+            });
+    }
+
     function connect() {
         if (typeof window.IS_VERCEL !== 'undefined' && window.IS_VERCEL) {
             console.log('[WS] Vercel detected, WebSocket unavailable - using HTTP polling');
+            checkHttpHealth();
+            if (!pollTimer) {
+                pollTimer = setInterval(checkHttpHealth, 10000);
+            }
             return;
         }
         if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -75,6 +97,10 @@ const DashboardWS = (() => {
     }
 
     function disconnect() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -141,6 +167,9 @@ const DashboardWS = (() => {
 
     function onStatusChange(callback) {
         statusCallback = callback;
+        if (typeof window.IS_VERCEL !== 'undefined' && window.IS_VERCEL) {
+            checkHttpHealth();
+        }
     }
 
     function getCSRFToken() {
