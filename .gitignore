@@ -13,3 +13,7 @@ client/scans/
 
 .vercel
 .env*
+
+# SQLite database files (local only, should never be in git)
+*.db
+*.sqlite3
