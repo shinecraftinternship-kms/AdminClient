@@ -130,9 +130,29 @@ if DATABASE_URL:
         separator = "&" if "?" in DATABASE_URL else "?"
         DATABASE_URL = f"{DATABASE_URL}{separator}sslmode=require"
     DATABASES = {
-        "default": dj_database_url.config(default=DATABASE_URL, conn_max_age=0)
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=0,  # 0 = close after each request (required for Vercel serverless)
+        )
     }
+    # Add robust options to prevent "always checking" / hanging connections on Vercel
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"].update({
+        "connect_timeout": 10,       # fail fast if DB unreachable (seconds)
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+        "sslmode": "require",
+    })
 elif IS_VERCEL:
+    # Vercel without DATABASE_URL → warn loudly (SQLite /tmp is ephemeral!)
+    import warnings
+    warnings.warn(
+        "DATABASE_URL is not set! Falling back to ephemeral SQLite on /tmp. "
+        "Login data will be lost on every request. Set DATABASE_URL in Vercel Dashboard.",
+        RuntimeWarning,
+    )
     _vdb = os.path.join("/tmp", "vercel.db")
     DATABASES = {
         "default": {
@@ -147,6 +167,10 @@ else:
             "NAME": os.path.join(os.environ.get("SCANNER_DATA_DIR", str(BASE_DIR / "data")), "scanner.db"),
         }
     }
+
+# ── Supabase (make keys available via Django settings) ────────────────────
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
