@@ -155,7 +155,7 @@ def login_view(request):
         if remember_me:
             request.session.set_expiry(60 * 60 * 24 * 30)
         else:
-            request.session.set_expiry(0)
+            request.session.set_expiry(60 * 60 * 24 * 7)
 
         request.session["last_activity_ts"] = str(time.time())
         request.session["login_history_id"] = login_history.id

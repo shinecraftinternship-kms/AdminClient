@@ -28,7 +28,6 @@ class CompanyPrefixMiddleware:
                 return redirect(expected + "/")
             if path.startswith(expected + "/"):
                 suffix = path[len(expected):]
-                request.META["SCRIPT_NAME"] = expected
                 request.path_info = suffix or "/"
                 request.path = suffix or "/"
                 request.session["url_prefix"] = prefix

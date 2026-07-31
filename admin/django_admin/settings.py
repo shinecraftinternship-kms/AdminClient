@@ -185,6 +185,11 @@ STORAGES = {
     },
 }
 
+AUTHENTICATION_BACKENDS = [
+    "scanner_api.auth_backend.ResilientModelBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 if DATABASE_URL:
     SESSION_ENGINE = "django.contrib.sessions.backends.db"
 elif IS_VERCEL:
@@ -201,6 +206,8 @@ if IS_VERCEL:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = False
 
+SESSION_COOKIE_PATH = "/"
+CSRF_COOKIE_PATH = "/"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
