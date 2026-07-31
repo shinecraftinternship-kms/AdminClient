@@ -1,0 +1,18 @@
+{
+  // ── Python Language Server & Diagnostics ──────────────────────────────
+  "pyrefly.enable": false,
+  "pyrefly.diagnostics.enable": false,
+  "pyrefly.lint.enable": false,
+  "pyrefly.typeCheckingMode": "off",
+
+  // Use Pylance for error-free Python intelligence
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.extraPaths": [
+    "./admin"
+  ],
+
+  "editor.formatOnSave": false,
+  "files.trimTrailingWhitespace": true
+}
+
