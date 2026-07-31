@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+from runtime import get_data_dir
+
 load_dotenv(os.path.join(Path(__file__).resolve().parent.parent.parent, '.env'))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -161,10 +163,11 @@ elif IS_VERCEL:
         }
     }
 else:
+    database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.join(os.environ.get("SCANNER_DATA_DIR", str(BASE_DIR / "data")), "scanner.db"),
+            "NAME": os.path.join(database_dir, "scanner.db"),
         }
     }
 
