@@ -4,7 +4,7 @@ import time
 import urllib.request
 import urllib.error
 
-DISCOVERY_SUPABASE_URL = "https://db.eekerbqgmektmrzjiyyv.supabase.co"
+DISCOVERY_SUPABASE_URL = "https://eekerbqgmektmrzjiyyv.supabase.co"
 DISCOVERY_SUPABASE_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
     "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVla2VyYnFnbWVrdG1yemppeXl2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIs"
