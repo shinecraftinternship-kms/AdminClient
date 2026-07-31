@@ -14,6 +14,12 @@ ALLOWED_HOSTS = ["*"] if ALLOWED_HOSTS_RAW.strip() == "*" else ALLOWED_HOSTS_RAW
 
 IS_VERCEL = os.getenv("VERCEL", "0") == "1"
 
+try:
+    import corsheaders.middleware as _corsheaders_middleware  # noqa: F401
+    CORS_MIDDLEWARE_PATH = "corsheaders.middleware.CorsMiddleware"
+except Exception:
+    CORS_MIDDLEWARE_PATH = "corsheaders.middleware.CorsHeadersMiddleware"
+
 _API = "scanner_api"
 _MON = "monitoring"
 _MNT = "maintenance"
@@ -39,7 +45,7 @@ if not IS_VERCEL:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsHeadersMiddleware",
+    CORS_MIDDLEWARE_PATH,
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
