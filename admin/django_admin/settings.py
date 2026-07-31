@@ -185,10 +185,14 @@ STORAGES = {
     },
 }
 
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+if DATABASE_URL:
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+elif IS_VERCEL:
+    SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
+else:
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 if IS_VERCEL:
-    SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_DOMAIN = None
     CSRF_COOKIE_SECURE = True
@@ -196,8 +200,7 @@ if IS_VERCEL:
     CSRF_COOKIE_HTTPONLY = False
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = False
-else:
-    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
