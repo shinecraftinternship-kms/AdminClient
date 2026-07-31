@@ -188,19 +188,11 @@ def login_view(request):
         request.session["last_activity_ts"] = str(time.time())
         request.session["login_history_id"] = login_history.id
 
+        from django.conf import settings
         from django.core.signing import TimestampSigner
         import json
         signer = TimestampSigner(salt="scanner-auth-cookie")
         payload = signer.sign(json.dumps({"user_id": user.pk, "username": user.username}))
-        response = redirect(normalize_next_url(next_url, _prefix_val))
-        response.set_cookie(
-            "scanner_auth",
-            payload,
-            max_age=60 * 60 * 24 * 30,
-            httponly=True,
-            samesite="Lax",
-            secure=request.is_secure() or getattr(__import__("django.conf", fromlist=["settings"]).conf.settings, "IS_VERCEL", False),
-        )
 
         from .models import ActivityLog, AdministratorProfile, Company
         _profile, _ = AdministratorProfile.objects.get_or_create(user=user)
@@ -219,6 +211,16 @@ def login_view(request):
         request.session["url_prefix"] = _prefix_val
 
         next_url = request.POST.get("next") or request.GET.get("next") or "/"
+        response = redirect(normalize_next_url(next_url, _prefix_val))
+        response.set_cookie(
+            "scanner_auth",
+            payload,
+            max_age=60 * 60 * 24 * 30,
+            httponly=True,
+            samesite="Lax",
+            secure=request.is_secure() or getattr(settings, "IS_VERCEL", False),
+        )
+
         return response
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
