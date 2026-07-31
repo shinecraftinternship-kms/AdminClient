@@ -66,7 +66,8 @@ def _bootstrap():
     else:
         _init_log.append("[SKIP] Skipped admin user creation (SQLite /tmp is ephemeral, use Signup instead)")
 
-    from scanner_api.models import Setting  # type: ignore[import]
+    from django.apps import apps
+    Setting = apps.get_model("scanner_api", "Setting")
     import secrets
     vercel_url = os.getenv("VERCEL_URL", "admin-client-weld.vercel.app")
     Setting.set("admin_server_url", f"https://{vercel_url}")
