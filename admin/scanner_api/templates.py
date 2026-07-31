@@ -10,6 +10,34 @@ from django.urls import resolve, Resolver404
 from django.utils import timezone
 
 
+def normalize_next_url(next_url, prefix):
+    if not next_url:
+        return f"/{prefix}/" if prefix else "/"
+
+    candidate = str(next_url).strip()
+    if not candidate or candidate in {"/", "#"}:
+        return f"/{prefix}/" if prefix else "/"
+
+    if candidate.startswith(("http://", "https://", "//")):
+        return f"/{prefix}/" if prefix else "/"
+
+    if not candidate.startswith("/"):
+        candidate = f"/{candidate}"
+
+    if candidate in {"/login/", "/signup/", "/logout/"} or candidate.startswith(("/api/", "/static/", "/download-client/")):
+        return f"/{prefix}/" if prefix else "/"
+
+    if prefix and candidate.startswith(f"/{prefix}/"):
+        return candidate
+
+    if prefix and candidate.startswith("/"):
+        if candidate.count("/") >= 2:
+            return candidate
+        return f"/{prefix}{candidate}" if candidate != "/" else f"/{prefix}/"
+
+    return candidate
+
+
 @login_required
 def dashboard(request):
     return render(request, "dashboard.html")
@@ -176,19 +204,8 @@ def login_view(request):
         _prefix_val = f"{_user_part}-{_company_part}"
         request.session["url_prefix"] = _prefix_val
 
-        next_url = request.POST.get("next", "/") or "/"
-        if next_url == "/":
-            next_url = f"/{_prefix_val}/"
-        elif next_url.startswith("/"):
-            if next_url.startswith(f"/{_prefix_val}/"):
-                pass
-            else:
-                try:
-                    resolve(next_url)
-                    next_url = f"/{_prefix_val}{next_url}"
-                except Resolver404:
-                    next_url = f"/{_prefix_val}/"
-        return redirect(next_url)
+        next_url = request.POST.get("next") or request.GET.get("next") or "/"
+        return redirect(normalize_next_url(next_url, _prefix_val))
 
     return render(request, "login.html", {"timeout": timeout_msg, "registered": registered})
 
