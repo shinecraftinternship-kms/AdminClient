@@ -88,6 +88,7 @@ class CompanyPrefixMiddleware:
         # Persist prefix in session for later requests
         if prefix and request.session.get("url_prefix") != prefix:
             request.session["url_prefix"] = prefix
+            request.session.modified = True
 
         if prefix:
             expected = "/" + prefix
@@ -110,6 +111,7 @@ class CompanyPrefixMiddleware:
             computed = self._compute_prefix_from_user(request.user)
             if computed:
                 request.session["url_prefix"] = computed
+                request.session.modified = True
                 target = f"/{computed}{path}"
                 if target.endswith("//"):
                     target = target.rstrip("/") + "/"
