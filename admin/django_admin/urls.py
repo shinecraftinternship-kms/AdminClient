@@ -8,6 +8,15 @@ from maintenance import templates as mnt_templates
 from intelligence import templates as intel_templates
 from django.conf import settings
 
+
+def _catch_all(request, path):
+    # If user not authenticated, send to login preserving the original path
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    # Authenticated but no matching route → 404
+    raise Http404
+
+
 _api_urls = "scanner_api.urls"
 _mon_urls = "monitoring.urls"
 _mnt_urls = "maintenance.urls"
@@ -49,7 +58,7 @@ urlpatterns = [
     path("maintenance/", mnt_templates.maintenance_page, name="maintenance"),
     path("licenses/", mnt_templates.licenses_page, name="licenses"),
     path("maintenance-alerts/", mnt_templates.maintenance_alerts_page, name="maintenance-alerts"),
-    re_path(r"^.*/$", lambda request: redirect_to_login(request.get_full_path()) if not request.user.is_authenticated else redirect("/")),
+    re_path(r"^(?P<path>.*)/$", _catch_all),
 ]
 
 # WebSocket routes are handled by ASGI/Channels (monitoring/routing.py)
