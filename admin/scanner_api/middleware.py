@@ -70,6 +70,10 @@ class CompanyPrefixMiddleware:
 
         prefix = self._get_prefix(request, path)
 
+        # If we have a prefix, make sure it's stored in session for later use
+        if prefix and request.session.get("url_prefix") != prefix:
+            request.session["url_prefix"] = prefix
+
         if prefix:
             expected = "/" + prefix
             if path == expected:
@@ -78,10 +82,20 @@ class CompanyPrefixMiddleware:
                 suffix = path[len(expected):]
                 request.path_info = suffix or "/"
                 request.path = suffix or "/"
-                request.session["url_prefix"] = prefix
                 return self.get_response(request)
+            # authenticated user but missing prefix → redirect to prefixed URL
             if request.user.is_authenticated:
                 target = expected + path
+                if target.endswith("//"):
+                    target = target.rstrip("/") + "/"
+                return redirect(target)
+
+        # No prefix in URL and user authenticated → compute prefix and redirect
+        if request.user.is_authenticated and not prefix:
+            computed = self._compute_prefix_from_user(request.user)
+            if computed:
+                request.session["url_prefix"] = computed
+                target = f"/{computed}{path}"
                 if target.endswith("//"):
                     target = target.rstrip("/") + "/"
                 return redirect(target)
@@ -89,10 +103,12 @@ class CompanyPrefixMiddleware:
         return self.get_response(request)
 
     def _get_prefix(self, request, path):
+        # 1️⃣ session
         prefix_from_session = request.session.get("url_prefix", "")
         if prefix_from_session:
             return prefix_from_session
 
+        # 2️⃣ URL
         prefix_from_url = self._extract_prefix_from_url(path)
         if prefix_from_url:
             return prefix_from_url
@@ -119,6 +135,16 @@ class CompanyPrefixMiddleware:
                     except Resolver404:
                         pass
         return ""
+
+    def _compute_prefix_from_user(self, user):
+        from django.utils.text import slugify
+        from .models import AdministratorProfile
+        profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
+        if not profile or not profile.company:
+            return ""
+        user_part = slugify(user.username) or "admin"
+        company_part = slugify(profile.company.slug) or slugify(profile.company.name) or "default"
+        return f"{user_part}-{company_part}"
 
 
 def url_prefix_context(request):
