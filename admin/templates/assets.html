@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% load url_prefix_tags %}
 {% block title %}Assets - ITAMS{% endblock %}
 {% block content %}
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-box-seam me-2"></i>Asset Management</h4>
     <div class="d-flex gap-2">
-        <a href="{{ url_prefix }}/asset-dashboard/" class="btn btn-outline-info"><i class="bi bi-graph-up"></i> Analytics</a>
+        <a href="{% prefixed_url '/asset-dashboard/' %}" class="btn btn-outline-info"><i class="bi bi-graph-up"></i> Analytics</a>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assetModal" onclick="openAddAsset()">
             <i class="bi bi-plus-lg"></i> Add Asset
         </button>

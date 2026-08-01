@@ -173,7 +173,7 @@ function renderClients() {
         return `<div class="col-xl-3 col-lg-4 col-md-6 mb-3 client-card-wrapper">
             <div class="client-card p-3 ${isAdmin ? 'border-primary' : ''} ${isSelected ? 'border-success' : ''} ${c.deleted ? 'opacity-50' : ''}" style="cursor:pointer;">
                 <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="flex-grow-1" onclick="window.location=(window.URL_PREFIX||'')+'/client/${c.registration_key}'">
+                    <div class="flex-grow-1" onclick="window.location=prefixedUrl('/client/'+encodeURIComponent('${c.registration_key}'))">
                         <div>
                             <span class="fw-semibold">${escapeHtml(c.hostname || 'Unknown')}</span>
                             <span class="badge bg-dark ms-1" style="font-family:monospace;font-size:0.7rem;">${c.registration_key}</span>
@@ -459,7 +459,7 @@ function loadNotifDropdown() {
                     n.severity === 'warning' ? 'bi-exclamation-circle-fill text-warning' :
                     'bi-info-circle-fill text-info';
                 const isUnread = n.status === 'unread';
-                return `<div class="px-3 py-2 border-bottom border-secondary notif-item ${isUnread ? 'notif-unread' : ''}" style="cursor:pointer;" onclick="window.location='${n.source_url || '/intelligence/notifications/'}'">
+                return `<div class="px-3 py-2 border-bottom border-secondary notif-item ${isUnread ? 'notif-unread' : ''}" style="cursor:pointer;" onclick="window.location=prefixedUrl('${n.source_url || '/intelligence/notifications/'}')">
                     <div class="d-flex align-items-start gap-2">
                         <i class="bi ${sevIcon} mt-1 flex-shrink-0"></i>
                         <div class="flex-grow-1 min-w-0">

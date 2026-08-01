@@ -274,7 +274,7 @@ def signup_view(request):
             return render(request, "signup.html", {"error": "Email already registered"})
 
         user = User.objects.create_user(username=username, email=email, password=password)
-        user.is_superuser = True
+        user.is_superuser = False
         user.save()
 
         from .models import Company

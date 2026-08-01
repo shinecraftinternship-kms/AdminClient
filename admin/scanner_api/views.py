@@ -45,16 +45,36 @@ def get_user_company(request):
 
 
 def get_admin_owned_clients(request):
-    """Return a base QuerySet of non-deleted clients owned by the current admin.
+    """Return a base QuerySet of non-deleted clients the current admin may see.
 
-    Superusers see all clients. Regular admins see only clients they own.
+    Visibility rules (client-data isolation):
+      - Superusers: clients belonging to their own company, plus unowned
+        pending clients so they can be approved.
+      - Regular admins: only clients they own, plus unowned pending clients
+        so they can approve newly-registered devices.
     """
     qs = Client.objects.filter(deleted=False).select_related("group", "owner")
     if not request.user or not request.user.is_authenticated:
         return qs.none()
+    unowned_pending = models.Q(owner__isnull=True, approved=False)
     if request.user.is_superuser:
+        company = get_user_company(request)
+        if company:
+            return qs.filter(models.Q(company=company) | unowned_pending)
         return qs
-    return qs.filter(owner=request.user)
+    return qs.filter(models.Q(owner=request.user) | unowned_pending)
+
+
+def client_is_visible(request, client):
+    """Return True if the current admin may view/modify the given client."""
+    if not request.user or not request.user.is_authenticated:
+        return False
+    if client.owner is None and not client.approved:
+        return True
+    if request.user.is_superuser:
+        company = get_user_company(request)
+        return bool(company) and client.company == company
+    return client.owner == request.user
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
     ManualUpdateSerializer, ScanConfigSerializer,
@@ -150,6 +170,8 @@ class ApproveClientView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not client_is_visible(request, client):
+            return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         client.approved = True
         client.status = "online"
@@ -170,6 +192,10 @@ class ApproveMultipleView(APIView):
         company = get_user_company(request)
 
         clients = Client.objects.filter(registration_key__in=keys)
+        if not request.user.is_superuser:
+            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
+        elif company:
+            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
         count = 0
         for client in clients:
             client.approved = True
@@ -277,7 +303,7 @@ class ClientDetailView(APIView):
             client = Client.objects.prefetch_related("scans", "addons").select_related("group", "owner").get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Not found"}, status=status.HTTP_404_NOT_FOUND)
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         serializer = ClientDetailSerializer(client)
         data = serializer.data
@@ -292,7 +318,7 @@ class ClientDetailView(APIView):
     def delete(self, request, key):
         try:
             client = Client.objects.get(registration_key=key)
-            if not request.user.is_superuser and client.owner and client.owner != request.user:
+            if not client_is_visible(request, client):
                 return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
             hostname = client.hostname
             client.deleted = True
@@ -322,7 +348,9 @@ class DeleteMultipleView(APIView):
         company = get_user_company(request)
         clients = Client.objects.filter(registration_key__in=keys)
         if not request.user.is_superuser:
-            clients = clients.filter(owner=request.user)
+            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
+        elif company:
+            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
         count = clients.count()
         for client in clients:
             client.deleted = True
@@ -354,7 +382,7 @@ class ManualUpdateView(APIView):
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         Client.objects.filter(registration_key=key).update(**data)
@@ -370,7 +398,7 @@ class AddonListView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response([])
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response([], status=status.HTTP_403_FORBIDDEN)
         return Response(AddonDeviceSerializer(client.addons.all(), many=True).data)
 
@@ -379,7 +407,7 @@ class AddonListView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         serializer = AddonDeviceSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -390,8 +418,14 @@ class AddonListView(APIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class AddonDeleteView(APIView):
     def delete(self, request, key, addon_id):
-        deleted, _ = AddonDevice.objects.filter(id=addon_id, client__registration_key=key).delete()
-        return Response({"status": "ok"})
+        try:
+            client = Client.objects.get(registration_key=key)
+            if not client_is_visible(request, client):
+                return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
+            deleted, _ = AddonDevice.objects.filter(id=addon_id, client__registration_key=key).delete()
+            return Response({"status": "ok"})
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -411,7 +445,7 @@ class ScanConfigView(APIView):
             client = Client.objects.get(registration_key=key)
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
         client.scan_interval = data["interval_seconds"]
         client.scan_enabled = data["enabled"]
@@ -427,7 +461,7 @@ class TriggerScanView(APIView):
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not request.user.is_superuser and client.owner and client.owner != request.user:
+        if not client_is_visible(request, client):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         client.scan_requested = True
@@ -442,9 +476,9 @@ class ScanAllView(APIView):
         company = get_user_company(request)
         qs = Client.objects.filter(approved=True, deleted=False)
         if not request.user.is_superuser:
-            qs = qs.filter(owner=request.user)
+            qs = qs.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
         elif company:
-            qs = qs.filter(company=company)
+            qs = qs.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
         count = qs.update(scan_requested=True)
         ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients by {request.user.username}")
         return Response({"status": "ok", "message": f"Scan queued for {count} client(s)"})
@@ -3230,13 +3264,12 @@ class GlobalSearchView(APIView):
         emp_qs = Employee.objects.filter(deleted=False)
         dept_qs = Department.objects.filter(deleted=False)
         loc_qs = Location.objects.filter(deleted=False)
-        client_qs = Client.objects.filter(deleted=False)
+        client_qs = get_admin_owned_clients(request)
         if company:
             asset_qs = asset_qs.filter(company=company)
             emp_qs = emp_qs.filter(company=company)
             dept_qs = dept_qs.filter(company=company)
             loc_qs = loc_qs.filter(company=company)
-            client_qs = client_qs.filter(company=company)
 
         # Assets
         for asset in asset_qs.filter(

@@ -5,6 +5,11 @@ window.fetch = function(url, opts) {
     return _origFetch(url, opts);
 };
 
+function prefixedUrl(path) {
+    const prefix = window.URL_PREFIX || '';
+    return prefix + '/' + String(path).replace(/^\/+/, '');
+}
+
 function showToast(message, type) {
     const container = document.querySelector('.toast-container');
     const toast = document.createElement('div');
