@@ -210,6 +210,7 @@ def login_view(request):
         _company_part = _slugify2(_profile.company.slug) or _slugify2(_profile.company.name) or "default"
         _prefix_val = f"{_user_part}-{_company_part}"
         request.session["url_prefix"] = _prefix_val
+        request.session.modified = True
 
         next_url = request.POST.get("next") or request.GET.get("next") or "/"
         response = redirect(normalize_next_url(next_url, _prefix_val))
