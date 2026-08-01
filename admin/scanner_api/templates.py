@@ -211,8 +211,8 @@ def login_view(request):
         _prefix_val = f"{_user_part}-{_company_part}"
         request.session["url_prefix"] = _prefix_val
 
-        # always send the user to the tenant‑root so the prefix is established
-        response = redirect(normalize_next_url("/", _prefix_val))
+        next_url = request.POST.get("next") or request.GET.get("next") or "/"
+        response = redirect(normalize_next_url(next_url, _prefix_val))
         response.set_cookie(
             "scanner_auth",
             payload,
