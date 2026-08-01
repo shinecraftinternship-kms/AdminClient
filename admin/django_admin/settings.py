@@ -155,20 +155,15 @@ if DATABASE_URL:
         "sslmode": "require",
     })
 elif IS_VERCEL:
-    # Vercel without DATABASE_URL → warn loudly (SQLite /tmp is ephemeral!)
-    import warnings
-    warnings.warn(
-        "DATABASE_URL is not set! Falling back to ephemeral SQLite on /tmp. "
-        "Login data will be lost on every request. Set DATABASE_URL in Vercel Dashboard.",
-        RuntimeWarning,
+    # Vercel deployment must have a real persistent database.
+    # If DATABASE_URL is not provided we raise an explicit error so the
+    # deployment fails fast and the operator knows to configure a managed
+    # Postgres (Supabase, Neon, Railway, Vercel Postgres, etc.).
+    raise RuntimeError(
+        "DATABASE_URL is not set. On Vercel you must provision a managed Postgres "
+        "(Supabase, Neon, Railway, Vercel Postgres, …) and add its connection string "
+        "as the environment variable DATABASE_URL in the Vercel dashboard."
     )
-    _vdb = os.path.join("/tmp", "vercel.db")
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": _vdb,
-        }
-    }
 else:
     database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
     DATABASES = {
