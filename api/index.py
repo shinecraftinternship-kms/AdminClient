@@ -28,10 +28,17 @@ def _bootstrap():
 
     db_url = os.getenv("DATABASE_URL", "")
     if db_url:
-        _init_log.append(f"[OK] DATABASE_URL is set → using PostgreSQL (Supabase)")
+        _init_log.append(f"[OK] DATABASE_URL is set → using PostgreSQL")
     else:
-        _init_log.append("[WARN] DATABASE_URL not set → falling back to ephemeral SQLite at /tmp/vercel.db")
-        _init_log.append("[WARN] Login data WILL be lost between requests! Set DATABASE_URL in Vercel Dashboard.")
+        _init_log.append("[ERROR] DATABASE_URL not set. On Vercel a persistent Postgres is required.")
+        # Fail fast so the deployment shows the problem in the logs
+        if os.getenv("VERCEL", "0") == "1":
+            raise RuntimeError(
+                "DATABASE_URL is not set. On Vercel you must provision a managed Postgres "
+                "(Supabase, Neon, Railway, Vercel Postgres, …) and add its connection string "
+                "as the environment variable DATABASE_URL in the Vercel dashboard."
+            )
+        _init_log.append("[WARN] Falling back to ephemeral SQLite at /tmp/vercel.db (data will be lost each request)")
 
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -48,14 +55,12 @@ def _bootstrap():
         err_detail = traceback.format_exc()
         _init_log.append(f"[ERROR] migrate failed: {e}")
         _init_log.append(f"[ERROR] Detail: {err_detail[:500]}")
-        # If DB connection itself failed, still serve the app (login page will show)
         from django.core.wsgi import get_wsgi_application
         _handler = get_wsgi_application()
         _init_log.append("[WARN] App started without DB (pages will show errors until DB is fixed)")
         return
 
     # Only create default admin user when using a real persistent DB (PostgreSQL)
-    # Never on SQLite /tmp which is ephemeral and causes "no user" on every refresh
     if db_url:
         from django.contrib.auth.models import User
         if not User.objects.filter(username="admin").exists():
