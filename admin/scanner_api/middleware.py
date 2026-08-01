@@ -25,6 +25,26 @@ def build_url_prefix_path(prefix, path=""):
     return f"/{clean_prefix}/{clean_path.lstrip('/')}"
 
 
+def _get_user_from_cookie(request):
+    """Return user from scanner_auth cookie if valid, else None."""
+    cookie_value = request.COOKIES.get("scanner_auth")
+    if not cookie_value:
+        return None
+    try:
+        signer = TimestampSigner(salt="scanner-auth-cookie")
+        data = signer.unsign(cookie_value, max_age=60 * 60 * 24 * 30)
+        payload = json.loads(data)
+        user_id = payload.get("user_id")
+        if user_id:
+            User = get_user_model()
+            user = User.objects.filter(pk=user_id).first()
+            if user and user.is_active:
+                return user
+    except (BadSignature, SignatureExpired, TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return None
+
+
 class CookieAuthMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -34,21 +54,10 @@ class CookieAuthMiddleware:
             request.user = AnonymousUser()
 
         if not getattr(request.user, "is_authenticated", False):
-            cookie_value = request.COOKIES.get("scanner_auth")
-            if cookie_value:
-                try:
-                    signer = TimestampSigner(salt="scanner-auth-cookie")
-                    data = signer.unsign(cookie_value, max_age=60 * 60 * 24 * 30)
-                    payload = json.loads(data)
-                    user_id = payload.get("user_id")
-                    if user_id:
-                        User = get_user_model()
-                        user = User.objects.filter(pk=user_id).first()
-                        if user and user.is_active:
-                            request.user = user
-                            request._cached_user = user
-                except (BadSignature, SignatureExpired, TypeError, ValueError, json.JSONDecodeError):
-                    pass
+            user = _get_user_from_cookie(request)
+            if user:
+                request.user = user
+                request._cached_user = user
 
         response = self.get_response(request)
         return response
@@ -68,9 +77,15 @@ class CompanyPrefixMiddleware:
         if path in ("/login/", "/signup/", "/logout/"):
             return self.get_response(request)
 
+        # Ensure we have a user (fallback to cookie if AuthenticationMiddleware missed it)
+        if not getattr(request.user, "is_authenticated", False):
+            cookie_user = _get_user_from_cookie(request)
+            if cookie_user:
+                request.user = cookie_user
+
         prefix = self._get_prefix(request, path)
 
-        # If we have a prefix, make sure it's stored in session for later use
+        # Persist prefix in session for later requests
         if prefix and request.session.get("url_prefix") != prefix:
             request.session["url_prefix"] = prefix
 
@@ -83,7 +98,7 @@ class CompanyPrefixMiddleware:
                 request.path_info = suffix or "/"
                 request.path = suffix or "/"
                 return self.get_response(request)
-            # authenticated user but missing prefix → redirect to prefixed URL
+            # Authenticated user but missing prefix → redirect to prefixed URL
             if request.user.is_authenticated:
                 target = expected + path
                 if target.endswith("//"):
