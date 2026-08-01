@@ -13,28 +13,28 @@ from .middleware import build_url_prefix_path
 
 def normalize_next_url(next_url, prefix):
     if not next_url:
-        return f"/{prefix}/" if prefix else "/"
+        return build_url_prefix_path(prefix, "/")
 
     candidate = str(next_url).strip()
     if not candidate or candidate in {"/", "#"}:
-        return f"/{prefix}/" if prefix else "/"
+        return build_url_prefix_path(prefix, "/")
 
     if candidate.startswith(("http://", "https://", "//")):
-        return f"/{prefix}/" if prefix else "/"
+        return build_url_prefix_path(prefix, "/")
 
     if not candidate.startswith("/"):
         candidate = f"/{candidate}"
 
     if candidate in {"/login/", "/signup/", "/logout/"} or candidate.startswith(("/api/", "/static/", "/download-client/")):
-        return f"/{prefix}/" if prefix else "/"
+        return build_url_prefix_path(prefix, "/")
 
-    if prefix and candidate.startswith(f"/{prefix}/"):
-        return candidate
+    if candidate in {"/settings", "/settings/"}:
+        return build_url_prefix_path(prefix, "/setting/")
 
-    if prefix and candidate.startswith("/"):
-        if candidate.count("/") >= 2:
+    if prefix:
+        if candidate == f"/{prefix}" or candidate.startswith(f"/{prefix}/"):
             return candidate
-        return f"/{prefix}{candidate}" if candidate != "/" else f"/{prefix}/"
+        return build_url_prefix_path(prefix, candidate)
 
     return candidate
 

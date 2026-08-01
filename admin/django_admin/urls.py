@@ -25,6 +25,7 @@ urlpatterns = [
     path("", templates.dashboard, name="dashboard"),
     path("client/<str:key>/", templates.client_detail, name="client-detail"),
     path("settings/", templates.settings_page, name="settings"),
+    path("setting/", templates.settings_page, name="setting"),
     path("admin-server/", templates.admin_server_page, name="admin-server"),
     path("admin-page/", templates.admin_page, name="admin-page"),
     path("executive-dashboard/", templates.executive_dashboard, name="executive-dashboard"),

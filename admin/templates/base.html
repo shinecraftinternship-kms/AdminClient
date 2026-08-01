@@ -120,7 +120,7 @@
                     <small class="text-secondary px-3 text-uppercase" style="font-size:0.65rem; letter-spacing:1px;">System</small>
                 </li>
                 <li class="nav-item">
-                    <a href="{% prefixed_url '/settings/' %}" class="nav-link {% if request.path == '/settings/' %}active{% endif %}">
+                    <a href="{% prefixed_url '/setting/' %}" class="nav-link {% if request.path == '/setting/' or request.path == '/settings/' %}active{% endif %}">
                         <i class="bi bi-gear me-2"></i>Settings
                     </a>
                 </li>

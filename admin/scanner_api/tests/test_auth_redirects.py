@@ -8,11 +8,14 @@ from scanner_api import middleware, templates
 
 
 class AuthRedirectTests(SimpleTestCase):
-    def test_preserves_internal_next_paths(self):
+    def test_prefixes_internal_next_paths(self):
         self.assertEqual(
-            templates.normalize_next_url("/asdf-asdff/executive-dashboard/", "user-company"),
-            "/asdf-asdff/executive-dashboard/",
+            templates.normalize_next_url("/executive-dashboard/", "user-company"),
+            "/user-company/executive-dashboard/",
         )
+
+    def test_prefixes_settings_route_for_company_urls(self):
+        self.assertEqual(templates.normalize_next_url("/settings/", "user-company"), "/user-company/setting/")
 
     def test_falls_back_to_prefixed_dashboard_when_next_is_empty(self):
         self.assertEqual(templates.normalize_next_url("", "user-company"), "/user-company/")
@@ -55,4 +58,4 @@ class AuthRedirectTests(SimpleTestCase):
             response = templates.login_view(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/executive-dashboard/")
+        self.assertEqual(response.url, "/asdf-acme/executive-dashboard/")
