@@ -269,6 +269,88 @@ class AgentHeartbeatView(APIView):
 
 
 @method_decorator(csrf_exempt, name="dispatch")
+class HeartbeatPublicView(APIView):
+    """Public heartbeat endpoint using registration_key (no agent secret required)."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        from scanner_api.models import Client
+        from .models import DeviceHeartbeat
+        from django.utils import timezone as tz
+        from .security import get_client_ip
+
+        reg_key = request.data.get("registration_key")
+        if not reg_key:
+            return Response({"status": "error", "message": "registration_key required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            client = Client.objects.get(registration_key=reg_key, deleted=False)
+        except Client.DoesNotExist:
+            return Response({"status": "error", "message": "unknown client"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # optional rate limiting
+        if not RateLimiter.check(f"hb_pub:{reg_key}", max_requests=60, window_seconds=60):
+            return Response({"status": "error", "message": "Rate limit exceeded"},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        cpu = request.data.get("cpu_usage_pct", 0)
+        ram = request.data.get("ram_usage_pct", 0)
+        disk = request.data.get("disk_usage_pct", 0)
+        disk_free = request.data.get("disk_free_gb", 0)
+        disk_total = request.data.get("disk_total_gb", 0)
+        net_connected = request.data.get("network_connected", True)
+        uptime = request.data.get("uptime_seconds", 0)
+        load_avg = request.data.get("load_average", 0)
+        agent_ver = request.data.get("agent_version", "")
+        ip = request.data.get("ip_address") or get_client_ip(request)
+        scan_running = request.data.get("scan_running", False)
+        pending_cmds = request.data.get("pending_commands", 0)
+        resp_time = request.data.get("response_time_ms", 0)
+
+        heartbeat = DeviceHeartbeat.objects.create(
+            client=client,
+            cpu_usage_pct=cpu,
+            ram_usage_pct=ram,
+            disk_usage_pct=disk,
+            disk_free_gb=disk_free,
+            disk_total_gb=disk_total,
+            network_connected=net_connected,
+            uptime_seconds=uptime,
+            load_average=load_avg,
+            agent_version=agent_ver,
+            ip_address=ip,
+        )
+
+        client.status = "online"
+        client.last_seen = tz.now()
+        client.last_ip = ip
+        if agent_ver:
+            client.client_version = agent_ver
+        client.save(update_fields=["status", "last_seen", "last_ip", "client_version"])
+
+        info, _ = DeviceMonitoringInfo.objects.get_or_create(client=client)
+        info.last_heartbeat = tz.now()
+        info.heartbeat_count = F("heartbeat_count") + 1
+        info.monitoring_status = "online"
+        info.ip_address = ip
+        if agent_ver:
+            info.agent_version = agent_ver
+        info.save(update_fields=["last_heartbeat", "heartbeat_count",
+                                 "monitoring_status", "ip_address", "agent_version", "updated_at"])
+
+        return Response({
+            "status": "ok",
+            "health_score": info.health_score,
+            "health_level": info.health_level,
+            "pending_commands": [],
+        })
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class AgentInventoryView(APIView):
     """Submit hardware and software inventory snapshot."""
 

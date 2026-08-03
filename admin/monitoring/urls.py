@@ -7,6 +7,7 @@ urlpatterns = [
     # ── Agent API ──────────────────────────────────────────
     path("agent/register", views.AgentRegisterView.as_view(), name="mon-agent-register"),
     path("agent/heartbeat", views.AgentHeartbeatView.as_view(), name="mon-agent-heartbeat"),
+    path("agent/heartbeat-public", views.HeartbeatPublicView.as_view(), name="mon-agent-heartbeat-public"),
     path("agent/inventory", views.AgentInventoryView.as_view(), name="mon-agent-inventory"),
     path("agent/version-check", views.AgentVersionCheckView.as_view(), name="mon-agent-version-check"),
     path("agent/pending-scans", scheduler_views.AgentPendingScansView.as_view(), name="mon-agent-pending-scans"),
