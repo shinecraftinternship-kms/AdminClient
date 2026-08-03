@@ -3,6 +3,7 @@ import sys
 import json
 import traceback
 import threading
+import urllib.request
 from io import BytesIO
 
 _handler = None
@@ -44,6 +45,40 @@ def _bootstrap():
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
     if supabase_url and supabase_key:
         _init_log.append("[OK] SUPABASE_URL and SUPABASE_SERVICE_KEY are set")
+        # Register Vercel URL in Supabase for cloud discovery
+        vercel_url = os.getenv("VERCEL_URL", "")
+        if vercel_url:
+            try:
+                # Extract hostname from Vercel URL
+                if vercel_url.startswith("https://"):
+                    hostname = vercel_url[8:]
+                elif vercel_url.startswith("http://"):
+                    hostname = vercel_url[7:]
+                else:
+                    hostname = vercel_url
+                hostname = hostname.split("/")[0]
+                
+                endpoint = f"{supabase_url}/rest/v1/server_registry"
+                headers = {
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates",
+                }
+                payload = json.dumps({
+                    "id": "admin",
+                    "ip_address": hostname,
+                    "port": 443,
+                    "protocol": "https",
+                    "is_active": True,
+                    "updated_at": "now()",
+                }).encode("utf-8")
+                
+                req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+                with urllib.request.urlopen(req, timeout=10):
+                    _init_log.append(f"[OK] Registered Vercel URL in Supabase: https://{hostname}")
+            except Exception as e:
+                _init_log.append(f"[WARN] Failed to register Vercel URL in Supabase: {e}")
     else:
         _init_log.append("[WARN] SUPABASE_URL or SUPABASE_SERVICE_KEY missing → cloud discovery disabled")
 
