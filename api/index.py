@@ -111,6 +111,12 @@ def _bootstrap():
     import secrets
     vercel_url = os.getenv("VERCEL_URL", "admin-client-weld.vercel.app")
     Setting.set("admin_server_url", f"https://{vercel_url}")
+    
+    # Auto-approve clients on Vercel so they don't get stuck in "Checking..."
+    if os.getenv("VERCEL", "0") == "1":
+        Setting.set("auto_approve", "true")
+        _init_log.append("[OK] Auto-approve enabled for Vercel")
+    
     if not Setting.get("admin_connection_token", ""):
         Setting.set("admin_connection_token", secrets.token_hex(16))
     _init_log.append("[OK] Settings initialised")
