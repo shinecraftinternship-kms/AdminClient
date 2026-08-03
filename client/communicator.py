@@ -205,6 +205,12 @@ class Communicator:
     def monitor_version_check(self, current_version):
         return self._request("GET", f"/api/monitoring/agent/version-check?v={current_version}")
 
+    def monitor_heartbeat_public(self, registration_key, metrics):
+        """Send heartbeat using public endpoint (only registration_key required)."""
+        payload = dict(metrics)
+        payload["registration_key"] = registration_key
+        return self._request("POST", "/api/monitoring/agent/heartbeat-public/", payload)
+
     def get_ws_url(self):
         """Convert HTTP admin URL to WebSocket URL."""
         url = self.admin_url

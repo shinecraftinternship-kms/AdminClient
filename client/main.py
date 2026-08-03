@@ -331,22 +331,10 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
 
                 if monitoring_registered and monitoring_agent_id and monitoring_secret:
                     try:
-                        import hmac as _hmac
-                        import hashlib as _hashlib
-                        import time as _time
-
-                        body = json.dumps(metrics).encode("utf-8")
-                        sig = _hmac.new(
-                            monitoring_secret.encode("utf-8"), body,
-                            _hashlib.sha256,
-                        ).hexdigest()
-
-                        comm.monitor_heartbeat(
-                            monitoring_agent_id, sig,
-                            _time.time(), metrics,
-                        )
+                        # Use public HTTP heartbeat (no secret needed)
+                        comm.monitor_heartbeat_public(key, metrics)
                     except Exception as e:
-                        logger.debug("Heartbeat send failed: %s", e)
+                        logger.debug("Public heartbeat send failed: %s", e)
 
             if resp.get("trigger_scan"):
                 now = datetime.now().strftime('%H:%M:%S')
