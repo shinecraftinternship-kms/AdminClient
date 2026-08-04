@@ -31,15 +31,10 @@ def _bootstrap():
     if db_url:
         _init_log.append(f"[OK] DATABASE_URL is set → using PostgreSQL")
     else:
-        _init_log.append("[ERROR] DATABASE_URL not set. On Vercel a persistent Postgres is required.")
-        # Fail fast so the deployment shows the problem in the logs
         if os.getenv("VERCEL", "0") == "1":
-            raise RuntimeError(
-                "DATABASE_URL is not set. On Vercel you must provision a managed Postgres "
-                "(Supabase, Neon, Railway, Vercel Postgres, …) and add its connection string "
-                "as the environment variable DATABASE_URL in the Vercel dashboard."
-            )
-        _init_log.append("[WARN] Falling back to ephemeral SQLite at /tmp/vercel.db (data will be lost each request)")
+            _init_log.append("[WARN] DATABASE_URL not set on Vercel. Falling back to ephemeral SQLite (data lost each request). Set DATABASE_URL in Vercel dashboard for persistence.")
+        else:
+            _init_log.append("[WARN] DATABASE_URL not set. Falling back to local SQLite.")
 
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")

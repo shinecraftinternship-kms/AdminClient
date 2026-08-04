@@ -17,3 +17,6 @@ client/scans/
 # SQLite database files (local only, should never be in git)
 *.db
 *.sqlite3
+
+.vercel
+.env*
