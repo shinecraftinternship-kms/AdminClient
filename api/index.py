@@ -75,8 +75,13 @@ def _bootstrap():
                 }).encode("utf-8")
                 
                 req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
-                with urllib.request.urlopen(req, timeout=10):
+                with urllib.request.urlopen(req, timeout=5):
                     _init_log.append(f"[OK] Registered Vercel URL in Supabase: https://{hostname}")
+            except OSError as e:
+                if "Cannot assign requested address" in str(e) or "Network is unreachable" in str(e):
+                    _init_log.append("[INFO] Skipping Supabase registration (Vercel network restriction)")
+                else:
+                    _init_log.append(f"[WARN] Failed to register Vercel URL in Supabase: {e}")
             except Exception as e:
                 _init_log.append(f"[WARN] Failed to register Vercel URL in Supabase: {e}")
     else:
