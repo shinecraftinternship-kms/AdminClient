@@ -49,6 +49,8 @@ def _bootstrap():
         vercel_url = os.getenv("VERCEL_URL", "")
         if vercel_url:
             try:
+                from supabase import create_client
+                
                 # Extract hostname from Vercel URL
                 if vercel_url.startswith("https://"):
                     hostname = vercel_url[8:]
@@ -58,32 +60,22 @@ def _bootstrap():
                     hostname = vercel_url
                 hostname = hostname.split("/")[0]
                 
-                endpoint = f"{supabase_url}/rest/v1/server_registry"
-                headers = {
-                    "apikey": supabase_key,
-                    "Authorization": f"Bearer {supabase_key}",
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates",
-                }
-                payload = json.dumps({
+                supabase = create_client(supabase_url, supabase_key)
+                supabase.table("server_registry").upsert({
                     "id": "admin",
                     "ip_address": hostname,
                     "port": 443,
                     "protocol": "https",
                     "is_active": True,
                     "updated_at": "now()",
-                }).encode("utf-8")
-                
-                req = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
-                with urllib.request.urlopen(req, timeout=5):
-                    _init_log.append(f"[OK] Registered Vercel URL in Supabase: https://{hostname}")
-            except OSError as e:
-                if "Cannot assign requested address" in str(e) or "Network is unreachable" in str(e):
-                    _init_log.append("[INFO] Skipping Supabase registration (Vercel network restriction)")
+                }).execute()
+                _init_log.append(f"[OK] Registered Vercel URL in Supabase: https://{hostname}")
+            except Exception as e:
+                err_str = str(e)
+                if "Cannot assign requested address" in err_str or "Network is unreachable" in err_str:
+                    _init_log.append("[WARN] Supabase registration failed (Vercel network restriction): " + err_str)
                 else:
                     _init_log.append(f"[WARN] Failed to register Vercel URL in Supabase: {e}")
-            except Exception as e:
-                _init_log.append(f"[WARN] Failed to register Vercel URL in Supabase: {e}")
     else:
         _init_log.append("[WARN] SUPABASE_URL or SUPABASE_SERVICE_KEY missing → cloud discovery disabled")
 
