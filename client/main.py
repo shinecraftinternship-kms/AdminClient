@@ -656,31 +656,23 @@ def main():
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
     _log_crash(f"OK: register result={result}")
 
-    if result.get("status") in ("ok",):
-        if result.get("auto_approved"):
-            P("  [OK] Auto-approved by admin server.")
-        else:
-            P("  [WAITING] Registration sent. Waiting for admin approval...")
-            while True:
-                time.sleep(5)
-                status_res = comm.check_status(key)
-                if status_res.get("status") == "approved":
-                    P("  [OK] Admin approved registration.")
-                    break
-                elif status_res.get("status") == "error":
-                    pass
-    elif result.get("status") == "pending":
-        P("  [WAITING] Registration pending admin approval...")
+    # Check if already approved (either auto_approved or existing approved client)
+    if result.get("status") == "ok" and result.get("auto_approved"):
+        P("  [OK] Auto-approved by admin server.")
+    elif result.get("status") == "pending" and result.get("approved"):
+        P("  [OK] Already approved.")
+    elif result.get("status") == "ok" and result.get("approved"):
+        P("  [OK] Already approved.")
+    else:
+        P("  [WAITING] Registration sent. Waiting for admin approval...")
         while True:
-            time.sleep(5)
+            time.sleep(2)
             status_res = comm.check_status(key)
             if status_res.get("status") == "approved":
                 P("  [OK] Admin approved registration.")
                 break
             elif status_res.get("status") == "error":
                 pass
-    else:
-        P(f"  [WARN] {result.get('message', 'Registration pending')}")
 
     P()
     P("  Performing initial scan...")

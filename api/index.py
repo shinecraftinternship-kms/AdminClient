@@ -103,6 +103,14 @@ def _bootstrap():
             _init_log.append("[OK] Default admin user created (username=admin, password=admin123)")
         else:
             _init_log.append("[OK] Admin user already exists")
+        
+        # Ensure admin client record exists and is linked to superuser (for Vercel)
+        try:
+            from scanner_api.views import ensure_admin_client
+            admin_key = ensure_admin_client()
+            _init_log.append(f"[OK] Admin client ensured: {admin_key}")
+        except Exception as e:
+            _init_log.append(f"[WARN] Admin client setup failed: {e}")
     else:
         _init_log.append("[SKIP] Skipped admin user creation (SQLite /tmp is ephemeral, use Signup instead)")
 
