@@ -1,3 +1,5 @@
+import os
+import json
 import time
 import logging
 import socket
@@ -11,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
+from django.http import JsonResponse
 from .models import Client, ScanResult, AddonDevice, ActivityLog, ClientGroup, Setting, AdministratorProfile, LoginHistory, AuditLog, Company
 from .models import Location, Department, Employee, EmployeeAssetAssignment, OrgAuditLog
 from .models import AssetCategory, AssetVendor, Asset, AssetAssignment, AssetTransfer, AssetHistory, AssetDocument
@@ -3569,3 +3572,53 @@ class ExecutiveAnalyticsView(APIView):
             },
             "recent_activities": recent_activities,
         })
+
+
+def health_check(request):
+    """Health check endpoint for Vercel - shows DB status and init log."""
+    db_ok = False
+    db_error = ""
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        db_ok = True
+    except Exception as e:
+        db_error = str(e)
+
+    db_url = os.getenv("DATABASE_URL", "")
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    vercel_url = os.getenv("VERCEL_URL", "")
+
+    # Try to get init log from api/index if available
+    init_log = []
+    try:
+        from api.index import _init_log
+        init_log = list(_init_log)
+    except Exception:
+        pass
+
+    return JsonResponse({
+        "database_url_set": bool(db_url),
+        "supabase_url_set": bool(supabase_url),
+        "supabase_key_set": bool(supabase_key),
+        "vercel_url": vercel_url,
+        "db_connection_ok": db_ok,
+        "db_error": db_error,
+        "init_log": init_log,
+    })
+
+
+def diag_check(request):
+    """Diagnostic endpoint showing full init log."""
+    init_log = []
+    try:
+        from api.index import _init_log
+        init_log = list(_init_log)
+    except Exception:
+        init_log = ["Not available"]
+
+    return JsonResponse({
+        "init_log": init_log,
+    }, json_dumps_params={"indent": 2})
