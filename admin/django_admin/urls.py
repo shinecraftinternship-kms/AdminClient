@@ -1,6 +1,6 @@
 from django.urls import path, include, re_path
 from django.contrib.auth.views import redirect_to_login
-from django.http import Http404, HttpResponseNotFound, HttpResponseRedirect
+from django.http import Http404
 from django.shortcuts import redirect
 from scanner_api import templates
 from scanner_api import views as api_views
@@ -28,8 +28,8 @@ urlpatterns = [
     path("api/monitoring/", include(_mon_urls)),
     path("api/maintenance/", include(_mnt_urls)),
     path("api/intelligence/", include(_int_urls)),
-    path("__health/", views.health_check, name="health-check"),
-    path("__diag/", views.diag_check, name="diag-check"),
+    path("__health/", api_views.health_check, name="health-check"),
+    path("__diag/", api_views.diag_check, name="diag-check"),
     path("login/", templates.login_view, name="login"),
     path("signup/", templates.signup_view, name="signup"),
     path("logout/", templates.logout_view, name="logout"),
