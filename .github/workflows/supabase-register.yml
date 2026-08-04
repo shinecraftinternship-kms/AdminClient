@@ -10,12 +10,13 @@ jobs:
     name: Register Vercel URL in Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      VERCEL_PROJECT_URL: admin-client-weld.vercel.app
     steps:
       - name: Register with Supabase
+        env:
+          VERCEL_PROJECT_URL: admin-client-weld.vercel.app
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           curl -X POST "https://$VERCEL_PROJECT_URL/api/supabase/register" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
             -H "Content-Type: application/json" \
             --fail --silent --show-error --max-time 30
