@@ -11,12 +11,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Register with Supabase
+      - name: Register with Supabase (direct REST API)
         env:
-          VERCEL_PROJECT_URL: admin-client-weld.vercel.app
-          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VERCEL_URL: https://admin-client-weld.vercel.app
         run: |
-          curl -X POST "https://$VERCEL_PROJECT_URL/api/supabase/register" \
-            -H "Authorization: Bearer $SUPABASE_KEY" \
+          # Extract hostname from Vercel URL
+          HOSTNAME=$(echo "$VERCEL_URL" | sed 's|https://||; s|/.*||')
+          
+          curl -X POST "${SUPABASE_URL}/rest/v1/server_registry" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
             -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "{
+              \"id\": \"admin\",
+              \"ip_address\": \"$HOSTNAME\",
+              \"port\": 443,
+              \"protocol\": \"https\",
+              \"is_active\": true,
+              \"updated_at\": \"now()\"
+            }" \
             --fail --silent --show-error --max-time 30
+          
+          echo "Registered $HOSTNAME in Supabase"
