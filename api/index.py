@@ -45,39 +45,8 @@ def _bootstrap():
     supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
     if supabase_url and supabase_key:
         _init_log.append("[OK] SUPABASE_URL and SUPABASE_SERVICE_KEY are set")
-        # Register Vercel URL in Supabase for cloud discovery (async, non-blocking)
-        vercel_url = os.getenv("VERCEL_URL", "")
-        if vercel_url:
-            def _register_supabase_async():
-                try:
-                    from supabase import create_client
-                    
-                    if vercel_url.startswith("https://"):
-                        hostname = vercel_url[8:]
-                    elif vercel_url.startswith("http://"):
-                        hostname = vercel_url[7:]
-                    else:
-                        hostname = vercel_url
-                    hostname = hostname.split("/")[0]
-                    
-                    supabase = create_client(supabase_url, supabase_key)
-                    supabase.table("server_registry").upsert({
-                        "id": "admin",
-                        "ip_address": hostname,
-                        "port": 443,
-                        "protocol": "https",
-                        "is_active": True,
-                        "updated_at": "now()",
-                    }).execute()
-                    _init_log.append(f"[OK] Registered Vercel URL in Supabase: https://{hostname}")
-                except Exception as e:
-                    err_str = str(e)
-                    if "Cannot assign requested address" in err_str or "Network is unreachable" in err_str:
-                        _init_log.append("[INFO] Supabase cloud discovery unavailable on Vercel (network restriction)")
-                    else:
-                        _init_log.append(f"[WARN] Supabase registration failed: {e}")
-            
-            threading.Thread(target=_register_supabase_async, daemon=True).start()
+        # Supabase registration is handled by GitHub Actions workflow (runs outside Vercel network)
+        _init_log.append("[INFO] Supabase cloud discovery: registration via GitHub Actions (external)")
     else:
         _init_log.append("[WARN] SUPABASE_URL or SUPABASE_SERVICE_KEY missing → cloud discovery disabled")
 

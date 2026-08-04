@@ -3622,3 +3622,56 @@ def diag_check(request):
     return JsonResponse({
         "init_log": init_log,
     }, json_dumps_params={"indent": 2})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class SupabaseRegisterView(APIView):
+    """
+    Endpoint to register this Vercel instance in Supabase server_registry table.
+    Called from GitHub Actions (runs outside Vercel's network restrictions).
+    Requires Authorization header with SUPABASE_SERVICE_KEY for security.
+    """
+    def post(self, request):
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        expected_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+        
+        if not expected_key or not auth_header.startswith("Bearer "):
+            return Response({"status": "error", "message": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        provided_key = auth_header[7:]  # Remove "Bearer "
+        if provided_key != expected_key:
+            return Response({"status": "error", "message": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        if not supabase_url:
+            return Response({"status": "error", "message": "SUPABASE_URL not configured"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        vercel_url = os.getenv("VERCEL_URL", "")
+        if not vercel_url:
+            return Response({"status": "error", "message": "VERCEL_URL not available"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        try:
+            from supabase import create_client
+            
+            # Extract hostname from Vercel URL
+            if vercel_url.startswith("https://"):
+                hostname = vercel_url[8:]
+            elif vercel_url.startswith("http://"):
+                hostname = vercel_url[7:]
+            else:
+                hostname = vercel_url
+            hostname = hostname.split("/")[0]
+            
+            supabase = create_client(supabase_url, expected_key)
+            supabase.table("server_registry").upsert({
+                "id": "admin",
+                "ip_address": hostname,
+                "port": 443,
+                "protocol": "https",
+                "is_active": True,
+                "updated_at": "now()",
+            }).execute()
+            
+            return Response({"status": "ok", "message": f"Registered {hostname} in Supabase"})
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

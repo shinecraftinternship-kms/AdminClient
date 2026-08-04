@@ -5,6 +5,7 @@ from . import jwt_views
 urlpatterns = [
     path("health", views.HealthCheckView.as_view(), name="api-health"),
     path("health/", views.HealthCheckView.as_view(), name="api-health-slash"),
+    path("supabase/register", views.SupabaseRegisterView.as_view(), name="api-supabase-register"),
     path("register", views.RegisterClientView.as_view(), name="api-register"),
     path("approve", views.ApproveClientView.as_view(), name="api-approve"),
     path("approve-multiple", views.ApproveMultipleView.as_view(), name="api-approve-multiple"),

@@ -1,0 +1,22 @@
+name: Register with Supabase
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Run hourly
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  supabase-register:
+    name: Register Vercel URL in Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Register with Supabase
+        run: |
+          curl -X POST "https://${{ vars.VERCEL_PROJECT_URL }}/api/supabase/register" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
+            -H "Content-Type: application/json" \
+            --fail --silent --show-error --max-time 30
+        env:
+          VERCEL_PROJECT_URL: admin-client-weld.vercel.app
