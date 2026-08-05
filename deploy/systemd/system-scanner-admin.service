@@ -1,0 +1,22 @@
+[Unit]
+Description=System Scanner Pro Admin Server (Daphne ASGI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scanner
+Group=scanner
+WorkingDirectory=/opt/scanner-admin
+Environment=DJANGO_SETTINGS_MODULE=django_admin.settings
+EnvironmentFile=/opt/scanner-admin/.env
+# Daphne binds the private backend port; nginx proxies public 80/443 -> 8000.
+# --domain registers https://<DOMAIN> in the Supabase cloud registry so clients
+# discover the server automatically. UDP discovery still binds 0.0.0.0:45000.
+ExecStart=/opt/scanner-admin/venv/bin/python admin/main.py --host 127.0.0.1 --port 8000 --asgi --domain scanner.example.com
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

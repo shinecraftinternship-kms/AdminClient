@@ -5,21 +5,41 @@ on:
     - cron: '0 * * * *'  # Run hourly
   workflow_dispatch:  # Allow manual trigger
 
+# NOTE: The admin server self-registers on startup via `admin/main.py --domain`
+# (deploy/systemd/system-scanner-admin.service). This workflow only serves as a
+# safety net, and only when the ADMIN_SERVER_URL repository variable is set
+# (GitHub -> Settings -> Secrets and variables -> Actions -> Variables).
+# If unset, it does nothing so it can never clobber the live registry entry
+# with a stale/dead URL (which the previous hardcoded Vercel domain did).
+
 jobs:
   supabase-register:
-    name: Register Vercel URL in Supabase
+    name: Register Admin Server URL in Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check ADMIN_SERVER_URL repository variable
+        id: check
+        env:
+          ADMIN_SERVER_URL: ${{ vars.ADMIN_SERVER_URL }}
+        run: |
+          if [ -z "$ADMIN_SERVER_URL" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "ADMIN_SERVER_URL not set - skipping (VPS self-registers on startup)"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Using ADMIN_SERVER_URL=$ADMIN_SERVER_URL"
+          fi
+
       - name: Register with Supabase (direct REST API)
+        if: steps.check.outputs.skip == 'false'
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          VERCEL_URL: https://admin-client-weld.vercel.app
+          ADMIN_SERVER_URL: ${{ vars.ADMIN_SERVER_URL }}
         run: |
-          # Extract hostname from Vercel URL
-          HOSTNAME=$(echo "$VERCEL_URL" | sed 's|https://||; s|/.*||')
-          
+          HOSTNAME=$(echo "$ADMIN_SERVER_URL" | sed 's|https://||; s|/.*||')
+
           curl -X POST "${SUPABASE_URL}/rest/v1/server_registry" \
             -H "apikey: ${SUPABASE_SERVICE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}" \
@@ -34,5 +54,5 @@ jobs:
               \"updated_at\": \"now()\"
             }" \
             --fail --silent --show-error --max-time 30
-          
+
           echo "Registered $HOSTNAME in Supabase"

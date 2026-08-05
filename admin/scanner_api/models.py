@@ -90,6 +90,10 @@ class Client(models.Model):
         return [t.strip() for t in self.tags.split(",") if t.strip()] if self.tags else []
 
     @property
+    def key(self):
+        return self.registration_key
+
+    @property
     def is_stale(self):
         if self.deleted:
             return False

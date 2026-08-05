@@ -72,7 +72,7 @@ def _get_device_details(client=None):
         )
         results.append({
             "hostname": c.hostname,
-            "registration_key": str(c.key),
+            "registration_key": str(c.registration_key),
             "platform": c.platform,
             "status": c.status,
             "monitoring_status": info.monitoring_status,

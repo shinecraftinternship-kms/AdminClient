@@ -129,7 +129,7 @@ class AgentRegisterView(APIView):
         event_bus.publish(Event(
             event_type=EventType.DEVICE_REGISTERED,
             client_id=client.id,
-            client_key=str(client.key),
+            client_key=str(client.registration_key),
             hostname=client.hostname,
             severity="info",
             title=f"Agent registered: {agent_id}",
@@ -186,7 +186,7 @@ class AgentHeartbeatView(APIView):
             event_bus.publish(Event(
                 event_type=EventType.AGENT_VERSION_CHANGED,
                 client_id=client.id,
-                client_key=str(client.key),
+                client_key=str(client.registration_key),
                 hostname=client.hostname,
                 severity="info",
                 title=f"Agent version changed: {old_version} → {new_version}",
@@ -244,7 +244,7 @@ class AgentHeartbeatView(APIView):
             event_bus.publish(Event(
                 event_type=EventType.HEALTH_LEVEL_CHANGED,
                 client_id=client.id,
-                client_key=str(client.key),
+                client_key=str(client.registration_key),
                 hostname=client.hostname,
                 severity=severity,
                 title=f"Health level changed: {prev_level} → {level}",
@@ -432,7 +432,7 @@ class AgentInventoryView(APIView):
                 event_bus.publish(Event(
                     event_type=event_type,
                     client_id=client.id,
-                    client_key=str(client.key),
+                    client_key=str(client.registration_key),
                     hostname=client.hostname,
                     severity=change["severity"],
                     title=change["description"],
@@ -452,7 +452,7 @@ class AgentInventoryView(APIView):
                 event_bus.publish(Event(
                     event_type=event_type,
                     client_id=client.id,
-                    client_key=str(client.key),
+                    client_key=str(client.registration_key),
                     hostname=client.hostname,
                     severity=change["severity"],
                     title=change["description"],
@@ -730,7 +730,7 @@ class MonitorDeviceDetailView(APIView):
             event_bus.publish(Event(
                 event_type=EventType.DEVICE_STATUS_CHANGED,
                 client_id=info.client.id,
-                client_key=str(info.client.key),
+                client_key=str(info.client.registration_key),
                 hostname=info.client.hostname,
                 severity="info",
                 title=f"Status changed: {prev_status} → {new_status}",
@@ -906,7 +906,7 @@ class MonitorDeviceApproveView(APIView):
         event_bus.publish(Event(
             event_type=EventType.DEVICE_APPROVED,
             client_id=client.id,
-            client_key=str(client.key),
+            client_key=str(client.registration_key),
             hostname=client.hostname,
             severity="info",
             title=f"Device approved",
@@ -939,7 +939,7 @@ class MonitorDeviceBlockView(APIView):
         event_bus.publish(Event(
             event_type=EventType.DEVICE_BLOCKED,
             client_id=info.client.id,
-            client_key=str(info.client.key),
+            client_key=str(info.client.registration_key),
             hostname=info.client.hostname,
             severity="warning",
             title="Device blocked",

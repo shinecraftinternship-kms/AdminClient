@@ -110,6 +110,8 @@ class RegisterClientView(APIView):
         client_version = data.get("client_version", "")
         fingerprint = data.get("device_fingerprint", "")
 
+        auto_approve = Setting.get("auto_approve", "false").lower() == "true"
+
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
             if existing.deleted:
@@ -119,9 +121,15 @@ class RegisterClientView(APIView):
             existing.client_version = client_version
             existing.last_seen = timezone.now()
             existing.last_ip = _client_ip(request)
+            update_fields = ["hostname", "platform", "client_version", "last_seen", "last_ip"]
             if fingerprint:
                 existing.device_fingerprint = fingerprint
-            existing.save(update_fields=["hostname", "platform", "client_version", "last_seen", "last_ip", "device_fingerprint"])
+                update_fields.append("device_fingerprint")
+            if auto_approve and not existing.approved:
+                existing.approved = True
+                existing.status = "online"
+                update_fields += ["approved", "status"]
+            existing.save(update_fields=update_fields)
             return Response({"status": "pending", "approved": existing.approved})
 
         if fingerprint:
@@ -134,11 +142,12 @@ class RegisterClientView(APIView):
                 same_device.last_seen = timezone.now()
                 same_device.last_ip = _client_ip(request)
                 same_device.status = "online"
-                same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status"])
+                if auto_approve and not same_device.approved:
+                    same_device.approved = True
+                same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved"])
                 ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
                 return Response({"status": "ok", "auto_approved": same_device.approved})
 
-        auto_approve = Setting.get("auto_approve", "false").lower() == "true"
         company = None
         owner = None
         admin_key = Setting.get("admin_client_key", "")
@@ -902,6 +911,12 @@ class ChangePasswordView(APIView):
 
 
 def get_admin_client_key():
+    """Return the admin's own client key. Reuses the persisted setting when the
+    matching Client still exists so the key stays stable across restarts and
+    hostname changes (e.g. Vercel cold starts / VPS hostnames)."""
+    stored = Setting.get("admin_client_key", "")
+    if stored and Client.objects.filter(registration_key=stored).exists():
+        return stored
     hostname = socket.gethostname().upper().replace("-", "").replace(".", "")[:12]
     return f"ADMIN-{hostname}"
 

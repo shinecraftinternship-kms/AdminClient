@@ -130,6 +130,11 @@ def main():
     parser.add_argument("--username", type=str, default="admin", help="Default admin username")
     parser.add_argument("--password", type=str, default="admin123", help="Default admin password")
     parser.add_argument("--reset", action="store_true", help="Re-ask for IP address")
+    parser.add_argument("--domain", type=str, default=None,
+        help="Public domain (e.g. scanner.example.com). Registers https://<domain> "
+             "for cloud discovery and uses it as admin_server_url.")
+    parser.add_argument("--asgi", action="store_true",
+        help="Serve with daphne (ASGI + WebSocket). Use behind nginx with /ws/ proxy.")
     args = parser.parse_args()
 
     print("=" * 55)
@@ -155,7 +160,10 @@ def main():
     if args.host == "0.0.0.0":
         os.environ["DJANGO_ALLOWED_HOSTS"] = "*"
     else:
-        os.environ["DJANGO_ALLOWED_HOSTS"] = f"0.0.0.0,127.0.0.1,localhost,{args.host}"
+        allowed = ["0.0.0.0", "127.0.0.1", "localhost", args.host]
+        if args.domain:
+            allowed.append(args.domain)
+        os.environ["DJANGO_ALLOWED_HOSTS"] = ",".join(dict.fromkeys(allowed))
     os.environ["SCANNER_DATA_DIR"] = DATA_DIR
 
     django.setup()
@@ -175,7 +183,9 @@ def main():
     print(f"  Admin client key: {admin_key}")
 
     protocol = "https" if args.port == 443 else "http"
-    if args.host in ("0.0.0.0", ""):
+    if args.domain:
+        startup_url = f"https://{args.domain}"
+    elif args.host in ("0.0.0.0", ""):
         startup_url = f"{protocol}://localhost:{args.port}" if args.port not in (80, 443) else f"{protocol}://localhost"
     else:
         startup_url = f"{protocol}://{args.host}:{args.port}" if args.port not in (80, 443) else f"{protocol}://{args.host}"
@@ -195,12 +205,16 @@ def main():
             pass
         return base
 
-    if not Setting.get("admin_server_url", ""):
+    stored_url = Setting.get("admin_server_url", "")
+    if args.domain:
+        Setting.set("admin_server_url", startup_url)
+        print(f"  Server URL set to: {startup_url}")
+    elif not stored_url:
         full_url = _make_url_with_path(startup_url)
         Setting.set("admin_server_url", full_url)
         print(f"  Server URL set to: {full_url}")
     else:
-        print(f"  Server URL (stored): {Setting.get('admin_server_url', '')}")
+        print(f"  Server URL (stored): {stored_url}")
     token = Setting.get("admin_connection_token", "")
     if not token:
         import secrets
@@ -210,13 +224,16 @@ def main():
     print(f"  Token:       {token[:8]}...")
     print()
 
-    print(f"  Dashboard: http://{args.host}:{args.port}")
-    print(f"  Login:     http://{args.host}:{args.port}/login/")
+    print(f"  Dashboard: {startup_url}")
+    print(f"  Login:     {startup_url}/login/")
     print()
 
-    import webbrowser
-    if args.host != "0.0.0.0":
-        webbrowser.open(f"http://{args.host}:{args.port}")
+    if args.host not in ("0.0.0.0", "127.0.0.1", "localhost", ""):
+        try:
+            import webbrowser
+            webbrowser.open(f"http://{args.host}:{args.port}")
+        except Exception:
+            pass
 
     disc_thread = threading.Thread(target=start_discovery_listener, args=(args.port,), daemon=True)
     disc_thread.start()
@@ -224,21 +241,37 @@ def main():
     bcast_thread.start()
     print(f"  UDP discovery active on port {DISCOVERY_PORT} (listen + broadcast)")
 
-    protocol = "https" if args.port == 443 else "http"
-    cloud_ok = register_with_cloud_discovery(args.port, protocol)
-    if cloud_ok:
-        refresh_thread = threading.Thread(
-            target=cloud_discovery_refresh_loop,
-            args=(args.port, protocol),
-            daemon=True,
-        )
-        refresh_thread.start()
-        print(f"  Cloud discovery refresh every {CLOUD_REFRESH_INTERVAL}s")
+    if args.domain:
+        try:
+            from scanner_api.supabase_client import register_server_in_registry
+            register_server_in_registry(args.domain, 443, "https")
+            print(f"  [OK] Cloud discovery registered: https://{args.domain}")
+        except Exception as e:
+            print(f"  [WARN] Cloud discovery registration failed: {e}")
+    else:
+        protocol = "https" if args.port == 443 else "http"
+        cloud_ok = register_with_cloud_discovery(args.port, protocol)
+        if cloud_ok:
+            refresh_thread = threading.Thread(
+                target=cloud_discovery_refresh_loop,
+                args=(args.port, protocol),
+                daemon=True,
+            )
+            refresh_thread.start()
+            print(f"  Cloud discovery refresh every {CLOUD_REFRESH_INTERVAL}s")
     print()
 
-    runserver_args = [f"{args.host}:{args.port}", "--noreload"]
+    if args.asgi:
+        from daphne.server import Server
+        from daphne.endpoints import build_endpoint_description_strings
+        import django_admin.asgi as asgi_application
+        endpoints = build_endpoint_description_strings(host=args.host, port=args.port)
+        print(f"  Daphne serving {args.host}:{args.port} (ASGI + WebSocket)")
+        Server(application=asgi_application.application, endpoints=endpoints).run()
+    else:
+        runserver_args = [f"{args.host}:{args.port}", "--noreload"]
 
-    call_command("runserver", *runserver_args)
+        call_command("runserver", *runserver_args)
 
 
 if __name__ == "__main__":
