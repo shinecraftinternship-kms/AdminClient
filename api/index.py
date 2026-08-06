@@ -124,7 +124,14 @@ def app(environ, start_response):
 
     # Diagnostic endpoint: visit /__diag to see full init log
     if path == "/__diag":
-        body = "\n".join(_init_log).encode() if _init_log else b"OK (no log)"
+        lines = list(_init_log)
+        try:
+            from django.conf import settings
+            db = getattr(settings, "DATABASES", {}).get("default", {})
+            lines.append(f"DB: host={db.get('HOST', '')} port={db.get('PORT', '')} conn_max_age={db.get('CONN_MAX_AGE', '')}")
+        except Exception as e:
+            lines.append(f"DB: (unavailable) {e}")
+        body = "\n".join(lines).encode() if lines else b"OK (no log)"
         start_response("200 OK", [("Content-Type", "text/plain")])
         return [body]
 
