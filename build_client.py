@@ -135,54 +135,87 @@ def build():
 
     datas = collect_datas()
 
+    hiddenimports = [
+        "websockets",
+        "watchdog",
+        "watchdog.observers",
+        "watchdog.events",
+        "client.runtime",
+        "client.key_manager",
+        "client.config",
+        "client.communicator",
+        "client.scanner",
+        "client.discovery",
+        "client.metrics",
+        "client.fingerprint",
+        "client.events",
+        "client.events.dispatcher",
+        "client.events.usb_monitor",
+        "client.events.file_monitor",
+        "client.events.process_monitor",
+        "client.events.software_monitor",
+    ]
+
+    # Use a spec file instead of a giant command line: 300+ --add-data
+    # entries with long absolute paths blow past the Windows 32k cmdline
+    # limit (WinError 206). The spec has no such limit.
+    spec_content = f"""\
+# -*- mode: python ; coding: utf-8 -*-
+
+a = Analysis(
+    [{ENTRY!r}],
+    pathex=[{CLIENT_DIR!r}],
+    binaries=[],
+    datas={datas!r},
+    hiddenimports={hiddenimports!r},
+    hookspath=[],
+    hooksconfig={{}},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name={OUTPUT_NAME.replace('.exe', '')!r},
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+"""
+
+    spec_path = os.path.join(ROOT_DIR, "client_scanner.spec")
+    with open(spec_path, "w", encoding="utf-8") as fh:
+        fh.write(spec_content)
+
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--name", OUTPUT_NAME.replace(".exe", ""),
         "--distpath", DIST_DIR,
         "--workpath", BUILD_DIR,
         "--noconfirm",
         "--clean",
-        "--noupx",
-        f"--paths={CLIENT_DIR}",
-        "--hidden-import=websockets",
-        "--hidden-import=watchdog",
-        "--hidden-import=watchdog.observers",
-        "--hidden-import=watchdog.events",
-        "--hidden-import=client.runtime",
-        "--hidden-import=client.key_manager",
-        "--hidden-import=client.config",
-        "--hidden-import=client.communicator",
-        "--hidden-import=client.scanner",
-        "--hidden-import=client.discovery",
-        "--hidden-import=client.metrics",
-        "--hidden-import=client.fingerprint",
-        "--hidden-import=client.events",
-        "--hidden-import=client.events.dispatcher",
-        "--hidden-import=client.events.usb_monitor",
-        "--hidden-import=client.events.file_monitor",
-        "--hidden-import=client.events.process_monitor",
-        "--hidden-import=client.events.software_monitor",
-        "--console",
+        spec_path,
     ]
-
-    if os.path.exists(VERSION_FILE):
-        cmd.append(f"--version-file={VERSION_FILE}")
-        print(f"[INFO] Version info  : {VERSION_FILE}")
-
-    if os.path.exists(MANIFEST_FILE):
-        cmd.append(f"--manifest={MANIFEST_FILE}")
-        print(f"[INFO] Manifest      : {MANIFEST_FILE}")
-
-    for src, dst in datas:
-        cmd.extend(["--add-data", f"{src};{dst}"])
-
-    cmd.append(ENTRY)
 
     print(f"[INFO] Entry point : {ENTRY}")
     print(f"[INFO] Output dir  : {DIST_DIR}")
     print(f"[INFO] Mode        : onefile (single self-contained exe)")
-    print(f"[INFO] Building with PyInstaller...")
+    print(f"[INFO] Building with PyInstaller (spec file)...")
     print()
 
     try:
