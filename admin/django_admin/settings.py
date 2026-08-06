@@ -45,6 +45,7 @@ if not IS_VERCEL:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     CORS_MIDDLEWARE_PATH,
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -209,6 +210,10 @@ STORAGES = {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
+
+# Serve static files from source dirs (no collectstatic step needed on Vercel).
+# Uses the staticfiles finders (STATICFILES_DIRS + each app's static/ folder).
+WHITENOISE_USE_FINDERS = True
 
 AUTHENTICATION_BACKENDS = [
     "scanner_api.auth_backend.ResilientModelBackend",
