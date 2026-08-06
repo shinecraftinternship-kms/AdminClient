@@ -59,20 +59,22 @@ def get_admin_owned_clients(request):
     qs = Client.objects.filter(deleted=False).select_related("group", "owner")
     if not request.user or not request.user.is_authenticated:
         return qs.none()
-    unowned_pending = models.Q(owner__isnull=True, approved=False)
+    # Show unowned clients (pending or auto-approved) so devices registered on
+    # Vercel/auto-approve are visible even without a company/owner assignment.
+    unowned_clients = models.Q(owner__isnull=True)
     if request.user.is_superuser:
         company = get_user_company(request)
         if company:
-            return qs.filter(models.Q(company=company) | unowned_pending)
+            return qs.filter(models.Q(company=company) | unowned_clients)
         return qs
-    return qs.filter(models.Q(owner=request.user) | unowned_pending)
+    return qs.filter(models.Q(owner=request.user) | unowned_clients)
 
 
 def client_is_visible(request, client):
     """Return True if the current admin may view/modify the given client."""
     if not request.user or not request.user.is_authenticated:
         return False
-    if client.owner is None and not client.approved:
+    if client.owner is None:
         return True
     if request.user.is_superuser:
         company = get_user_company(request)
@@ -205,9 +207,9 @@ class ApproveMultipleView(APIView):
 
         clients = Client.objects.filter(registration_key__in=keys)
         if not request.user.is_superuser:
-            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
+            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
         elif company:
-            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
+            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True))
         count = 0
         for client in clients:
             client.approved = True
@@ -360,9 +362,9 @@ class DeleteMultipleView(APIView):
         company = get_user_company(request)
         clients = Client.objects.filter(registration_key__in=keys)
         if not request.user.is_superuser:
-            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
+            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
         elif company:
-            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
+            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True))
         count = clients.count()
         for client in clients:
             client.deleted = True
@@ -488,9 +490,9 @@ class ScanAllView(APIView):
         company = get_user_company(request)
         qs = Client.objects.filter(approved=True, deleted=False)
         if not request.user.is_superuser:
-            qs = qs.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True, approved=False))
+            qs = qs.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
         elif company:
-            qs = qs.filter(models.Q(company=company) | models.Q(owner__isnull=True, approved=False))
+            qs = qs.filter(models.Q(company=company) | models.Q(owner__isnull=True))
         count = qs.update(scan_requested=True)
         ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients by {request.user.username}")
         return Response({"status": "ok", "message": f"Scan queued for {count} client(s)"})
