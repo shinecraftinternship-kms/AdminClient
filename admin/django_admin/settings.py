@@ -138,10 +138,14 @@ if DATABASE_URL:
     if "sslmode=" not in DATABASE_URL:
         separator = "&" if "?" in DATABASE_URL else "?"
         DATABASE_URL = f"{DATABASE_URL}{separator}sslmode=require"
+    # 0 = close after each request (required for Vercel serverless).
+    # Persistent servers reuse connections to avoid repeated DNS lookups,
+    # which are flaky for the Supabase pooler on IPv4-only hosts.
+    conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", "0" if IS_VERCEL else "10"))
     DATABASES = {
         "default": dj_database_url.config(
             default=DATABASE_URL,
-            conn_max_age=0,  # 0 = close after each request (required for Vercel serverless)
+            conn_max_age=conn_max_age,
         )
     }
     # Add robust options to prevent "always checking" / hanging connections on Vercel

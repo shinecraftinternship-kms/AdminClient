@@ -213,12 +213,12 @@ class Communicator:
 
     def get_ws_url(self):
         """Convert HTTP admin URL to WebSocket URL."""
-        url = self.admin_url
+        url = self.admin_url.rstrip("/")
         if url.startswith("https://"):
             return "wss://" + url[8:]
         elif url.startswith("http://"):
-            return "ws://" + url[5:]
-        return "ws://" + url
+            return "ws://" + url[7:]
+        return "ws://" + url.lstrip("/")
 
 
 class WebSocketClient:
@@ -416,11 +416,11 @@ class WebSocketClient:
             logger.debug("Heartbeat ACK: health=%s score=%d", health, score)
 
     def _get_ws_url(self):
-        url = self.admin_url
+        url = self.admin_url.rstrip("/")
         if url.startswith("https://"):
             base = "wss://" + url[8:]
         elif url.startswith("http://"):
-            base = "ws://" + url[5:]
+            base = "ws://" + url[7:]
         else:
-            base = "ws://" + url
+            base = "ws://" + url.lstrip("/")
         return f"{base}/ws/agent/{self.agent_id}/"
