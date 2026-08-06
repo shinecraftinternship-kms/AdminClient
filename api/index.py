@@ -129,6 +129,9 @@ def app(environ, start_response):
             from django.conf import settings
             db = getattr(settings, "DATABASES", {}).get("default", {})
             lines.append(f"DB: host={db.get('HOST', '')} port={db.get('PORT', '')} conn_max_age={db.get('CONN_MAX_AGE', '')}")
+            diag = getattr(settings, "DB_BOOT_DIAG", {})
+            if diag:
+                lines.append(f"DB_BOOT_DIAG: {diag}")
         except Exception as e:
             lines.append(f"DB: (unavailable) {e}")
         body = "\n".join(lines).encode() if lines else b"OK (no log)"

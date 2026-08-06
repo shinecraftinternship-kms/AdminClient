@@ -133,9 +133,16 @@ JWT_ACCESS_EXPIRY_MINUTES = 60
 JWT_REFRESH_EXPIRY_DAYS = 7
 JWT_ISSUER = "system-scanner-pro"
 
+DB_BOOT_DIAG = {}
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+DB_BOOT_DIAG["raw_url"] = True if DATABASE_URL else False
 if DATABASE_URL:
     from urllib.parse import urlsplit, urlunsplit
+    _dbu = urlsplit(DATABASE_URL)
+    DB_BOOT_DIAG["hostname"] = _dbu.hostname
+    DB_BOOT_DIAG["url_port"] = _dbu.port
+    DB_BOOT_DIAG["pooler_in_url"] = "pooler.supabase.com" in DATABASE_URL
     if "pooler.supabase.com" in DATABASE_URL:
         # Supabase pooler session mode (port 5432) caps at pool_size=15
         # concurrent connections. Vercel serverless bursts easily exceed this
@@ -168,6 +175,8 @@ if DATABASE_URL:
             conn_max_age=conn_max_age,
         )
     }
+    DB_BOOT_DIAG["final_host"] = DATABASES["default"].get("HOST")
+    DB_BOOT_DIAG["final_port"] = DATABASES["default"].get("PORT")
     # Add robust options to prevent "always checking" / hanging connections on Vercel
     DATABASES["default"].setdefault("OPTIONS", {})
     DATABASES["default"]["OPTIONS"].update({
