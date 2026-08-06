@@ -275,8 +275,29 @@ class WebSocketClient:
         with self._queue_lock:
             self._message_queue.append({"type": msg_type, **(data or {})})
 
+    @staticmethod
+    def _is_http_rejection(exc):
+        """True when the server answered with plain HTTP instead of a WS upgrade
+        (e.g. Vercel, which has no WebSocket endpoint). Nothing to retry."""
+        name = type(exc).__name__
+        if name in ("InvalidStatusCode", "InvalidStatus", "AbortHandshake"):
+            return True
+        try:
+            import websockets.exceptions as wse
+        except Exception:
+            return False
+        for cls in (
+            getattr(wse, "InvalidStatus", None),
+            getattr(wse, "InvalidStatusCode", None),
+        ):
+            if cls and isinstance(exc, cls):
+                return True
+        return False
+
     def _run_loop(self):
-        """Main reconnection loop."""
+        """Main reconnection loop. Falls back to HTTP polling when the server
+        does not support WebSockets (Vercel), so it stops retrying and
+        spamming errors."""
         try:
             import asyncio
             asyncio.set_event_loop(asyncio.new_event_loop())
@@ -284,20 +305,28 @@ class WebSocketClient:
             logger.error("asyncio not available")
             return
 
+        ws_unsupported = False
         while not self._stop_event.is_set():
+            if ws_unsupported:
+                logger.info("WebSocket disabled (server does not support WS); HTTP polling only")
+                return
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 loop.run_until_complete(self._connect_and_run())
             except Exception as e:
-                logger.error("WebSocket loop error: %s", e)
+                if self._is_http_rejection(e):
+                    ws_unsupported = True
+                    logger.error("WebSocket unsupported by server (HTTP response to WS upgrade); switching to HTTP polling")
+                else:
+                    logger.error("WebSocket loop error: %s", e)
             finally:
                 try:
                     loop.close()
                 except Exception:
                     pass
 
-            if not self._stop_event.is_set():
+            if not self._stop_event.is_set() and not ws_unsupported:
                 logger.info("Reconnecting in %ds...", self._reconnect_delay)
                 self._stop_event.wait(self._reconnect_delay)
                 self._reconnect_delay = min(

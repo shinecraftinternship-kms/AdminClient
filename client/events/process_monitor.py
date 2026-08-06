@@ -56,14 +56,15 @@ def _get_processes_windows():
         for item in items:
             pid = item.get("ProcessId")
             if pid is not None:
-                name = item.get("Name", "unknown")
+                name = item.get("Name") or "unknown"
+                path = item.get("ExecutablePath") or ""
                 key = f"{name}:{pid}"
                 processes[key] = {
                     "pid": pid,
                     "name": name,
-                    "path": item.get("ExecutablePath", ""),
-                    "parent_pid": item.get("ParentProcessId", 0),
-                    "created": item.get("CreationDate", ""),
+                    "path": path,
+                    "parent_pid": item.get("ParentProcessId") or 0,
+                    "created": item.get("CreationDate") or "",
                 }
     except Exception:
         pass
@@ -137,8 +138,8 @@ SUSPICIOUS_PATHS_KEYWORDS = {
 
 
 def _is_suspicious(process_data):
-    name = process_data.get("name", "").lower()
-    path = process_data.get("path", "").lower()
+    name = (process_data.get("name") or "").lower()
+    path = (process_data.get("path") or "").lower()
 
     if any(s in name for s in SUSPICIOUS_NAMES):
         return True, "known_suspicious_name"
