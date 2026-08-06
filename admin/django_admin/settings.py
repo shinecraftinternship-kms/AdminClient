@@ -134,6 +134,17 @@ JWT_ISSUER = "system-scanner-pro"
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if DATABASE_URL:
+    from urllib.parse import urlsplit, urlunsplit
+    if IS_VERCEL and "pooler.supabase.com" in DATABASE_URL:
+        # Supabase pooler session mode (port 5432) caps at pool_size=15
+        # concurrent connections. Vercel serverless bursts easily exceed this
+        # → EMAXCONNSESSION errors and 500s. Transaction mode (port 6543)
+        # multiplexes up to 10k connections and is built for serverless.
+        parts = list(urlsplit(DATABASE_URL))
+        netloc = parts[1]
+        if netloc.endswith(":5432"):
+            parts[1] = netloc[:-5] + ":6543"
+            DATABASE_URL = urlunsplit(parts)
     import dj_database_url
     if "sslmode=" not in DATABASE_URL:
         separator = "&" if "?" in DATABASE_URL else "?"
