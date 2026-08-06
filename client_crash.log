@@ -1,0 +1,40 @@
+=== START 2026-08-05 12:37:49.680732 ===
+frozen=False
+executable=C:\Users\mkail\AppData\Local\Programs\Python\Python313\python.exe
+argv=['client/main.py', 'http://127.0.0.1:8000']
+OK: frozen setup done
+OK: stdlib imports done
+OK: imported client.runtime
+OK: imported client.key_manager (funcs)
+OK: imported client.key_manager (config)
+OK: imported client.config (funcs)
+OK: imported client.config (config)
+OK: imported client.communicator
+OK: all imports done
+OK: data_dir=C:\new intern project\system_scanner_pro\admin-client  main\AdminClient\client
+OK: __main__ block entered
+OK: main() starting
+OK: admin_url=http://127.0.0.1:8000 hostname=vel
+OK: server reachable
+OK: register result={'status': 'pending', 'approved': True}
+OK: entering main loop
+=== START 2026-08-05 20:47:37.587515 ===
+frozen=False
+executable=C:\Users\mkail\AppData\Local\Programs\Python\Python313\python.exe
+argv=['client\\main.py', 'http://127.0.0.1:8000']
+OK: frozen setup done
+OK: stdlib imports done
+OK: imported client.runtime
+OK: imported client.key_manager (funcs)
+OK: imported client.key_manager (config)
+OK: imported client.config (funcs)
+OK: imported client.config (config)
+OK: imported client.communicator
+OK: all imports done
+OK: data_dir=C:\new intern project\system_scanner_pro\admin-client  main\AdminClient\client
+OK: __main__ block entered
+OK: main() starting
+OK: admin_url=http://127.0.0.1:8000 hostname=vel
+OK: server reachable
+OK: register result={'status': 'pending', 'approved': True}
+OK: entering main loop
