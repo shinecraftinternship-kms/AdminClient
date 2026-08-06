@@ -143,6 +143,7 @@ if DATABASE_URL:
     DB_BOOT_DIAG["hostname"] = _dbu.hostname
     DB_BOOT_DIAG["url_port"] = _dbu.port
     DB_BOOT_DIAG["pooler_in_url"] = "pooler.supabase.com" in DATABASE_URL
+    DB_BOOT_DIAG["masked_netloc"] = __import__("re").sub(r":([^@]*)@", ":****@", _dbu.netloc)
     if "pooler.supabase.com" in DATABASE_URL:
         # Supabase pooler session mode (port 5432) caps at pool_size=15
         # concurrent connections. Vercel serverless bursts easily exceed this
@@ -175,6 +176,13 @@ if DATABASE_URL:
             conn_max_age=conn_max_age,
         )
     }
+    # Bulletproof override: regardless of how the URL parsed, force transaction
+    # mode (6543) whenever the effective host is the Supabase pooler. Session
+    # mode (5432) caps at pool_size=15 and 500s under serverless bursts.
+    _eff_host = str(DATABASES["default"].get("HOST", ""))
+    _eff_port = str(DATABASES["default"].get("PORT", ""))
+    if _eff_host.endswith("pooler.supabase.com") and _eff_port in ("", "5432"):
+        DATABASES["default"]["PORT"] = "6543"
     DB_BOOT_DIAG["final_host"] = DATABASES["default"].get("HOST")
     DB_BOOT_DIAG["final_port"] = DATABASES["default"].get("PORT")
     # Add robust options to prevent "always checking" / hanging connections on Vercel
