@@ -18,5 +18,9 @@ client/scans/
 *.db
 *.sqlite3
 
+# Local admin server logs
+admin/local_server.log
+admin/local_server.log.err
+
 .vercel
 .env*
