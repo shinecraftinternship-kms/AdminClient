@@ -18,12 +18,30 @@ const STATUS_BADGES = {
 
 function refreshAssets() {
     Promise.all([
-        fetch('/api/assets?page_size=500').then(r => r.json()),
-        fetch('/api/asset-categories').then(r => r.json()).catch(() => []),
-        fetch('/api/departments').then(r => r.json()).catch(() => []),
-        fetch('/api/locations').then(r => r.json()).catch(() => []),
-        fetch('/api/asset-vendors').then(r => r.json()).catch(() => []),
-        fetch('/api/employees?status=Active').then(r => r.json()).catch(() => []),
+        fetch('/api/assets?page_size=500').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Assets API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }),
+        fetch('/api/asset-categories').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Categories API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }).catch(() => []),
+        fetch('/api/departments').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Departments API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }).catch(() => []),
+        fetch('/api/locations').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Locations API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }).catch(() => []),
+        fetch('/api/asset-vendors').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Vendors API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }).catch(() => []),
+        fetch('/api/employees?status=Active').then(r => {
+            if (!r.ok) return r.text().then(text => { throw new Error(`Employees API error (${r.status}): ${text.substring(0,200)}`); });
+            return r.json();
+        }).catch(() => []),
     ]).then(([data, catData, deptData, locData, venData, empData]) => {
         assets = data.results || data;
         categories = catData;
@@ -256,7 +274,19 @@ function saveAsset() {
     fetch(url, {
         method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     }).then(r => {
-        if (!r.ok) return r.json().then(e => { throw new Error(e.message || 'Save failed'); });
+        if (!r.ok) {
+            return r.text().then(text => {
+                let msg = 'Save failed';
+                try {
+                    const err = JSON.parse(text);
+                    msg = err.message || msg;
+                } catch {
+                    // Response is not JSON (likely HTML error page)
+                    msg = `Server error (${r.status}): ${text.substring(0, 200)}`;
+                }
+                throw new Error(msg);
+            });
+        }
         return r.json();
     }).then(res => {
         showToast(editAssetId ? 'Asset updated!' : 'Asset created!', 'success');
