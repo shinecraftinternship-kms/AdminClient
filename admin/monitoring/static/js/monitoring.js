@@ -277,7 +277,9 @@ function renderDeviceTable() {
     }
 
     tbody.innerHTML = filtered.map(d => {
-        const statusBadge = getStatusBadge(d.monitoring_status);
+        const isOnline = d.is_online !== undefined ? d.is_online : (d.monitoring_status === 'online');
+        const statusForBadge = isOnline ? 'online' : (d.monitoring_status || 'unknown');
+        const statusBadge = getStatusBadge(statusForBadge);
         const healthBadge = getHealthBadge(d.health_level, d.health_score);
         const cpu = d.latest_cpu || 0;
         const ram = d.latest_ram || 0;

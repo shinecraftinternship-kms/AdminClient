@@ -33,8 +33,8 @@ function refreshClients() {
 
 function renderStats() {
     const total = clients.length;
-    const online = clients.filter(c => !c.deleted && !c.is_stale && c.status === 'online').length;
-    const pending = clients.filter(c => !c.deleted && !c.is_stale && c.status === 'pending').length;
+    const online = clients.filter(c => !c.deleted && c.is_online).length;
+    const pending = clients.filter(c => !c.deleted && !c.is_online && c.status === 'pending').length;
     const deleted = clients.filter(c => c.deleted).length;
     const offline = total - online - pending;
     document.getElementById('totalClients').textContent = total;
@@ -44,8 +44,8 @@ function renderStats() {
 }
 
 function renderCharts() {
-    const online = clients.filter(c => !c.deleted && !c.is_stale && c.status === 'online').length;
-    const pending = clients.filter(c => !c.deleted && !c.is_stale && c.status === 'pending').length;
+    const online = clients.filter(c => !c.deleted && c.is_online).length;
+    const pending = clients.filter(c => !c.deleted && !c.is_online && c.status === 'pending').length;
     const offline = clients.length - online - pending;
 
     if (!statusChart) {
@@ -150,10 +150,10 @@ function renderClients() {
 
     const filtered = clients.filter(c => {
         if (searchTerm && !c.hostname?.toLowerCase().includes(searchTerm) && !c.registration_key?.toLowerCase().includes(searchTerm) && !c.platform?.toLowerCase().includes(searchTerm) && !(c.tags_list || []).some(t => t.toLowerCase().includes(searchTerm))) return false;
-        if (statusFilter === 'online' && (c.deleted || c.is_stale || c.status !== 'online')) return false;
-        if (statusFilter === 'offline' && !c.deleted && !c.is_stale && c.status !== 'offline') return false;
+        if (statusFilter === 'online' && (c.deleted || !c.is_online)) return false;
+        if (statusFilter === 'offline' && (!c.deleted && c.is_online)) return false;
         if (statusFilter === 'stale' && (c.deleted || !c.is_stale)) return false;
-        if (statusFilter === 'pending' && (c.deleted || c.is_stale || c.status !== 'pending')) return false;
+        if (statusFilter === 'pending' && (c.deleted || c.status !== 'pending')) return false;
         if (statusFilter === 'deleted' && !c.deleted) return false;
         if (groupFilter !== 'all' && c.group !== parseInt(groupFilter)) return false;
         return true;
@@ -168,7 +168,7 @@ function renderClients() {
         const tagsHtml = (c.tags_list || []).map(t => `<span class="badge bg-secondary me-1" style="font-size:0.65rem;">${escapeHtml(t)}</span>`).join('');
         const groupBadge = c.group_name ? `<span class="badge bg-info ms-1" style="font-size:0.65rem;">${escapeHtml(c.group_name)}</span>` : '';
         const deletedBadge = c.deleted ? `<span class="badge bg-danger ms-1" style="font-size:0.65rem;">Deleted</span>` : '';
-        const dotClass = c.deleted ? 'offline' : (c.is_stale ? 'offline' : c.status === 'online' ? 'online' : c.status === 'pending' ? 'pending' : 'offline');
+        const dotClass = c.deleted ? 'offline' : (c.is_online ? 'online' : c.status === 'pending' ? 'pending' : 'offline');
 
         return `<div class="col-xl-3 col-lg-4 col-md-6 mb-3 client-card-wrapper">
             <div class="client-card p-3 ${isAdmin ? 'border-primary' : ''} ${isSelected ? 'border-success' : ''} ${c.deleted ? 'opacity-50' : ''}" style="cursor:pointer;">

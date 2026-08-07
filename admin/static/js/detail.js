@@ -229,7 +229,8 @@ function renderClientInfo() {
         badge.textContent = 'STALE';
         badge.className = 'badge ms-2 bg-danger';
     } else {
-        const status = clientData.status || 'offline';
+        const isOnline = clientData.is_online !== undefined ? clientData.is_online : (clientData.status === 'online');
+        const status = isOnline ? 'online' : (clientData.status || 'offline');
         badge.textContent = status.toUpperCase();
         badge.className = 'badge ms-2 bg-' + (status === 'online' ? 'success' : status === 'pending' ? 'warning' : 'danger');
     }

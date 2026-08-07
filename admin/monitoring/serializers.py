@@ -12,10 +12,23 @@ class DeviceMonitoringInfoSerializer(serializers.ModelSerializer):
     platform = serializers.CharField(source="client.platform", read_only=True, default="")
     last_seen = serializers.DateTimeField(source="client.last_seen", read_only=True)
     tag_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = DeviceMonitoringInfo
         fields = "__all__"
+
+    def get_is_online(self, obj):
+        """Compute real-time online status based on last heartbeat."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from scanner_api.models import Setting
+        
+        if not obj.last_heartbeat:
+            return False
+        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        cutoff = timezone.now() - timedelta(seconds=timeout)
+        return obj.last_heartbeat >= cutoff
 
 
 class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
@@ -27,6 +40,7 @@ class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
     latest_cpu = serializers.SerializerMethodField()
     latest_ram = serializers.SerializerMethodField()
     latest_disk = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = DeviceMonitoringInfo
@@ -37,6 +51,7 @@ class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
             "current_user", "agent_version", "last_heartbeat",
             "heartbeat_count", "last_seen", "tag_list",
             "latest_cpu", "latest_ram", "latest_disk",
+            "is_online",
             "created_at", "updated_at",
         ]
 
@@ -51,6 +66,18 @@ class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
     def get_latest_disk(self, obj):
         hb = DeviceHeartbeat.objects.filter(client=obj.client).order_by("-created_at").first()
         return hb.disk_usage_pct if hb else 0
+
+    def get_is_online(self, obj):
+        """Compute real-time online status based on last heartbeat."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from scanner_api.models import Setting
+        
+        if not obj.last_heartbeat:
+            return False
+        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        cutoff = timezone.now() - timedelta(seconds=timeout)
+        return obj.last_heartbeat >= cutoff
 
 
 class HardwareInventorySerializer(serializers.ModelSerializer):

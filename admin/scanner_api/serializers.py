@@ -54,6 +54,7 @@ class ClientListSerializer(serializers.ModelSerializer):
     owner_username = serializers.CharField(source="owner.username", read_only=True, default=None)
     tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
     is_stale = serializers.BooleanField(read_only=True)
+    is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -63,7 +64,20 @@ class ClientListSerializer(serializers.ModelSerializer):
             "is_stale", "last_ip", "deleted", "client_version", "cpu_model", "ram_info",
             "purchase_cost", "vendor_name", "notes", "created_at",
             "owner", "owner_username", "scan_requested",
+            "is_online",
         ]
+
+    def get_is_online(self, obj):
+        """Compute real-time online status based on last_seen."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from scanner_api.models import Setting
+        
+        if not obj.last_seen:
+            return False
+        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        cutoff = timezone.now() - timedelta(seconds=max(obj.scan_interval * 2, timeout))
+        return obj.last_seen >= cutoff
 
 
 class ClientDetailSerializer(serializers.ModelSerializer):
@@ -72,10 +86,23 @@ class ClientDetailSerializer(serializers.ModelSerializer):
     group_name = serializers.CharField(source="group.name", read_only=True, default=None)
     tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
     is_stale = serializers.BooleanField(read_only=True)
+    is_online = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
         fields = "__all__"
+
+    def get_is_online(self, obj):
+        """Compute real-time online status based on last_seen."""
+        from django.utils import timezone
+        from datetime import timedelta
+        from scanner_api.models import Setting
+        
+        if not obj.last_seen:
+            return False
+        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        cutoff = timezone.now() - timedelta(seconds=max(obj.scan_interval * 2, timeout))
+        return obj.last_seen >= cutoff
 
 
 class ManualUpdateSerializer(serializers.Serializer):
