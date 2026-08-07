@@ -183,6 +183,7 @@ class Communicator:
             "hostname": hostname,
             "platform": platform_name,
             "agent_version": version,
+            "client_key": getattr(self, '_client_key', ''),
         })
 
     def monitor_heartbeat(self, agent_id, signature, timestamp, heartbeat_data):
@@ -219,6 +220,16 @@ class Communicator:
         elif url.startswith("http://"):
             return "ws://" + url[7:]
         return "ws://" + url.lstrip("/")
+
+    def supports_websocket(self):
+        """Check if the admin URL likely supports WebSockets.
+        Vercel and similar serverless platforms don't support WebSockets."""
+        url = self.admin_url.lower()
+        # Vercel domains
+        if "vercel.app" in url:
+            return False
+        # Other serverless platforms could be added here
+        return True
 
 
 class WebSocketClient:

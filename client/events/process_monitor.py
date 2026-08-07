@@ -138,13 +138,15 @@ SUSPICIOUS_PATHS_KEYWORDS = {
 
 
 def _is_suspicious(process_data):
-    name = (process_data.get("name") or "").lower()
-    path = (process_data.get("path") or "").lower()
+    name = (process_data.get("name") or "")
+    path = (process_data.get("path") or "")
+    name_lower = name.lower() if name else ""
+    path_lower = path.lower() if path else ""
 
-    if any(s in name for s in SUSPICIOUS_NAMES):
+    if any(s in name_lower for s in SUSPICIOUS_NAMES):
         return True, "known_suspicious_name"
 
-    if any(kw in path for kw in SUSPICIOUS_PATHS_KEYWORDS):
+    if any(kw in path_lower for kw in SUSPICIOUS_PATHS_KEYWORDS):
         return True, "running_from_temp"
 
     return False, ""

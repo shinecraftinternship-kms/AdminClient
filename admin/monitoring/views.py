@@ -99,6 +99,13 @@ class AgentRegisterView(APIView):
         if not client:
             client = Client.objects.filter(hostname=hostname, deleted=False).first()
         if not client:
+            # Try to find by registration key from the client
+            client_key = data.get("client_key", "") or request.data.get("registration_key", "")
+            if client_key:
+                client = Client.objects.filter(registration_key=client_key, deleted=False).first()
+        
+        if not client:
+            # Only create new if no existing client found
             client = Client.objects.create(
                 registration_key=secrets.token_hex(4).upper()[:8],
                 hostname=hostname, platform=platform_name,

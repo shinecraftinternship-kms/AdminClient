@@ -120,6 +120,7 @@ class MonitorRegisterSerializer(serializers.Serializer):
     hostname = serializers.CharField(max_length=255, required=False, default="")
     platform = serializers.CharField(max_length=128, required=False, default="")
     agent_version = serializers.CharField(max_length=32, required=False, default="")
+    client_key = serializers.CharField(max_length=64, required=False, default="")
 
 
 class MonitorHeartbeatRequestSerializer(serializers.Serializer):

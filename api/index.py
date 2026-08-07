@@ -93,8 +93,8 @@ def _bootstrap():
     
     # Auto-approve clients on Vercel so they don't get stuck in "Checking..."
     if os.getenv("VERCEL", "0") == "1":
-        Setting.set("auto_approve", "true")
-        _init_log.append("[OK] Auto-approve enabled for Vercel")
+        Setting.set("auto_approve", "false")
+        _init_log.append("[OK] Auto-approve disabled for Vercel (manual approval required)")
     
     if not Setting.get("admin_connection_token", ""):
         Setting.set("admin_connection_token", secrets.token_hex(16))

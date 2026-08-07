@@ -443,7 +443,7 @@ def start_websocket_client(comm, monitoring_agent_id, monitoring_secret):
     return ws_client
 
 
-def _start_event_monitors(comm, key, ws_client):
+def _start_event_monitors(comm, key, ws_client, monitoring_agent_id=None, monitoring_secret=None):
     global _global_event_dispatchers, _global_event_monitors
 
     dispatcher = EventDispatcher(
@@ -453,6 +453,9 @@ def _start_event_monitors(comm, key, ws_client):
         batch_interval=5,
         max_batch_size=50,
     )
+    # Set monitoring credentials if available
+    if monitoring_agent_id and monitoring_secret:
+        dispatcher.set_monitoring_credentials(monitoring_agent_id, monitoring_secret)
     _global_event_dispatchers.append(dispatcher)
 
     def on_event(event):
@@ -732,6 +735,7 @@ def main():
     try:
         import uuid as _uuid
         monitoring_agent_id = str(_uuid.uuid4())
+        comm._client_key = key  # Pass client key for monitoring registration
         reg_resp = comm.monitor_register(
             monitoring_agent_id, fingerprint,
             hostname, platform.system(), VERSION,
@@ -761,9 +765,14 @@ def main():
     P(f"  [OK] Cloud discovery refresh every {CLOUD_DISCOVERY_INTERVAL}s")
 
     if monitoring_agent_id and monitoring_secret:
-        P("  Connecting WebSocket for real-time communication...")
-        ws_client = start_websocket_client(comm, monitoring_agent_id, monitoring_secret)
-        P("  WebSocket client started (auto-reconnect enabled)")
+        # Check if WebSocket is supported (not on Vercel)
+        if comm.supports_websocket():
+            P("  Connecting WebSocket for real-time communication...")
+            ws_client = start_websocket_client(comm, monitoring_agent_id, monitoring_secret)
+            P("  WebSocket client started (auto-reconnect enabled)")
+        else:
+            P("  [INFO] WebSocket not supported on this platform (Vercel), using HTTP polling only")
+            ws_client = None
     else:
         P("  [INFO] WebSocket not available (monitoring agent not registered)")
         ws_client = None
@@ -771,7 +780,7 @@ def main():
     if HAS_EVENT_MONITORS:
         P()
         P("  Starting event monitors...")
-        _start_event_monitors(comm, key, ws_client)
+        _start_event_monitors(comm, key, ws_client, monitoring_agent_id, monitoring_secret)
 
     P("  Starting heartbeat loop (every 30 seconds)...")
     P("  Press Ctrl+C to stop.")

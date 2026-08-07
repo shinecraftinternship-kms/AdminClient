@@ -129,8 +129,12 @@ class EventDispatcher:
     def _send_batch(self, batch):
         if self.ws_client and self.ws_client.connected and self.ws_client.authenticated:
             return self._send_via_websocket(batch)
-        elif self.http_comm and self.client_key:
+        elif self.http_comm and self.client_key and self._monitoring_agent_id and self._monitoring_secret:
             return self._send_via_http(batch)
+        elif self.http_comm and self.client_key:
+            # Try public heartbeat endpoint as fallback
+            logger.warning("No monitoring credentials, using public HTTP endpoint")
+            return self._send_via_http_public(batch)
         else:
             logger.warning("No transport available, %d events disk-queued", len(batch))
             return False
@@ -178,6 +182,23 @@ class EventDispatcher:
             return True
         except Exception as e:
             logger.error("HTTP send failed: %s", e)
+            return False
+
+    def _send_via_http_public(self, batch):
+        """Send events via public heartbeat endpoint (registration_key only)."""
+        try:
+            for event in batch:
+                payload = {
+                    "registration_key": self.client_key,
+                    "event_type": event.get("event_type", "unknown"),
+                    "severity": event.get("severity", "info"),
+                    "event_data": event.get("event_data", {}),
+                }
+                self.http_comm._request("POST", "/api/monitoring/agent/heartbeat-public/", payload)
+            logger.debug("Sent %d events via public HTTP", len(batch))
+            return True
+        except Exception as e:
+            logger.error("Public HTTP send failed: %s", e)
             return False
 
     def _persist_to_disk(self, batch):
