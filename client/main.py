@@ -202,6 +202,8 @@ def cloud_discovery_loop(comm):
     while True:
         time.sleep(CLOUD_DISCOVERY_INTERVAL)
         try:
+            if load_config().get("manual_url"):
+                continue
             if discover_admin_url:
                 new_url = discover_admin_url()
                 if new_url and new_url != comm.admin_url:
@@ -225,6 +227,8 @@ def listen_admin_broadcast(comm, hostname):
         try:
             data, (ip, _) = sock.recvfrom(1024)
             if data.startswith(b"ADMIN_HERE"):
+                if load_config().get("manual_url"):
+                    continue
                 parts = data.decode().strip().split(":")
                 port = int(parts[1]) if len(parts) > 1 else 80
                 discovered = f"http://{ip}:{port}"
@@ -533,12 +537,14 @@ def main():
         if choice == "2":
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
+            config["manual_url"] = True
             save_config(config)
             P(f"  Admin server set to: {admin_url}")
             P()
         elif choice == "3":
             admin_url = "http://localhost:80"
             config["admin_url"] = admin_url
+            config["manual_url"] = True
             save_config(config)
             P(f"  Using localhost: {admin_url}")
             P()
@@ -600,6 +606,41 @@ def main():
         retry_count += 1
         P(f"  [ERROR] Cannot reach admin server at {admin_url}")
 
+        manual = load_config().get("manual_url")
+        if manual:
+            P(f"  Keeping manual admin server: {admin_url}")
+            if is_frozen() and retry_count < 3:
+                wait_time = min(10 * retry_count, 60)
+                P(f"  Retrying in {wait_time}s... (attempt {retry_count})")
+                time.sleep(wait_time)
+                continue
+            P("  Manual server unreachable.")
+            P()
+            P("  " + "=" * 45)
+            P("  Options:")
+            P("  " + "=" * 45)
+            P("  [1] Add new admin server link")
+            P("  [2] Continue on localhost")
+            P("  [3] Exit")
+            P("  " + "=" * 45)
+            P()
+            choice = safe_input("  Select option [1-3]: ").strip()
+            if choice == "1":
+                admin_url = prompt_admin_url()
+                config["admin_url"] = admin_url
+                config["manual_url"] = True
+                save_config(config)
+            elif choice == "2":
+                admin_url = "http://localhost:80"
+                config["admin_url"] = admin_url
+                config["manual_url"] = True
+                save_config(config)
+            elif choice == "3":
+                P("  Exiting...")
+                sys.exit(0)
+            else:
+                continue
+
         if discover_admin_url:
             P("  Trying cloud discovery...")
             cloud_url = discover_admin_url()
@@ -640,6 +681,7 @@ def main():
         if choice == "1":
             admin_url = prompt_admin_url()
             config["admin_url"] = admin_url
+            config["manual_url"] = True
             save_config(config)
         elif choice == "2":
             admin_url = "http://localhost:80"

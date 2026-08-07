@@ -11,13 +11,17 @@ LOCALHOST_URL = "http://localhost:80"
 
 
 def load_config():
-    defaults = {"admin_url": "", "scan_interval": 3600, "auto_start": True}
+    defaults = {"admin_url": "", "scan_interval": 3600, "auto_start": True, "manual_url": False}
     try:
         if os.path.exists(CONFIG_PATH):
             import json
             with open(CONFIG_PATH) as f:
                 data = json.load(f)
                 defaults.update(data)
+                if "manual_url" not in data:
+                    url = str(data.get("admin_url") or "").strip()
+                    if url and url != LOCALHOST_URL:
+                        defaults["manual_url"] = True
     except Exception:
         pass
     return defaults
@@ -56,6 +60,9 @@ def get_admin_url():
 
     config = load_config()
     cached_url = config.get("admin_url", "")
+
+    if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
+        return cached_url
 
     try:
         from client.discovery import discover_admin_url
