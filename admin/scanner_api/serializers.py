@@ -38,6 +38,7 @@ class AddonDeviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = AddonDevice
         fields = "__all__"
+        read_only_fields = ["client", "added_at"]
 
 
 class ActivityLogSerializer(serializers.ModelSerializer):

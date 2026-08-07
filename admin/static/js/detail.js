@@ -539,7 +539,11 @@ function saveAddon() {
             showToast('Device added!', 'success');
             bootstrap.Modal.getInstance(document.getElementById('addAddonModal')).hide();
             loadClient();
+        } else {
+            showToast('Error: ' + (res.message || JSON.stringify(res) || 'Unknown'), 'danger');
         }
+    }).catch(err => {
+        showToast('Error: ' + err.message, 'danger');
     });
 }
 
