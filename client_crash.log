@@ -38,3 +38,17 @@ OK: admin_url=http://127.0.0.1:8000 hostname=vel
 OK: server reachable
 OK: register result={'status': 'pending', 'approved': True}
 OK: entering main loop
+=== START 2026-08-08 21:36:31.359115 ===
+frozen=False
+executable=C:\Users\mkail\AppData\Local\Programs\Python\Python313\python.exe
+argv=['-c']
+OK: frozen setup done
+OK: stdlib imports done
+OK: imported client.runtime
+OK: imported client.key_manager (funcs)
+OK: imported client.key_manager (config)
+OK: imported client.config (funcs)
+OK: imported client.config (config)
+OK: imported client.communicator
+OK: all imports done
+OK: data_dir=C:\new intern project\system_scanner_pro\admin-client  main\AdminClient\client
