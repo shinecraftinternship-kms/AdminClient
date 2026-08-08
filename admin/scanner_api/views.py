@@ -976,6 +976,30 @@ def admin_self_scan():
         logger.error(f"Admin self-scan failed: {e}", exc_info=True)
 
 
+def admin_client_heartbeat_loop():
+    """Keep the admin's own client record online while the panel is running.
+
+    The auto-added admin client is otherwise only touched once at startup, so
+    it silently drifts to 'offline' after the stale threshold even though the
+    admin server is up.
+    """
+    import time as _time
+    while True:
+        _time.sleep(30)
+        try:
+            key = Setting.get("admin_client_key", "")
+            if not key:
+                continue
+            admin_client = Client.objects.filter(registration_key=key).first()
+            if not admin_client:
+                continue
+            admin_client.status = "online"
+            admin_client.last_seen = timezone.now()
+            admin_client.save(update_fields=["status", "last_seen"])
+        except Exception as e:
+            logger.error(f"Admin client heartbeat failed: {e}", exc_info=True)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class AuthLoginView(APIView):
     def post(self, request):
