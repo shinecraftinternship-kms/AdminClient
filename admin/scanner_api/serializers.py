@@ -68,7 +68,12 @@ class ClientListSerializer(serializers.ModelSerializer):
         ]
 
     def get_is_online(self, obj):
-        """Compute real-time online status based on last_seen."""
+        """Compute real-time online status based on last_seen.
+
+        A client is online only if it pinged recently (within the heartbeat
+        stale threshold). Scan frequency (scan_interval) must NOT affect this,
+        otherwise a dead client stays 'online' for hours after shutdown.
+        """
         from django.utils import timezone
         from datetime import timedelta
         from scanner_api.models import Setting
@@ -76,7 +81,7 @@ class ClientListSerializer(serializers.ModelSerializer):
         if not obj.last_seen:
             return False
         timeout = int(Setting.get("stale_threshold_seconds", "120"))
-        cutoff = timezone.now() - timedelta(seconds=max(obj.scan_interval * 2, timeout))
+        cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
 
 
@@ -101,7 +106,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         if not obj.last_seen:
             return False
         timeout = int(Setting.get("stale_threshold_seconds", "120"))
-        cutoff = timezone.now() - timedelta(seconds=max(obj.scan_interval * 2, timeout))
+        cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
 
 

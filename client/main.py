@@ -44,6 +44,14 @@ try:
             ctypes.windll.kernel32.SetConsoleTitleW("System Scanner Pro Client")
         except Exception:
             pass
+        if "--silent" in sys.argv:
+            try:
+                import ctypes
+                _hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+                if _hwnd:
+                    ctypes.windll.user32.ShowWindow(_hwnd, 0)
+            except Exception:
+                pass
 
     _log_crash("OK: frozen setup done")
 
@@ -496,8 +504,82 @@ def _start_event_monitors(comm, key, ws_client, monitoring_agent_id=None, monito
         P(f"        - {name} monitor")
 
 
+# ── Background / auto-start mode ─────────────────────────────────────────────
+
+SILENT_FLAG = "--silent"
+
+
+def _hide_console_window():
+    """Hide the console window of a frozen exe started at boot (Run key)."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+    except Exception:
+        pass
+
+
+def _silent_output():
+    """Redirect prints to a log file when running hidden (no console)."""
+    try:
+        log_path = os.path.join(get_client_data_dir(), "client_agent.log")
+        fh = open(log_path, "a", encoding="utf-8")
+        sys.stdout = fh
+        sys.stderr = fh
+    except Exception:
+        pass
+
+
+def _launch_hidden(argv):
+    """Relaunch this exe with no console window."""
+    import subprocess
+    try:
+        args = [sys.executable] + argv
+        if sys.platform == "win32":
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            subprocess.Popen(args, creationflags=flags)
+        else:
+            subprocess.Popen(args)
+        return True
+    except Exception:
+        return False
+
+
+def _register_autostart():
+    """Add this client exe to Windows startup (HKCU Run key)."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    try:
+        import winreg
+        exe = sys.executable
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE,
+        ) as key:
+            winreg.SetValueEx(key, "SystemScannerProClient", 0, winreg.REG_SZ,
+                              f'"{exe}" {SILENT_FLAG}')
+        _log_crash("OK: autostart registered in Windows Run key")
+        return True
+    except Exception as e:
+        _log_crash(f"WARN: autostart registration failed: {e}")
+        return False
+
+
 def main():
     global _global_scan_config
+
+    silent = SILENT_FLAG in sys.argv
+    if silent:
+        sys.argv = [a for a in sys.argv if a != SILENT_FLAG]
+        _hide_console_window()
+        _silent_output()
+        _log_crash("OK: running in silent/background mode")
+    else:
+        _register_autostart()
 
     _log_crash("OK: main() starting")
     print_header()
@@ -520,6 +602,32 @@ def main():
         admin_url = sys.argv[1].rstrip("/")
         config["admin_url"] = admin_url
         save_config(config)
+    elif silent:
+        if not admin_url or admin_url == "http://localhost:80":
+            discovered = False
+            if discover_admin_url:
+                try:
+                    cloud_url = discover_admin_url()
+                    if cloud_url:
+                        admin_url = cloud_url
+                        config["admin_url"] = admin_url
+                        save_config(config)
+                        P(f"  [OK] Discovered admin server: {admin_url}")
+                        discovered = True
+                except Exception:
+                    pass
+            if not discovered:
+                udp_url = discover_admin(timeout=3)
+                if udp_url:
+                    admin_url = udp_url
+                    config["admin_url"] = admin_url
+                    save_config(config)
+                    P(f"  [OK] Discovered admin server: {admin_url}")
+            if not admin_url:
+                admin_url = "http://localhost:80"
+                config["admin_url"] = admin_url
+                save_config(config)
+                P(f"  Using default: {admin_url}")
     else:
         P("  " + "=" * 50)
         P("  Admin Server Configuration")
@@ -609,6 +717,11 @@ def main():
         retry_count += 1
         P(f"  [ERROR] Cannot reach admin server at {admin_url}")
 
+        if silent:
+            P(f"  Retrying in 15s... (attempt {retry_count})")
+            time.sleep(15)
+            continue
+
         manual = load_config().get("manual_url")
         if manual:
             P(f"  Keeping manual admin server: {admin_url}")
@@ -662,6 +775,11 @@ def main():
             config["admin_url"] = admin_url
             save_config(config)
             retry_count = 0
+            continue
+
+        if silent:
+            P(f"  Retrying in 15s... (attempt {retry_count})")
+            time.sleep(15)
             continue
 
         if is_frozen() and retry_count < 3:
@@ -745,6 +863,15 @@ def main():
             P(f"  [OK] Monitoring agent registered: {monitoring_agent_id[:16]}...")
     except Exception as e:
         P(f"  [WARN] Monitoring agent registration failed: {e}")
+
+    if not silent and _launch_hidden([SILENT_FLAG]):
+        _log_crash("OK: connected; relaunched hidden, closing console")
+        P("  Connected to admin server. Moving to background...")
+        P("  This window will close now. The client keeps running hidden")
+        P("  and reconnects automatically when this machine comes online.")
+        P()
+        time.sleep(2)
+        return
 
     P("  Starting communication channels...")
     P()
