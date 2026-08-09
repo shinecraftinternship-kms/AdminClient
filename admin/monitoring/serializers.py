@@ -11,7 +11,7 @@ class DeviceMonitoringInfoSerializer(serializers.ModelSerializer):
     registration_key = serializers.CharField(source="client.registration_key", read_only=True, default="")
     platform = serializers.CharField(source="client.platform", read_only=True, default="")
     last_seen = serializers.DateTimeField(source="client.last_seen", read_only=True)
-    tag_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    tag_list = serializers.ListField(child=serializers.CharField(), read_only=True)
     is_online = serializers.SerializerMethodField()
 
     class Meta:
@@ -39,7 +39,7 @@ class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
     registration_key = serializers.CharField(source="client.registration_key", read_only=True, default="")
     platform = serializers.CharField(source="client.platform", read_only=True, default="")
     last_seen = serializers.DateTimeField(source="client.last_seen", read_only=True)
-    tag_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    tag_list = serializers.ListField(child=serializers.CharField(), read_only=True)
     latest_cpu = serializers.SerializerMethodField()
     latest_ram = serializers.SerializerMethodField()
     latest_disk = serializers.SerializerMethodField()
