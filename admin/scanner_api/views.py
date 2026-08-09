@@ -150,25 +150,14 @@ class RegisterClientView(APIView):
                 ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
                 return Response({"status": "ok", "auto_approved": same_device.approved})
 
-        company = None
-        owner = None
-        admin_key = Setting.get("admin_client_key", "")
-        if admin_key:
-            admin_client = Client.objects.filter(registration_key=admin_key).first()
-            if admin_client:
-                company = admin_client.company
-                owner = admin_client.owner
-
         client = Client.objects.create(
             registration_key=key, hostname=hostname, platform=platform_name,
             client_version=client_version, device_fingerprint=fingerprint,
             status="online" if auto_approve else "pending",
             approved=auto_approve, last_seen=timezone.now(),
             last_ip=_client_ip(request),
-            company=company,
-            owner=owner,
         )
-        ActivityLog.objects.create(action="register", company=company, details=f"Client {hostname} registered with key {key}")
+        ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}")
         return Response({"status": "ok", "auto_approved": auto_approve}, status=status.HTTP_201_CREATED)
 
 
