@@ -210,7 +210,7 @@ def cloud_discovery_loop(comm):
     while True:
         time.sleep(CLOUD_DISCOVERY_INTERVAL)
         try:
-            if discover_admin_url:
+            if discover_admin_url and not load_config().get("manual_url"):
                 new_url = discover_admin_url()
                 if new_url and new_url != comm.admin_url:
                     if comm.is_reachable(new_url):

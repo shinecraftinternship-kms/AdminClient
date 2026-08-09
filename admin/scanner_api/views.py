@@ -154,6 +154,15 @@ class RegisterClientView(APIView):
         if fingerprint:
             same_device = Client.objects.filter(device_fingerprint=fingerprint, deleted=False).first()
             if same_device:
+                # Never hijack the admin's own self-client: on a machine that
+                # runs both the admin panel and a deployed client (identical
+                # fingerprint) the real client would otherwise take over the
+                # admin's auto-approved client row and never appear as a
+                # separately-approvable device. Register a fresh client instead.
+                admin_self_key = Setting.get("admin_client_key", "")
+                if admin_self_key and same_device.registration_key == admin_self_key:
+                    same_device = None
+            if same_device:
                 same_device.registration_key = key
                 same_device.hostname = hostname
                 same_device.platform = platform_name

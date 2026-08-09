@@ -137,7 +137,22 @@ DB_BOOT_DIAG = {}
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_BOOT_DIAG["raw_url"] = True if DATABASE_URL else False
-if DATABASE_URL:
+
+# ── Database isolation ─────────────────────────────────────────────────────
+# Every admin server uses its OWN database so client data, keys and approval
+# status never sync between different admin servers. Cloud deployments
+# (Vercel) use the shared Supabase instance. Non-cloud servers (local panel,
+# VPS) ALWAYS use their own local SQLite — never a shared DATABASE_URL — so
+# the local panel stays fully independent from the cloud panel.
+if not IS_VERCEL:
+    database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.path.join(database_dir, "scanner.db"),
+        }
+    }
+elif DATABASE_URL:
     from urllib.parse import urlsplit, urlunsplit
     _dbu = urlsplit(DATABASE_URL)
     DB_BOOT_DIAG["hostname"] = _dbu.hostname
@@ -195,8 +210,8 @@ if DATABASE_URL:
         "keepalives_count": 5,
         "sslmode": "require",
     })
-elif IS_VERCEL:
-    # Vercel without DATABASE_URL → warn loudly (SQLite /tmp is ephemeral!)
+else:
+    # IS_VERCEL without DATABASE_URL → warn loudly (SQLite /tmp is ephemeral!)
     import warnings
     warnings.warn(
         "DATABASE_URL is not set! Falling back to ephemeral SQLite on /tmp. "
@@ -208,14 +223,6 @@ elif IS_VERCEL:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": _vdb,
-        }
-    }
-else:
-    database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.join(database_dir, "scanner.db"),
         }
     }
 

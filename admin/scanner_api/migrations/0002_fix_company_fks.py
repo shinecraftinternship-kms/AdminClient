@@ -7,6 +7,16 @@
 
 from django.db import migrations
 
+# This one-off migration uses Postgres-only SQL (public. schema prefixes,
+# ADD COLUMN IF NOT EXISTS, a PL/pgSQL DO $$ block) and was written to repair
+# the live Supabase schema. It must ONLY run on a PostgreSQL backend — on
+# SQLite (e.g. the local panel's own isolated database) it is a no-op.
+class PostgresOnlyRunSQL(migrations.RunSQL):
+    def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        if schema_editor.connection.vendor == "postgresql":
+            super().database_forwards(app_label, schema_editor, from_state, to_state)
+
+
 SQL = r"""
 -- -----------------------------------------------------------
 -- 1️⃣  Add missing company_id columns + FK (ON DELETE SET NULL)
@@ -176,5 +186,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(SQL, reverse_sql=migrations.RunSQL.noop),
+        PostgresOnlyRunSQL(SQL, reverse_sql=migrations.RunSQL.noop),
     ]
