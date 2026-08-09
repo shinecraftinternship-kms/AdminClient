@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -681,12 +681,13 @@ def _register_startup_script():
     try:
         vbs_path = os.path.join(folder, "SystemScannerProClient.vbs")
         exe = sys.executable
-        quoted = '"' + exe.replace('"', '""') + '"'
         content = (
-            'Set sh = CreateObject("WScript.Shell")\r\n'
-            f'sh.Run "{quoted} {SILENT_FLAG}", 0, False\r\n'
+            "Set sh = CreateObject(\"WScript.Shell\")\r\n"
+            f'sh.Run "{exe} {SILENT_FLAG}", 0, False\r\n'
         )
-        with open(vbs_path, "w", encoding="utf-8") as f:
+        # newline="" disables universal newline translation, otherwise Python
+        # on Windows turns the "\n" into "\r\n" and we get "\r\r\n" output.
+        with open(vbs_path, "w", encoding="utf-8", newline="") as f:
             f.write(content)
         _log_crash(f"OK: startup launcher created: {vbs_path}")
         return vbs_path
