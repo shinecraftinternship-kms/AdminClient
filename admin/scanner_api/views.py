@@ -117,7 +117,24 @@ class RegisterClientView(APIView):
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
             if existing.deleted:
-                return Response({"status": "error", "message": "Client has been removed. Reinstall required."}, status=status.HTTP_403_FORBIDDEN)
+                # Device reconnecting after being soft-deleted: bring it back.
+                # Prevents the classic "client will never show up again" dead end
+                # where re-registration is permanently rejected with a 403.
+                existing.deleted = False
+                existing.approved = True
+                existing.status = "online"
+                existing.hostname = hostname
+                existing.platform = platform_name
+                existing.client_version = client_version
+                existing.device_fingerprint = fingerprint
+                existing.last_seen = timezone.now()
+                existing.last_ip = _client_ip(request)
+                existing.save(update_fields=[
+                    "deleted", "approved", "status", "hostname", "platform",
+                    "client_version", "device_fingerprint", "last_seen", "last_ip",
+                ])
+                ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion (key {key})")
+                return Response({"status": "ok", "auto_approved": True})
             existing.hostname = hostname
             existing.platform = platform_name
             existing.client_version = client_version
