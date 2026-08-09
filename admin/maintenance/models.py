@@ -154,7 +154,7 @@ class MaintenanceHistory(models.Model):
         return f"{self.action} on {self.maintenance_id} at {self.timestamp}"
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             raise ValueError("MaintenanceHistory records are immutable and cannot be updated")
         super().save(*args, **kwargs)
 
@@ -507,7 +507,7 @@ class LicenseHistory(models.Model):
         return f"{self.action} on {self.license.software_name} at {self.timestamp}"
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             raise ValueError("LicenseHistory records are immutable and cannot be updated")
         super().save(*args, **kwargs)
 

@@ -2251,11 +2251,16 @@ class OrgDashboardStatsView(APIView):
 
 
 def _record_asset_history(asset, action, prev=None, new=None, request=None, notes=""):
+    def _json_safe(data):
+        try:
+            return json.loads(json.dumps(data, default=str))
+        except (TypeError, ValueError):
+            return {}
     AssetHistory.objects.create(
         asset=asset,
         action=action,
-        previous_value=prev or {},
-        new_value=new or {},
+        previous_value=_json_safe(prev) if prev else {},
+        new_value=_json_safe(new) if new else {},
         performed_by=request.user.username if request and request.user.is_authenticated else "system",
         ip_address=_client_ip(request) if request else None,
         user_agent=request.META.get("HTTP_USER_AGENT", "") if request else "",
@@ -2266,6 +2271,30 @@ def _record_asset_history(asset, action, prev=None, new=None, request=None, note
 # ── Asset Category Views ────────────────────────────────────────────────────
 
 
+DEFAULT_ASSET_CATEGORIES = [
+    ("Laptop", "LAP"),
+    ("Desktop", "DSK"),
+    ("Monitor", "MON"),
+    ("Mobile", "MOB"),
+    ("Printer", "PRN"),
+    ("Network", "NET"),
+    ("Peripheral", "PER"),
+    ("Server", "SRV"),
+    ("Software", "SW"),
+    ("Furniture", "FUR"),
+    ("Other", "OTH"),
+]
+
+
+def seed_default_asset_categories(company):
+    """Create the default category set for a company when it has none yet."""
+    created = []
+    for name, code in DEFAULT_ASSET_CATEGORIES:
+        if not AssetCategory.objects.filter(name=name, company=company).exists():
+            created.append(AssetCategory.objects.create(name=name, code=code, company=company))
+    return created
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class AssetCategoryListView(APIView):
     def get(self, request):
@@ -2273,6 +2302,9 @@ class AssetCategoryListView(APIView):
         qs = AssetCategory.objects.filter(is_active=True)
         if company:
             qs = qs.filter(company=company)
+            if not qs.exists():
+                seed_default_asset_categories(company)
+                qs = AssetCategory.objects.filter(is_active=True, company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(name__icontains=search) | models.Q(code__icontains=search))

@@ -760,7 +760,7 @@ class AssetHistory(models.Model):
         return f"{self.action} on {self.asset} at {self.timestamp}"
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             raise ValueError("AssetHistory records are immutable and cannot be updated")
         super().save(*args, **kwargs)
 

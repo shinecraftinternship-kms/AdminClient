@@ -464,7 +464,7 @@ class AssetSerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source="parent.asset_name", read_only=True, default="")
     client_hostname = serializers.CharField(source="client.hostname", read_only=True, default="")
     children = serializers.SerializerMethodField()
-    tag_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
+    tag_list = serializers.ListField(child=serializers.CharField(), read_only=True)
     is_warranty_valid = serializers.BooleanField(read_only=True)
     warranty_status = serializers.CharField(read_only=True)
     age_days = serializers.IntegerField(read_only=True)
