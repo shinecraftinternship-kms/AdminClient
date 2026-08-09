@@ -80,7 +80,10 @@ class ClientListSerializer(serializers.ModelSerializer):
         
         if not obj.last_seen:
             return False
-        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        try:
+            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        except (TypeError, ValueError):
+            timeout = 120
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
 
@@ -105,7 +108,10 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         
         if not obj.last_seen:
             return False
-        timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        try:
+            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+        except (TypeError, ValueError):
+            timeout = 120
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
 

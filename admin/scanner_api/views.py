@@ -252,6 +252,18 @@ class PingClientView(APIView):
 
         client.save(update_fields=["status", "last_seen", "last_ip", "hostname", "client_version", "device_fingerprint", "scan_requested"])
 
+        # Keep the monitoring module in sync so it flips back online right away
+        # via the regular ping, not only through the separate heartbeat endpoint.
+        try:
+            from monitoring.models import DeviceMonitoringInfo
+            info, _ = DeviceMonitoringInfo.objects.get_or_create(client=client)
+            info.last_heartbeat = timezone.now()
+            info.monitoring_status = "online"
+            info.ip_address = _client_ip(request)
+            info.save(update_fields=["last_heartbeat", "monitoring_status", "ip_address", "updated_at"])
+        except Exception:
+            pass
+
         resp = {"status": "ok"}
         if trigger:
             resp["trigger_scan"] = True

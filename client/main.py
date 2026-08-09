@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -252,6 +252,31 @@ def listen_admin_broadcast(comm, hostname):
             pass
 
 
+def _try_rediscover(comm, current_url):
+    """Try cloud discovery then UDP discovery to find a live admin server.
+
+    Returns the new admin URL if found and reachable, else None.
+    """
+    candidates = []
+    if discover_admin_url:
+        try:
+            cloud_url = discover_admin_url()
+            if cloud_url:
+                candidates.append(cloud_url)
+        except Exception:
+            pass
+    try:
+        udp_url = discover_admin(timeout=3)
+        if udp_url:
+            candidates.append(udp_url)
+    except Exception:
+        pass
+    for url in candidates:
+        if url != current_url and comm.is_reachable(url):
+            return url
+    return None
+
+
 def handle_ws_command(command):
     cmd_type = command.get("command_type", "")
     payload = command.get("payload", {})
@@ -314,6 +339,8 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
     while True:
         try:
             resp = comm.ping(key, hostname, VERSION, fingerprint)
+            if not isinstance(resp, dict) or resp.get("status") != "ok":
+                raise ConnectionError("ping failed")
             consecutive_errors = 0
             backoff = 5
 
@@ -363,41 +390,19 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
             consecutive_errors += 1
             if consecutive_errors <= 3:
                 P(f"  [{datetime.now().strftime('%H:%M:%S')}] Heartbeat error: {e}")
-            elif consecutive_errors == 5:
-                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Multiple errors - trying cloud discovery...")
-                if discover_admin_url:
-                    discovered = discover_admin_url()
-                    if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
-                        comm.update_admin_url(discovered)
-                        cfg = load_config()
-                        cfg["admin_url"] = discovered
-                        save_config(cfg)
-                        consecutive_errors = 0
-                        backoff = 5
-                    else:
-                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Cloud discovery failed, trying UDP...")
-                        discovered = discover_admin(timeout=2)
-                        if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                            P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
-                            comm.update_admin_url(discovered)
-                            cfg = load_config()
-                            cfg["admin_url"] = discovered
-                            save_config(cfg)
-                            consecutive_errors = 0
-                            backoff = 5
+            elif consecutive_errors == 5 or consecutive_errors % 10 == 0:
+                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Multiple errors - trying discovery...")
+                new_url = _try_rediscover(comm, comm.admin_url)
+                if new_url:
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {new_url}")
+                    comm.update_admin_url(new_url)
+                    cfg = load_config()
+                    cfg["admin_url"] = new_url
+                    save_config(cfg)
+                    consecutive_errors = 0
+                    backoff = 5
                 else:
-                    discovered = discover_admin(timeout=2)
-                    if discovered and discovered != comm.admin_url and comm.is_reachable(discovered):
-                        P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovered admin at {discovered}")
-                        comm.update_admin_url(discovered)
-                        cfg = load_config()
-                        cfg["admin_url"] = discovered
-                        save_config(cfg)
-                        consecutive_errors = 0
-                        backoff = 5
-            elif consecutive_errors % 10 == 0:
-                P(f"  [{datetime.now().strftime('%H:%M:%S')}] Still disconnected ({consecutive_errors} errors). Retrying in {backoff}s...")
+                    P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovery failed, will keep retrying")
         time.sleep(min(backoff, 30))
         backoff = min(backoff * 2, 30)
 
@@ -507,6 +512,8 @@ def _start_event_monitors(comm, key, ws_client, monitoring_agent_id=None, monito
 # ── Background / auto-start mode ─────────────────────────────────────────────
 
 SILENT_FLAG = "--silent"
+MUTEX_NAME = "Local\\SystemScannerPro_Client_Mutex"
+_MUTEX_HANDLE = None
 
 
 def _hide_console_window():
@@ -533,25 +540,81 @@ def _silent_output():
         pass
 
 
-def _launch_hidden(argv):
-    """Relaunch this exe with no console window."""
-    import subprocess
-    try:
-        args = [sys.executable] + argv
-        if sys.platform == "win32":
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-            subprocess.Popen(args, creationflags=flags)
-        else:
-            subprocess.Popen(args)
+def _ensure_single_instance():
+    """Return False if another client process is already running.
+
+    Uses a Windows named mutex so a boot auto-start (Run key + Startup
+    folder) and a manual double-click never spawn duplicate agents.
+    """
+    global _MUTEX_HANDLE
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return True
+    try:
+        import ctypes
+        _MUTEX_HANDLE = ctypes.windll.kernel32.CreateMutexW(None, True, MUTEX_NAME)
+        if not _MUTEX_HANDLE:
+            return True
+        already_exists = ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
+        return not already_exists
     except Exception:
+        return True
+
+
+def _startup_folder():
+    """Return the current user's Windows Startup folder, or None."""
+    if sys.platform != "win32":
+        return None
+    base = os.environ.get("APPDATA", "")
+    if not base:
+        return None
+    folder = os.path.join(
+        base, "Microsoft", "Windows", "Start Menu", "Programs", "Startup"
+    )
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except Exception:
+        pass
+    return folder
+
+
+def _register_startup_script():
+    """Create a hidden launcher in the Startup folder.
+
+    Runs at every login even if the registry Run key is cleared or points to
+    a stale path, so the agent always comes back online after a reboot.
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    folder = _startup_folder()
+    if not folder:
+        return False
+    try:
+        vbs_path = os.path.join(folder, "SystemScannerProClient.vbs")
+        exe = sys.executable
+        quoted = '"' + exe.replace('"', '""') + '"'
+        content = (
+            'Set sh = CreateObject("WScript.Shell")\r\n'
+            f'sh.Run "{quoted} {SILENT_FLAG}", 0, False\r\n'
+        )
+        with open(vbs_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        _log_crash(f"OK: startup launcher created: {vbs_path}")
+        return True
+    except Exception as e:
+        _log_crash(f"WARN: startup launcher creation failed: {e}")
         return False
 
 
 def _register_autostart():
-    """Add this client exe to Windows startup (HKCU Run key)."""
+    """Register this client exe to start automatically at boot/login.
+
+    Re-registered on EVERY run (silent or not) so the Run key and Startup
+    folder launcher always point to the currently running exe, even if the
+    exe has been rebuilt or moved to a new folder.
+    """
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
+    ok = False
     try:
         import winreg
         exe = sys.executable
@@ -563,10 +626,12 @@ def _register_autostart():
             winreg.SetValueEx(key, "SystemScannerProClient", 0, winreg.REG_SZ,
                               f'"{exe}" {SILENT_FLAG}')
         _log_crash("OK: autostart registered in Windows Run key")
-        return True
+        ok = True
     except Exception as e:
         _log_crash(f"WARN: autostart registration failed: {e}")
-        return False
+    if _register_startup_script():
+        ok = True
+    return ok
 
 
 def main():
@@ -578,8 +643,14 @@ def main():
         _hide_console_window()
         _silent_output()
         _log_crash("OK: running in silent/background mode")
-    else:
-        _register_autostart()
+
+    # Always refresh auto-start (Run key + Startup folder) on every run so it
+    # points at the current exe even after a rebuild or move.
+    _register_autostart()
+
+    if not _ensure_single_instance():
+        _log_crash("INFO: another client instance is already running - exiting")
+        sys.exit(0)
 
     _log_crash("OK: main() starting")
     print_header()
@@ -629,73 +700,77 @@ def main():
                 save_config(config)
                 P(f"  Using default: {admin_url}")
     else:
-        P("  " + "=" * 50)
-        P("  Admin Server Configuration")
-        P("  " + "=" * 50)
-        P()
         if admin_url and admin_url != "http://localhost:80":
-            P(f"  Current Admin Server: {admin_url}")
-        P()
-        P("  [1] Use auto-discovered / saved server" + (f" ({admin_url})" if admin_url and admin_url != "http://localhost:80" else ""))
-        P("  [2] Enter new admin server URL")
-        P("  [3] Continue on localhost")
-        P("  [4] Exit")
-        P("  " + "=" * 50)
-        P()
-        choice = safe_input("  Select option [1-4]: ").strip()
-        _log_crash(f"OK: user chose '{choice}'")
+            P(f"  Using saved admin server: {admin_url}")
+            P()
+        else:
+            P("  " + "=" * 50)
+            P("  Admin Server Configuration")
+            P("  " + "=" * 50)
+            P()
+            if admin_url and admin_url != "http://localhost:80":
+                P(f"  Current Admin Server: {admin_url}")
+            P()
+            P("  [1] Use auto-discovered / saved server" + (f" ({admin_url})" if admin_url and admin_url != "http://localhost:80" else ""))
+            P("  [2] Enter new admin server URL")
+            P("  [3] Continue on localhost")
+            P("  [4] Exit")
+            P("  " + "=" * 50)
+            P()
+            choice = safe_input("  Select option [1-4]: ").strip()
+            _log_crash(f"OK: user chose '{choice}'")
 
-        if choice == "2":
-            admin_url = prompt_admin_url()
-            config["admin_url"] = admin_url
-            config["manual_url"] = True
-            save_config(config)
-            P(f"  Admin server set to: {admin_url}")
-            P()
-        elif choice == "3":
-            admin_url = "http://localhost:80"
-            config["admin_url"] = admin_url
-            config["manual_url"] = True
-            save_config(config)
-            P(f"  Using localhost: {admin_url}")
-            P()
-        elif choice == "4":
-            P("  Exiting...")
-            sys.exit(0)
-        elif choice == "1" or choice == "":
-            if not admin_url or admin_url == "http://localhost:80":
-                P("  Attempting auto-discovery...")
-                discovered = False
-                if discover_admin_url:
-                    try:
-                        cloud_url = discover_admin_url()
-                        if cloud_url:
-                            admin_url = cloud_url
+            if choice == "2":
+                admin_url = prompt_admin_url()
+                config["admin_url"] = admin_url
+                config["manual_url"] = True
+                save_config(config)
+                P(f"  Admin server set to: {admin_url}")
+                P()
+            elif choice == "3":
+                admin_url = "http://localhost:80"
+                config["admin_url"] = admin_url
+                config["manual_url"] = True
+                save_config(config)
+                P(f"  Using localhost: {admin_url}")
+                P()
+            elif choice == "4":
+                P("  Exiting...")
+                sys.exit(0)
+            elif choice == "1" or choice == "":
+                if not admin_url or admin_url == "http://localhost:80":
+                    P("  Attempting auto-discovery...")
+                    discovered = False
+                    if discover_admin_url:
+                        try:
+                            cloud_url = discover_admin_url()
+                            if cloud_url:
+                                admin_url = cloud_url
+                                config["admin_url"] = admin_url
+                                save_config(config)
+                                P(f"  [OK] Discovered admin server: {admin_url}")
+                                discovered = True
+                        except Exception:
+                            pass
+                    if not discovered:
+                        udp_url = discover_admin(timeout=3)
+                        if udp_url:
+                            admin_url = udp_url
                             config["admin_url"] = admin_url
                             save_config(config)
                             P(f"  [OK] Discovered admin server: {admin_url}")
                             discovered = True
-                    except Exception:
-                        pass
-                if not discovered:
-                    udp_url = discover_admin(timeout=3)
-                    if udp_url:
-                        admin_url = udp_url
+                    if not discovered:
+                        admin_url = "http://localhost:80"
                         config["admin_url"] = admin_url
                         save_config(config)
-                        P(f"  [OK] Discovered admin server: {admin_url}")
-                        discovered = True
-                if not discovered:
-                    admin_url = "http://localhost:80"
-                    config["admin_url"] = admin_url
-                    save_config(config)
-                    P(f"  Using default: {admin_url}")
+                        P(f"  Using default: {admin_url}")
+                else:
+                    P(f"  Using saved server: {admin_url}")
+                P()
             else:
-                P(f"  Using saved server: {admin_url}")
-            P()
-        else:
-            P("  Invalid option. Using saved/default server.")
-            P()
+                P("  Invalid option. Using saved/default server.")
+                P()
 
     hostname = socket.gethostname()
     _log_crash(f"OK: admin_url={admin_url} hostname={hostname}")
@@ -718,6 +793,16 @@ def main():
         P(f"  [ERROR] Cannot reach admin server at {admin_url}")
 
         if silent:
+            if retry_count >= 3:
+                P(f"  Trying to rediscover admin server... (attempt {retry_count})")
+                new_url = _try_rediscover(comm, admin_url)
+                if new_url:
+                    P(f"  [OK] Rediscovered admin server: {new_url}")
+                    admin_url = new_url
+                    config["admin_url"] = new_url
+                    save_config(config)
+                    retry_count = 0
+                    continue
             P(f"  Retrying in 15s... (attempt {retry_count})")
             time.sleep(15)
             continue
@@ -864,14 +949,15 @@ def main():
     except Exception as e:
         P(f"  [WARN] Monitoring agent registration failed: {e}")
 
-    if not silent and _launch_hidden([SILENT_FLAG]):
-        _log_crash("OK: connected; relaunched hidden, closing console")
-        P("  Connected to admin server. Moving to background...")
-        P("  This window will close now. The client keeps running hidden")
-        P("  and reconnects automatically when this machine comes online.")
+    if not silent and getattr(sys, "frozen", False):
+        # Keep the SAME process running in the background instead of
+        # spawning a separate child that could die and take the agent
+        # offline forever. Hide the console window and continue here.
+        _hide_console_window()
+        _silent_output()
+        _log_crash("OK: connected; hid console, running in background")
+        P("  Connected to admin server. Running in background...")
         P()
-        time.sleep(2)
-        return
 
     P("  Starting communication channels...")
     P()

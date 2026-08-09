@@ -99,7 +99,10 @@ class Client(models.Model):
             return False
         if not self.last_seen:
             return True
-        threshold_seconds = int(Setting.get("stale_threshold_seconds", "120"))
+        try:
+            threshold_seconds = int(Setting.get("stale_threshold_seconds", "120"))
+        except (TypeError, ValueError):
+            threshold_seconds = 120
         threshold = timezone.now() - timezone.timedelta(seconds=max(self.scan_interval * 2, threshold_seconds))
         return self.last_seen < threshold
 
