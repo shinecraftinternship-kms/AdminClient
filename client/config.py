@@ -61,21 +61,25 @@ def get_admin_url():
     config = load_config()
     cached_url = config.get("admin_url", "")
 
-    if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
-        return cached_url
-
+    # Cloud discovery is always checked first (even for manual URLs) so the
+    # client self-heals to the currently registered admin server. The manual
+    # URL is kept purely as a fallback when discovery is unavailable.
     try:
         from client.discovery import discover_admin_url
         discovered = discover_admin_url()
         if discovered:
             if discovered != cached_url:
                 config["admin_url"] = discovered
+                config["manual_url"] = False
                 save_config(config)
             return discovered
     except ImportError:
         pass
     except Exception:
         pass
+
+    if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
+        return cached_url
 
     if cached_url and cached_url != LOCALHOST_URL:
         return cached_url

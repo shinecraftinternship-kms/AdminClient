@@ -210,8 +210,6 @@ def cloud_discovery_loop(comm):
     while True:
         time.sleep(CLOUD_DISCOVERY_INTERVAL)
         try:
-            if load_config().get("manual_url"):
-                continue
             if discover_admin_url:
                 new_url = discover_admin_url()
                 if new_url and new_url != comm.admin_url:
@@ -219,6 +217,7 @@ def cloud_discovery_loop(comm):
                         comm.update_admin_url(new_url)
                         cfg = load_config()
                         cfg["admin_url"] = new_url
+                        cfg["manual_url"] = False
                         save_config(cfg)
                         now = datetime.now().strftime('%H:%M:%S')
                         P(f"  [{now}] [DISCOVERY] Admin moved to {new_url}")

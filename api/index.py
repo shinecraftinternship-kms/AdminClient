@@ -86,6 +86,17 @@ def _bootstrap():
     vercel_url = os.getenv("VERCEL_URL", "").strip()
     if vercel_url:
         Setting.set("admin_server_url", f"https://{vercel_url}")
+        # Register this live deployment into the Supabase cloud registry so
+        # client discovery always resolves to the currently running admin.
+        # This keeps the client's admin URL dynamic: every Vercel cold start
+        # re-registers the current deployment, overriding stale LAN dev IPs
+        # that a local admin server may have written earlier.
+        try:
+            from scanner_api.supabase_client import register_server_in_registry
+            register_server_in_registry(vercel_url, 443, "https")
+            _init_log.append(f"[OK] Cloud discovery registered: https://{vercel_url}")
+        except Exception as e:
+            _init_log.append(f"[WARN] Cloud discovery registration failed: {e}")
     else:
         # Empty/missing VERCEL_URL previously fell back to a dead hardcoded
         # domain and overwrote a good setting. Keep the existing value instead.
