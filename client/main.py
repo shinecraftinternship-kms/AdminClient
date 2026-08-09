@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -514,6 +514,8 @@ def _start_event_monitors(comm, key, ws_client, monitoring_agent_id=None, monito
 SILENT_FLAG = "--silent"
 MUTEX_NAME = "Local\\SystemScannerPro_Client_Mutex"
 _MUTEX_HANDLE = None
+RESCUE_FLAG = "--rescue"
+_CONSOLE_CTRL_HANDLER = None
 
 
 def _hide_console_window():
@@ -529,6 +531,73 @@ def _hide_console_window():
         pass
 
 
+def _detach_console():
+    """Fully detach this process from its console window.
+
+    After this, closing the terminal window does NOT kill the agent: the
+    process keeps running in the background. This is what keeps the client
+    online and scanning after the exe window closes once approved.
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+        ctypes.windll.kernel32.FreeConsole()
+    except Exception:
+        pass
+
+
+def _launch_rescue():
+    """Start a fully detached background copy of this exe.
+
+    Called when the user closes the console window before the agent has
+    detached itself, so the client does not go offline just because the
+    terminal was closed. The rescue process runs with --rescue --silent.
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    try:
+        import subprocess
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        subprocess.Popen(
+            [sys.executable, RESCUE_FLAG, SILENT_FLAG],
+            creationflags=flags,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _install_console_close_handler():
+    """If the user closes the console window (X button), spawn a detached
+    background copy so the agent keeps running instead of going offline."""
+    global _CONSOLE_CTRL_HANDLER
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+        CTRL_CLOSE_EVENT = 2
+        HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_uint)
+
+        @HandlerRoutine
+        def _handler(ctrl_type):
+            if ctrl_type == CTRL_CLOSE_EVENT:
+                _launch_rescue()
+            return True
+
+        _CONSOLE_CTRL_HANDLER = _handler
+        ctypes.windll.kernel32.SetConsoleCtrlHandler(_handler, 1)
+    except Exception:
+        pass
+
+
 def _silent_output():
     """Redirect prints to a log file when running hidden (no console)."""
     try:
@@ -536,6 +605,12 @@ def _silent_output():
         fh = open(log_path, "a", encoding="utf-8")
         sys.stdout = fh
         sys.stderr = fh
+        return
+    except Exception:
+        pass
+    try:
+        sys.stdout = open(os.devnull, "w")
+        sys.stderr = sys.stdout
     except Exception:
         pass
 
@@ -637,20 +712,28 @@ def _register_autostart():
 def main():
     global _global_scan_config
 
+    rescue = RESCUE_FLAG in sys.argv
+    if rescue:
+        sys.argv = [a for a in sys.argv if a != RESCUE_FLAG]
+        # The process that spawned us is dying (console closed); wait for it
+        # to release the single-instance mutex before we take over.
+        time.sleep(8)
+
     silent = SILENT_FLAG in sys.argv
     if silent:
         sys.argv = [a for a in sys.argv if a != SILENT_FLAG]
-        _hide_console_window()
         _silent_output()
+        _detach_console()
         _log_crash("OK: running in silent/background mode")
 
     # Always refresh auto-start (Run key + Startup folder) on every run so it
     # points at the current exe even after a rebuild or move.
     _register_autostart()
 
-    if not _ensure_single_instance():
-        _log_crash("INFO: another client instance is already running - exiting")
-        sys.exit(0)
+    if not rescue:
+        if not _ensure_single_instance():
+            _log_crash("INFO: another client instance is already running - exiting")
+            sys.exit(0)
 
     _log_crash("OK: main() starting")
     print_header()
@@ -774,6 +857,11 @@ def main():
 
     hostname = socket.gethostname()
     _log_crash(f"OK: admin_url={admin_url} hostname={hostname}")
+
+    if not silent:
+        # If the user closes the terminal (X button) before the agent detaches
+        # itself, spawn a detached background copy so the client stays online.
+        _install_console_close_handler()
 
     retry_count = 0
     while True:
@@ -952,10 +1040,11 @@ def main():
     if not silent and getattr(sys, "frozen", False):
         # Keep the SAME process running in the background instead of
         # spawning a separate child that could die and take the agent
-        # offline forever. Hide the console window and continue here.
-        _hide_console_window()
+        # offline forever. Redirect output, then fully detach from the
+        # console so closing the terminal does not kill this process.
         _silent_output()
-        _log_crash("OK: connected; hid console, running in background")
+        _detach_console()
+        _log_crash("OK: connected; detached console, running in background")
         P("  Connected to admin server. Running in background...")
         P()
 
