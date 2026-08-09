@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -550,12 +550,16 @@ def _detach_console():
         pass
 
 
-def _launch_rescue():
-    """Start a fully detached background copy of this exe.
+def _spawn_background():
+    """Start a fully detached hidden copy of this exe (no console window).
 
-    Called when the user closes the console window before the agent has
-    detached itself, so the client does not go offline just because the
-    terminal was closed. The rescue process runs with --rescue --silent.
+    In a PyInstaller onefile build, the app runs as a child of the bootloader
+    which keeps the console window attached, so calling FreeConsole() inside
+    the app never closes the terminal. The reliable way to close the terminal
+    and keep the agent running is to spawn a hidden detached copy here and let
+    this process exit. The copy runs with --rescue --silent so it skips the
+    single-instance check (the exiting process still holds the mutex) and
+    continues the agent in the background.
     """
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
@@ -573,6 +577,16 @@ def _launch_rescue():
         return True
     except Exception:
         return False
+
+
+def _launch_rescue():
+    """Start a fully detached background copy of this exe.
+
+    Called when the user closes the console window before the agent has moved
+    to the background, so the client does not go offline just because the
+    terminal was closed.
+    """
+    return _spawn_background()
 
 
 def _install_console_close_handler():
@@ -657,12 +671,13 @@ def _register_startup_script():
 
     Runs at every login even if the registry Run key is cleared or points to
     a stale path, so the agent always comes back online after a reboot.
+    Returns the path to the created .vbs launcher, or None on failure.
     """
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
-        return False
+        return None
     folder = _startup_folder()
     if not folder:
-        return False
+        return None
     try:
         vbs_path = os.path.join(folder, "SystemScannerProClient.vbs")
         exe = sys.executable
@@ -674,10 +689,10 @@ def _register_startup_script():
         with open(vbs_path, "w", encoding="utf-8") as f:
             f.write(content)
         _log_crash(f"OK: startup launcher created: {vbs_path}")
-        return True
+        return vbs_path
     except Exception as e:
         _log_crash(f"WARN: startup launcher creation failed: {e}")
-        return False
+        return None
 
 
 def _register_autostart():
@@ -686,25 +701,33 @@ def _register_autostart():
     Re-registered on EVERY run (silent or not) so the Run key and Startup
     folder launcher always point to the currently running exe, even if the
     exe has been rebuilt or moved to a new folder.
+
+    Both the Run key and the Startup folder launch the exe through the
+    hidden .vbs launcher (wscript, window style 0) so NO console window is
+    ever shown at login - the agent starts fully hidden in the background.
     """
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
     ok = False
+    vbs_path = _register_startup_script()
     try:
         import winreg
-        exe = sys.executable
+        if vbs_path:
+            launch = f'wscript.exe "{vbs_path}"'
+        else:
+            launch = f'"{sys.executable}" {SILENT_FLAG}'
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
             r"Software\Microsoft\Windows\CurrentVersion\Run",
             0, winreg.KEY_SET_VALUE,
         ) as key:
             winreg.SetValueEx(key, "SystemScannerProClient", 0, winreg.REG_SZ,
-                              f'"{exe}" {SILENT_FLAG}')
-        _log_crash("OK: autostart registered in Windows Run key")
+                              launch)
+        _log_crash("OK: autostart registered in Windows Run key (hidden)")
         ok = True
     except Exception as e:
         _log_crash(f"WARN: autostart registration failed: {e}")
-    if _register_startup_script():
+    if vbs_path:
         ok = True
     return ok
 
@@ -1038,13 +1061,18 @@ def main():
         P(f"  [WARN] Monitoring agent registration failed: {e}")
 
     if not silent and getattr(sys, "frozen", False):
-        # Keep the SAME process running in the background instead of
-        # spawning a separate child that could die and take the agent
-        # offline forever. Redirect output, then fully detach from the
-        # console so closing the terminal does not kill this process.
+        # Move to the background: spawn a hidden detached copy of this exe
+        # and exit, which closes the terminal window. The background copy
+        # keeps the client online and scanning after the window closes.
+        if _spawn_background():
+            P("  Connected to admin server. Moving to background...")
+            P()
+            _log_crash("OK: spawned background agent; closing terminal")
+            return
+        # Fallback: if we could not spawn a copy, keep running in this process.
         _silent_output()
         _detach_console()
-        _log_crash("OK: connected; detached console, running in background")
+        _log_crash("WARN: could not spawn background agent; continuing in place")
         P("  Connected to admin server. Running in background...")
         P()
 
