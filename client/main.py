@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -807,77 +807,83 @@ def main():
                 save_config(config)
                 P(f"  Using default: {admin_url}")
     else:
+        # Manual run: ALWAYS ask so the user can continue with the saved
+        # server or switch to a new one. This prompt only appears when the
+        # exe is launched by hand - boot autostart runs with --silent and
+        # never asks.
+        P("  " + "=" * 50)
+        P("  Admin Server Configuration")
+        P("  " + "=" * 50)
+        P()
         if admin_url and admin_url != "http://localhost:80":
-            P(f"  Using saved admin server: {admin_url}")
-            P()
-        else:
-            P("  " + "=" * 50)
-            P("  Admin Server Configuration")
-            P("  " + "=" * 50)
-            P()
-            if admin_url and admin_url != "http://localhost:80":
-                P(f"  Current Admin Server: {admin_url}")
-            P()
-            P("  [1] Use auto-discovered / saved server" + (f" ({admin_url})" if admin_url and admin_url != "http://localhost:80" else ""))
-            P("  [2] Enter new admin server URL")
-            P("  [3] Continue on localhost")
-            P("  [4] Exit")
-            P("  " + "=" * 50)
-            P()
-            choice = safe_input("  Select option [1-4]: ").strip()
-            _log_crash(f"OK: user chose '{choice}'")
+            P(f"  Current Admin Server: {admin_url}")
+        P()
+        P("  [1] Continue with this admin server" + (f" ({admin_url})" if admin_url and admin_url != "http://localhost:80" else ""))
+        P("  [2] Enter new admin server URL")
+        P("  [3] Continue on localhost")
+        P("  [4] Exit")
+        P("  " + "=" * 50)
+        P()
+        choice = safe_input("  Select option [1-4]: ").strip()
+        _log_crash(f"OK: user chose '{choice}'")
 
-            if choice == "2":
-                admin_url = prompt_admin_url()
+        if choice == "2":
+            new_url = safe_input("  Enter admin server URL (e.g., http://192.168.1.100:80): ").strip()
+            if not new_url:
+                P("  No URL entered. Keeping current server.")
+                P()
+            else:
+                admin_url = new_url.rstrip("/")
                 config["admin_url"] = admin_url
                 config["manual_url"] = True
                 save_config(config)
                 P(f"  Admin server set to: {admin_url}")
                 P()
-            elif choice == "3":
-                admin_url = "http://localhost:80"
-                config["admin_url"] = admin_url
-                config["manual_url"] = True
-                save_config(config)
-                P(f"  Using localhost: {admin_url}")
+        elif choice == "3":
+            admin_url = "http://localhost:80"
+            config["admin_url"] = admin_url
+            config["manual_url"] = True
+            save_config(config)
+            P(f"  Using localhost: {admin_url}")
+            P()
+        elif choice == "4":
+            P("  Exiting...")
+            sys.exit(0)
+        elif choice == "1" or choice == "":
+            if admin_url and admin_url != "http://localhost:80":
+                P(f"  Continuing with: {admin_url}")
                 P()
-            elif choice == "4":
-                P("  Exiting...")
-                sys.exit(0)
-            elif choice == "1" or choice == "":
-                if not admin_url or admin_url == "http://localhost:80":
-                    P("  Attempting auto-discovery...")
-                    discovered = False
-                    if discover_admin_url:
-                        try:
-                            cloud_url = discover_admin_url()
-                            if cloud_url:
-                                admin_url = cloud_url
-                                config["admin_url"] = admin_url
-                                save_config(config)
-                                P(f"  [OK] Discovered admin server: {admin_url}")
-                                discovered = True
-                        except Exception:
-                            pass
-                    if not discovered:
-                        udp_url = discover_admin(timeout=3)
-                        if udp_url:
-                            admin_url = udp_url
+            else:
+                P("  Attempting auto-discovery...")
+                discovered = False
+                if discover_admin_url:
+                    try:
+                        cloud_url = discover_admin_url()
+                        if cloud_url:
+                            admin_url = cloud_url
                             config["admin_url"] = admin_url
                             save_config(config)
                             P(f"  [OK] Discovered admin server: {admin_url}")
                             discovered = True
-                    if not discovered:
-                        admin_url = "http://localhost:80"
+                    except Exception:
+                        pass
+                if not discovered:
+                    udp_url = discover_admin(timeout=3)
+                    if udp_url:
+                        admin_url = udp_url
                         config["admin_url"] = admin_url
                         save_config(config)
-                        P(f"  Using default: {admin_url}")
-                else:
-                    P(f"  Using saved server: {admin_url}")
+                        P(f"  [OK] Discovered admin server: {admin_url}")
+                        discovered = True
+                if not discovered:
+                    admin_url = "http://localhost:80"
+                    config["admin_url"] = admin_url
+                    save_config(config)
+                    P(f"  Using default: {admin_url}")
                 P()
-            else:
-                P("  Invalid option. Using saved/default server.")
-                P()
+        else:
+            P("  Invalid option. Using saved/default server.")
+            P()
 
     hostname = socket.gethostname()
     _log_crash(f"OK: admin_url={admin_url} hostname={hostname}")
