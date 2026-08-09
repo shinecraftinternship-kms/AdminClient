@@ -1,5 +1,13 @@
 let dashboardData = null;
 let analyticsData = null;
+const chartInstances = {};
+
+function makeChart(canvasId, config) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    chartInstances[canvasId] = new Chart(ctx, config);
+}
 
 function loadDashboard() {
     Promise.all([
@@ -40,50 +48,41 @@ function renderCharts() {
 
     // Category chart (doughnut)
     if (d.by_category && d.by_category.length > 0) {
-        const ctx = document.getElementById('categoryChart');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: d.by_category.map(c => c.name || 'Uncategorized'),
-                    datasets: [{
-                        data: d.by_category.map(c => c.count),
-                        backgroundColor: ['#4f8cff', '#22c55e', '#eab308', '#ef4444', '#a855f7', '#f97316', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1'],
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { padding: 12 } } } }
-            });
-        }
+        makeChart('categoryChart', {
+            type: 'doughnut',
+            data: {
+                labels: d.by_category.map(c => c.name || 'Uncategorized'),
+                datasets: [{
+                    data: d.by_category.map(c => c.count),
+                    backgroundColor: ['#4f8cff', '#22c55e', '#eab308', '#ef4444', '#a855f7', '#f97316', '#06b6d4', '#ec4899', '#14b8a6', '#6366f1'],
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { padding: 12 } } } }
+        });
     }
 
     // Department chart (bar)
     if (d.by_department && d.by_department.length > 0) {
-        const ctx = document.getElementById('departmentChart');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: d.by_department.map(d => d.name || 'None'),
-                    datasets: [{ label: 'Assets', data: d.by_department.map(d => d.count), backgroundColor: '#4f8cff', borderRadius: 6 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
+        makeChart('departmentChart', {
+            type: 'bar',
+            data: {
+                labels: d.by_department.map(d => d.name || 'None'),
+                datasets: [{ label: 'Assets', data: d.by_department.map(d => d.count), backgroundColor: '#4f8cff', borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
     }
 
     // Growth trend (line)
     if (analyticsData && analyticsData.monthly_growth && analyticsData.monthly_growth.length > 0) {
-        const ctx = document.getElementById('growthChart');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: analyticsData.monthly_growth.map(m => m.month),
-                    datasets: [{ label: 'New Assets', data: analyticsData.monthly_growth.map(m => m.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,0.1)', fill: true, tension: 0.4 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
+        makeChart('growthChart', {
+            type: 'line',
+            data: {
+                labels: analyticsData.monthly_growth.map(m => m.month),
+                datasets: [{ label: 'New Assets', data: analyticsData.monthly_growth.map(m => m.count), borderColor: '#4f8cff', backgroundColor: 'rgba(79,140,255,0.1)', fill: true, tension: 0.4 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
     }
 
     // Lifecycle distribution (pie)
@@ -96,7 +95,7 @@ function renderCharts() {
                 'Maintenance': '#f97316', 'Returned': '#6b7280', 'Lost': '#ef4444',
                 'Damaged': '#ef4444', 'Retired': '#9ca3af', 'Disposed': '#374151',
             };
-            new Chart(ctx, {
+            makeChart('lifecycleChart', {
                 type: 'pie',
                 data: {
                     labels: Object.keys(d.by_status),
@@ -112,32 +111,26 @@ function renderCharts() {
 
     // Location chart (bar)
     if (d.by_location && d.by_location.length > 0) {
-        const ctx = document.getElementById('locationChart');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: d.by_location.map(l => l.name || 'None'),
-                    datasets: [{ label: 'Assets', data: d.by_location.map(l => l.count), backgroundColor: '#22c55e', borderRadius: 6 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
-            });
-        }
+        makeChart('locationChart', {
+            type: 'bar',
+            data: {
+                labels: d.by_location.map(l => l.name || 'None'),
+                datasets: [{ label: 'Assets', data: d.by_location.map(l => l.count), backgroundColor: '#22c55e', borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+        });
     }
 
     // Value by department (bar)
     if (analyticsData && analyticsData.value_by_department && analyticsData.value_by_department.length > 0) {
-        const ctx = document.getElementById('valueChart');
-        if (ctx) {
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: analyticsData.value_by_department.map(d => d.name || 'None'),
-                    datasets: [{ label: 'Value ($)', data: analyticsData.value_by_department.map(d => d.total_value || 0), backgroundColor: '#eab308', borderRadius: 6 }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
+        makeChart('valueChart', {
+            type: 'bar',
+            data: {
+                labels: analyticsData.value_by_department.map(d => d.name || 'None'),
+                datasets: [{ label: 'Value ($)', data: analyticsData.value_by_department.map(d => d.total_value || 0), backgroundColor: '#eab308', borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
     }
 }
 

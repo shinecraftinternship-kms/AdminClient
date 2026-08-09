@@ -601,3 +601,11 @@ label {
     background: var(--border-color);
     border-radius: 2px;
 }
+
+/* Fixed-height wrapper for Chart.js canvases. Without a constrained height,
+   maintainAspectRatio:false charts re-measure their container on every resize
+   and the canvas grows taller each time. */
+.chart-box {
+    position: relative;
+    height: 250px;
+}
