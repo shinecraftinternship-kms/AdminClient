@@ -266,7 +266,9 @@ CSRF_COOKIE_PATH = "/"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_SAVE_EVERY_REQUEST = True
+# Save the session only when modified. With DB-backed sessions (Supabase),
+# saving on every request forces a Postgres round-trip on every page load,
+# which makes navigation feel slow (or time out / get "interrupted").
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 SECURE_BROWSER_XSS_FILTER = True

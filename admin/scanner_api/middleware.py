@@ -187,16 +187,24 @@ class SessionTimeoutMiddleware:
             except Exception:
                 timeout_seconds = 7200
 
+            now = time.time()
+            last_ts = None
             last_activity = request.session.get("last_activity_ts")
             if last_activity:
                 try:
-                    elapsed = time.time() - float(last_activity)
-                    if elapsed > timeout_seconds:
-                        logout(request)
-                        return redirect("/login/?timeout=1")
+                    last_ts = float(last_activity)
                 except (ValueError, TypeError):
-                    pass
-            request.session["last_activity_ts"] = str(time.time())
+                    last_ts = None
+
+            if last_ts is not None and now - last_ts > timeout_seconds:
+                logout(request)
+                return redirect("/login/?timeout=1")
+
+            # Only refresh the activity stamp periodically so we don't mark the
+            # session modified (forcing a DB write) on every single request.
+            if last_ts is None or now - last_ts >= 60:
+                request.session["last_activity_ts"] = str(now)
+                request.session.modified = True
 
         response = self.get_response(request)
         return response
