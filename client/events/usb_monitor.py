@@ -22,6 +22,7 @@ def _run_powershell(script, timeout=15):
             ["powershell", "-NoProfile", "-Command", script],
             capture_output=True, timeout=timeout,
             encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return result.stdout.strip()
     except Exception:
@@ -33,6 +34,7 @@ def _run_command(cmd, timeout=15):
         result = subprocess.run(
             cmd, capture_output=True, timeout=timeout,
             encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return result.stdout.strip()
     except Exception:

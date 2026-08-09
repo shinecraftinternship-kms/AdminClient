@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 

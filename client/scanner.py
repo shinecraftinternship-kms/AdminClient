@@ -12,6 +12,7 @@ def run_command(cmd, timeout=30, shell=False):
         result = subprocess.run(
             cmd, capture_output=True, timeout=timeout,
             shell=shell, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return result.stdout.strip(), result.stderr.strip(), result.returncode
     except Exception as e:
