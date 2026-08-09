@@ -1613,6 +1613,27 @@ class LocationBulkActionView(APIView):
 # ── Department Views ────────────────────────────────────────────────────────
 
 
+DEFAULT_DEPARTMENTS = [
+    ("Engineering", "ENG"),
+    ("Finance", "FIN"),
+    ("HR", "HR"),
+    ("IT", "IT"),
+    ("Marketing", "MKT"),
+    ("Operations", "OPS"),
+    ("Sales", "SAL"),
+    ("Support", "SUP"),
+]
+
+
+def seed_default_departments(company):
+    """Create the default department set for a company when it has none yet."""
+    created = []
+    for name, code in DEFAULT_DEPARTMENTS:
+        if not Department.objects.filter(name=name, company=company, deleted=False).exists():
+            created.append(Department.objects.create(name=name, code=code, company=company))
+    return created
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class DepartmentListView(APIView):
     def get(self, request):
@@ -1620,6 +1641,9 @@ class DepartmentListView(APIView):
         qs = Department.objects.filter(deleted=False)
         if company:
             qs = qs.filter(company=company)
+            if not qs.exists():
+                seed_default_departments(company)
+                qs = Department.objects.filter(deleted=False, company=company)
         search = request.query_params.get("search", "").strip()
         s = request.query_params.get("status", "").strip()
         if search:
@@ -2364,6 +2388,25 @@ class AssetCategoryDetailView(APIView):
 # ── Asset Vendor Views ──────────────────────────────────────────────────────
 
 
+DEFAULT_ASSET_VENDORS = [
+    "Apple",
+    "Dell",
+    "HP",
+    "Lenovo",
+    "Microsoft",
+    "Generic",
+]
+
+
+def seed_default_asset_vendors(company):
+    """Create the default vendor set for a company when it has none yet."""
+    created = []
+    for name in DEFAULT_ASSET_VENDORS:
+        if not AssetVendor.objects.filter(name=name, company=company).exists():
+            created.append(AssetVendor.objects.create(name=name, company=company))
+    return created
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class AssetVendorListView(APIView):
     def get(self, request):
@@ -2371,6 +2414,9 @@ class AssetVendorListView(APIView):
         qs = AssetVendor.objects.all()
         if company:
             qs = qs.filter(company=company)
+            if not qs.exists():
+                seed_default_asset_vendors(company)
+                qs = AssetVendor.objects.filter(company=company)
         search = request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(models.Q(name__icontains=search) | models.Q(contact_person__icontains=search))
