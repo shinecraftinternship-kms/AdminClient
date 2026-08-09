@@ -680,9 +680,13 @@ def _register_startup_script():
     try:
         vbs_path = os.path.join(folder, "SystemScannerProClient.vbs")
         exe = sys.executable
+        # WScript.Shell.Run cannot resolve quoted paths that contain
+        # consecutive double spaces (e.g. "admin-client  main\..."), failing
+        # with "file not found" (80070002) at boot. Wrapping the command in
+        # cmd /c with doubled quotes handles any path spacing correctly.
         content = (
             "Set sh = CreateObject(\"WScript.Shell\")\r\n"
-            f'sh.Run "{exe} {SILENT_FLAG}", 0, False\r\n'
+            f'sh.Run "cmd /c """"{exe}"""" {SILENT_FLAG}", 0, False\r\n'
         )
         # newline="" disables universal newline translation, otherwise Python
         # on Windows turns the "\n" into "\r\n" and we get "\r\r\n" output.
