@@ -4,6 +4,8 @@ let groups = [];
 let scanTriggerPoll = null;
 let detailRefreshInterval;
 let hasLoadedOnce = false;
+let manualFormTouched = false;
+let scanConfigTouched = false;
 
 function loadClient() {
     Promise.all([
@@ -471,6 +473,7 @@ function renderSystem() {
 
 function renderManual() {
     if (!clientData) return;
+    if (manualFormTouched) return;
     document.getElementById('manualHostname').value = clientData.hostname || '';
     document.getElementById('manualCost').value = clientData.purchase_cost || '';
     document.getElementById('manualPurchaseDate').value = clientData.purchase_date || '';
@@ -499,7 +502,7 @@ function saveManual() {
     fetch(`/api/clients/${CLIENT_KEY}/manual`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
     }).then(r => r.json()).then(res => {
-        if (res.status === 'ok') { showToast('Saved!', 'success'); loadClient(); }
+        if (res.status === 'ok') { manualFormTouched = false; showToast('Saved!', 'success'); loadClient(); }
         else { showToast('Error: ' + (res.message || 'Unknown'), 'danger'); }
     });
 }
@@ -638,6 +641,7 @@ function filterSoftware() {
 }
 
 function renderScanConfig() {
+    if (scanConfigTouched) return;
     fetch(`/api/clients/${CLIENT_KEY}/scan-config`).then(r => r.json()).then(config => {
         document.getElementById('scanInterval').value = config.interval_seconds || 3600;
         document.getElementById('scanEnabled').checked = config.enabled !== false;
@@ -648,7 +652,7 @@ function saveScanConfig() {
     fetch(`/api/clients/${CLIENT_KEY}/scan-config`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ interval_seconds: parseInt(document.getElementById('scanInterval').value), enabled: document.getElementById('scanEnabled').checked })
-    }).then(r => r.json()).then(res => { if (res.status === 'ok') showToast('Scan config saved!', 'success'); });
+    }).then(r => r.json()).then(res => { if (res.status === 'ok') { scanConfigTouched = false; showToast('Scan config saved!', 'success'); } });
 }
 
 function triggerScan() {
@@ -702,6 +706,21 @@ function startDetailRefresh() {
     if (detailRefreshInterval) clearInterval(detailRefreshInterval);
     detailRefreshInterval = setInterval(loadClient, 10000);
 }
+
+['manualHostname', 'manualGroup', 'manualCost', 'manualPurchaseDate', 'manualWarranty', 'manualTags', 'manualVendor', 'manualVendorContact', 'manualNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', () => { manualFormTouched = true; });
+        el.addEventListener('change', () => { manualFormTouched = true; });
+    }
+});
+['scanInterval', 'scanEnabled'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', () => { scanConfigTouched = true; });
+        el.addEventListener('change', () => { scanConfigTouched = true; });
+    }
+});
 
 loadClient();
 startDetailRefresh();
