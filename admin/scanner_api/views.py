@@ -537,7 +537,13 @@ class AdminClientInfoView(APIView):
         client = Client.objects.filter(registration_key=key).first()
         if not client:
             return Response({"registered": False})
-        return Response({"registered": True, "registration_key": client.registration_key, "hostname": client.hostname, "status": client.status})
+        # Keep the admin's own client online while the dashboard is being viewed.
+        # The dashboard polls this endpoint every few seconds.
+        client.status = "online"
+        client.deleted = False
+        client.last_seen = timezone.now()
+        client.save(update_fields=["status", "deleted", "last_seen"])
+        return Response({"registered": True, "registration_key": client.registration_key, "hostname": client.hostname, "status": client.status, "is_online": True})
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -932,6 +938,14 @@ def ensure_admin_client():
         registration_key=key,
         defaults={"hostname": hostname, "platform": platform_name, "status": "online", "approved": True, "last_seen": timezone.now()},
     )
+    if created:
+        client.hostname = hostname
+        client.platform = platform_name
+        client.approved = True
+    client.status = "online"
+    client.deleted = False
+    client.last_seen = timezone.now()
+    client.save(update_fields=["hostname", "platform", "status", "approved", "deleted", "last_seen"])
     if not client.company:
         from django.contrib.auth.models import User
         superuser = User.objects.filter(is_superuser=True).first()
@@ -994,8 +1008,9 @@ def admin_client_heartbeat_loop():
             if not admin_client:
                 continue
             admin_client.status = "online"
+            admin_client.deleted = False
             admin_client.last_seen = timezone.now()
-            admin_client.save(update_fields=["status", "last_seen"])
+            admin_client.save(update_fields=["status", "deleted", "last_seen"])
         except Exception as e:
             logger.error(f"Admin client heartbeat failed: {e}", exc_info=True)
 
