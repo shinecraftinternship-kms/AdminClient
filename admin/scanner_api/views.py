@@ -117,12 +117,13 @@ class RegisterClientView(APIView):
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
             if existing.deleted:
-                # Device reconnecting after being soft-deleted: bring it back.
-                # Prevents the classic "client will never show up again" dead end
-                # where re-registration is permanently rejected with a 403.
+                # Device reconnecting after being soft-deleted by an admin: bring
+                # it back VISIBLY but as PENDING. Approval is never auto-granted
+                # on re-register, otherwise a client the admin deleted (or never
+                # approved) would report "already approved" and stay invisible.
                 existing.deleted = False
-                existing.approved = True
-                existing.status = "online"
+                existing.approved = False
+                existing.status = "pending"
                 existing.hostname = hostname
                 existing.platform = platform_name
                 existing.client_version = client_version
@@ -133,8 +134,8 @@ class RegisterClientView(APIView):
                     "deleted", "approved", "status", "hostname", "platform",
                     "client_version", "device_fingerprint", "last_seen", "last_ip",
                 ])
-                ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion (key {key})")
-                return Response({"status": "ok", "auto_approved": True})
+                ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion, waiting for re-approval (key {key})")
+                return Response({"status": "pending", "approved": False})
             existing.hostname = hostname
             existing.platform = platform_name
             existing.client_version = client_version
@@ -263,11 +264,23 @@ class PingClientView(APIView):
         if data.get("device_fingerprint"):
             client.device_fingerprint = data["device_fingerprint"]
 
+        resurrected_pending = False
+        if client.deleted:
+            # Client was soft-deleted by an admin but is still alive and
+            # reporting. Re-surface it on the panel as PENDING so it can be
+            # approved again — never keep it hidden while it keeps pinging.
+            client.deleted = False
+            client.approved = False
+            client.status = "pending"
+            resurrected_pending = True
+
         trigger = client.scan_requested
         if trigger:
             client.scan_requested = False
 
         client.save(update_fields=["status", "last_seen", "last_ip", "hostname", "client_version", "device_fingerprint", "scan_requested"])
+        if resurrected_pending:
+            client.save(update_fields=["deleted", "approved", "status"])
 
         # Keep the monitoring module in sync so it flips back online right away
         # via the regular ping, not only through the separate heartbeat endpoint.
@@ -281,7 +294,7 @@ class PingClientView(APIView):
         except Exception:
             pass
 
-        resp = {"status": "ok"}
+        resp = {"status": "ok", "approved": client.approved, "deleted": client.deleted}
         if trigger:
             resp["trigger_scan"] = True
         return Response(resp)

@@ -333,6 +333,7 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
     monitoring_registered = False
     monitoring_agent_id = None
     monitoring_secret = None
+    approval_ok = True
     threading.Thread(target=listen_admin_broadcast, args=(comm, hostname), daemon=True).start()
 
     while True:
@@ -342,6 +343,22 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                 raise ConnectionError("ping failed")
             consecutive_errors = 0
             backoff = 5
+
+            if resp.get("approved") is False:
+                # Admin deleted/revoked approval: the row was re-surfaced as
+                # pending. Tell the user and re-register so the admin can
+                # approve again, instead of pretending everything is fine.
+                if approval_ok:
+                    P("  [WAITING] Approval removed by admin - waiting for re-approval...")
+                    approval_ok = False
+                reg = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+                if reg.get("approved"):
+                    approval_ok = True
+                    P("  [OK] Admin re-approved registration.")
+            elif resp.get("approved") is True:
+                if not approval_ok:
+                    P("  [OK] Admin approved registration.")
+                approval_ok = True
 
             if comm._consecutive_failures == 0 and comm._offline_queue:
                 sent = comm.flush_offline_queue(key)
