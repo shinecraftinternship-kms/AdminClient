@@ -136,18 +136,29 @@ class RegisterClientView(APIView):
                 ])
                 ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion, waiting for re-approval (key {key})")
                 return Response({"status": "pending", "approved": False})
+            stored_fp = (existing.device_fingerprint or "").strip()
+            incoming_fp = (fingerprint or "").strip()
             existing.hostname = hostname
             existing.platform = platform_name
             existing.client_version = client_version
             existing.last_seen = timezone.now()
             existing.last_ip = _client_ip(request)
             update_fields = ["hostname", "platform", "client_version", "last_seen", "last_ip"]
-            if fingerprint:
-                existing.device_fingerprint = fingerprint
+            if incoming_fp:
+                existing.device_fingerprint = incoming_fp
                 update_fields.append("device_fingerprint")
-            if auto_approve and not existing.approved:
+            if auto_approve:
                 existing.approved = True
                 existing.status = "online"
+                update_fields += ["approved", "status"]
+            elif stored_fp and incoming_fp and stored_fp != incoming_fp:
+                # The same registration key is being reused by a DIFFERENT
+                # physical device. Never hand out the previous device's
+                # approval: reset to pending so the admin has to explicitly
+                # approve THIS device (the panel would otherwise show nothing
+                # to approve while the new client wrongly reports "approved").
+                existing.approved = False
+                existing.status = "pending"
                 update_fields += ["approved", "status"]
             existing.save(update_fields=update_fields)
             return Response({"status": "pending", "approved": existing.approved})
@@ -170,9 +181,8 @@ class RegisterClientView(APIView):
                 same_device.client_version = client_version
                 same_device.last_seen = timezone.now()
                 same_device.last_ip = _client_ip(request)
-                same_device.status = "online"
-                if auto_approve and not same_device.approved:
-                    same_device.approved = True
+                same_device.status = "online" if auto_approve else "pending"
+                same_device.approved = bool(auto_approve)
                 same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved"])
                 ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
                 return Response({"status": "ok", "auto_approved": same_device.approved})
@@ -3810,10 +3820,10 @@ class SupabaseRegisterView(APIView):
     def post(self, request):
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         expected_key = os.getenv("SUPABASE_SERVICE_KEY", "")
-        
+
         if not expected_key or not auth_header.startswith("Bearer "):
             return Response({"status": "error", "message": "Unauthorized"}, status=status.HTTP_401_UNAUTHORIZED)
-        
+
         provided_key = auth_header[7:]  # Remove "Bearer "
         if provided_key != expected_key:
             return Response({"status": "error", "message": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -3828,7 +3838,7 @@ class SupabaseRegisterView(APIView):
 
         try:
             from supabase import create_client
-            
+
             # Extract hostname from Vercel URL
             if vercel_url.startswith("https://"):
                 hostname = vercel_url[8:]
@@ -3837,7 +3847,7 @@ class SupabaseRegisterView(APIView):
             else:
                 hostname = vercel_url
             hostname = hostname.split("/")[0]
-            
+
             supabase = create_client(supabase_url, expected_key)
             supabase.table("server_registry").upsert({
                 "id": "admin",
@@ -3847,7 +3857,7 @@ class SupabaseRegisterView(APIView):
                 "is_active": True,
                 "updated_at": "now()",
             }).execute()
-            
+
             return Response({"status": "ok", "message": f"Registered {hostname} in Supabase"})
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

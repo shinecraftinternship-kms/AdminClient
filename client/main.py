@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -339,8 +339,27 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
     while True:
         try:
             resp = comm.ping(key, hostname, VERSION, fingerprint)
+            just_registered = False
             if not isinstance(resp, dict) or resp.get("status") != "ok":
-                raise ConnectionError("ping failed")
+                missing = isinstance(resp, dict) and "not found" in str(resp.get("message", "")).lower()
+                if missing:
+                    # The server lost this client's row (DB reset/restore or
+                    # permanent removal). Re-register so the client reappears
+                    # on the panel instead of erroring forever. Approval is
+                    # never re-granted here - the server returns the true
+                    # state and the admin still has to approve it.
+                    reg = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+                    if reg and reg.get("status") != "error":
+                        resp = dict(reg)
+                        if "approved" not in resp and "auto_approved" in resp:
+                            resp["approved"] = resp["auto_approved"]
+                        if resp.get("status") == "ok":
+                            resp["status"] = "pending" if not resp.get("approved") else "ok"
+                        just_registered = True
+                    else:
+                        raise ConnectionError("re-register failed")
+                else:
+                    raise ConnectionError("ping failed")
             consecutive_errors = 0
             backoff = 5
 
@@ -351,10 +370,11 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                 if approval_ok:
                     P("  [WAITING] Approval removed by admin - waiting for re-approval...")
                     approval_ok = False
-                reg = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
-                if reg.get("approved"):
-                    approval_ok = True
-                    P("  [OK] Admin re-approved registration.")
+                if not just_registered:
+                    reg = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+                    if reg and reg.get("approved"):
+                        approval_ok = True
+                        P("  [OK] Admin re-approved registration.")
             elif resp.get("approved") is True:
                 if not approval_ok:
                     P("  [OK] Admin approved registration.")
@@ -1042,15 +1062,17 @@ def main():
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
     _log_crash(f"OK: register result={result}")
 
-    # Check if already approved (either auto_approved or existing approved client)
-    if result.get("status") == "ok" and result.get("auto_approved"):
+    # Check if already approved (either auto_approved or existing approved client).
+    # Only the server's answer is trusted: the client must never print
+    # "Already approved" unless this admin server actually approved this device.
+    approved = bool(result.get("approved", result.get("auto_approved", False)))
+    if result.get("status") == "ok" and approved:
         P("  [OK] Auto-approved by admin server.")
-    elif result.get("status") == "pending" and result.get("approved"):
-        P("  [OK] Already approved.")
-    elif result.get("status") == "ok" and result.get("approved"):
+    elif result.get("status") == "pending" and approved:
         P("  [OK] Already approved.")
     else:
         P("  [WAITING] Registration sent. Waiting for admin approval...")
+        P(f"  [WAITING] Approve this device in the admin panel (key: {key})")
         while True:
             time.sleep(2)
             status_res = comm.check_status(key)
@@ -1058,7 +1080,9 @@ def main():
                 P("  [OK] Admin approved registration.")
                 break
             elif status_res.get("status") == "error":
-                pass
+                # Row missing on the server (DB reset): re-register so the
+                # client becomes visible and can be approved again.
+                comm.register(key, hostname, platform.system(), VERSION, fingerprint)
 
     P()
     P("  Performing initial scan...")
