@@ -12,7 +12,11 @@
     "./admin"
   ],
 
+  // Silence Pylance false positive on urllib3.__version__ (requests dep)
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportPrivateImportUsage": "none"
+  },
+
   "editor.formatOnSave": false,
   "files.trimTrailingWhitespace": true
 }
-
