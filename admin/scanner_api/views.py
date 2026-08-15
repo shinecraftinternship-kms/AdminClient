@@ -63,9 +63,10 @@ def get_admin_owned_clients(request):
     # Vercel/auto-approve are visible even without a company/owner assignment.
     unowned_clients = models.Q(owner__isnull=True)
     if request.user.is_superuser:
-        company = get_user_company(request)
-        if company:
-            return qs.filter(models.Q(company=company) | unowned_clients)
+        # Superuser sees every client across companies. Company isolation
+        # previously hid clients (e.g. an auto-approved device owned by another
+        # company) from the main admin, so the panel showed "nothing" even
+        # though clients were registered and approved.
         return qs
     return qs.filter(models.Q(owner=request.user) | unowned_clients)
 
@@ -76,10 +77,11 @@ def client_is_visible(request, client):
         return False
     if client.owner is None:
         return True
+    if client.owner == request.user:
+        return True
     if request.user.is_superuser:
-        company = get_user_company(request)
-        return bool(company) and client.company == company
-    return client.owner == request.user
+        return True
+    return False
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
     ManualUpdateSerializer, ScanConfigSerializer,
@@ -223,11 +225,12 @@ class ApproveClientView(APIView):
 
         client.approved = True
         client.status = "online"
+        client.deleted = False
         client.last_seen = timezone.now()
         client.owner = request.user
         if company:
             client.company = company
-        client.save(update_fields=["approved", "status", "last_seen", "owner", "company"])
+        client.save(update_fields=["approved", "status", "deleted", "last_seen", "owner", "company"])
         ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved by {request.user.username}")
         return Response({"status": "ok"})
 
@@ -249,11 +252,12 @@ class ApproveMultipleView(APIView):
         for client in clients:
             client.approved = True
             client.status = "online"
+            client.deleted = False
             client.last_seen = timezone.now()
             client.owner = request.user
             if company:
                 client.company = company
-            client.save(update_fields=["approved", "status", "last_seen", "owner", "company"])
+            client.save(update_fields=["approved", "status", "deleted", "last_seen", "owner", "company"])
             count += 1
 
         ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients by {request.user.username}")
@@ -849,8 +853,6 @@ class AdminStatsView(APIView):
         base = Client.objects.all()
         if not request.user.is_superuser:
             base = base.filter(owner=request.user)
-        elif company:
-            base = base.filter(company=company)
         total = base.count()
         online = base.filter(deleted=False, approved=True, status__in=["online", "pending"]).count()
         pending = base.filter(deleted=False, approved=False).count()
@@ -861,9 +863,6 @@ class AdminStatsView(APIView):
         if not request.user.is_superuser:
             scan_base = scan_base.filter(client__owner=request.user)
             log_base = log_base.filter(client__owner=request.user)
-        elif company:
-            scan_base = scan_base.filter(client__company=company)
-            log_base = log_base.filter(company=company)
         return Response({
             "total_admins": User.objects.filter(is_superuser=True).count(),
             "total_clients": total,
@@ -996,7 +995,7 @@ def ensure_admin_client():
     platform_name = detect_platform()[0] or "Unknown"
     client, created = Client.objects.get_or_create(
         registration_key=key,
-        defaults={"hostname": hostname, "platform": platform_name, "status": "online", "approved": True, "last_seen": timezone.now()},
+        defaults={"hostname": hostname, "platform": platform_name, "status": "online", "approved": True, "last_seen": timezone.now(), "tags": "admin"},
     )
     if created:
         client.hostname = hostname
@@ -1005,7 +1004,9 @@ def ensure_admin_client():
     client.status = "online"
     client.deleted = False
     client.last_seen = timezone.now()
-    client.save(update_fields=["hostname", "platform", "status", "approved", "deleted", "last_seen"])
+    if "admin" not in (client.tags or "").split(","):
+        client.tags = ",".join([t.strip() for t in (client.tags or "").split(",") if t.strip()] + ["admin"])
+    client.save(update_fields=["hostname", "platform", "status", "approved", "deleted", "last_seen", "tags"])
     if not client.company:
         from django.contrib.auth.models import User
         superuser = User.objects.filter(is_superuser=True).first()

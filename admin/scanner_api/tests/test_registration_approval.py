@@ -8,8 +8,12 @@ from django.test import RequestFactory, TestCase
 
 django.setup()
 
+from django.contrib.auth import get_user_model
+
 from scanner_api.models import Client
-from scanner_api.views import RegisterClientView
+from scanner_api.views import RegisterClientView, ApproveClientView
+
+User = get_user_model()
 
 
 class RegistrationApprovalTests(TestCase):
@@ -134,3 +138,31 @@ class RegistrationApprovalTests(TestCase):
         client = Client.objects.get(registration_key="BRAND-NEW")
         self.assertFalse(client.approved)
         self.assertEqual(client.status, "pending")
+
+    def test_approving_deleted_client_reactivates_and_shows_it(self):
+        admin = User.objects.create_user(username="admin", password="pass1234", is_superuser=True)
+        client = Client.objects.create(
+            registration_key="DELETED-KEY",
+            hostname="Hidden Host",
+            platform="Linux",
+            deleted=True,
+            approved=False,
+            status="pending",
+            owner=admin,
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/approve",
+            {"registration_key": "DELETED-KEY"},
+            content_type="application/json",
+        )
+        request.user = admin
+
+        response = ApproveClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        client.refresh_from_db()
+        self.assertTrue(client.approved)
+        self.assertEqual(client.status, "online")
+        self.assertFalse(client.deleted)
