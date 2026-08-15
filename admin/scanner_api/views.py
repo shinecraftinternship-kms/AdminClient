@@ -47,6 +47,24 @@ def get_user_company(request):
     return profile.company
 
 
+def _admin_self_client_q():
+    """Q filter matching the panel's own auto-created admin client record(s).
+
+    ensure_admin_client() adds the admin server itself under an ``ADMIN-``
+    registration key so it can self-scan and stay healthy. Those rows are the
+    panel machine, not real endpoint devices, so they must never appear in the
+    client dashboard, stats, scan changes, or search results.
+    """
+    q = models.Q(registration_key__startswith="ADMIN-")
+    try:
+        stored = (Setting.get("admin_client_key", "") or "").strip()
+        if stored and not stored.startswith("ADMIN-"):
+            q |= models.Q(registration_key=stored)
+    except Exception:
+        pass
+    return q
+
+
 def get_admin_owned_clients(request):
     """Return a base QuerySet of non-deleted clients the current admin may see.
 
@@ -55,8 +73,11 @@ def get_admin_owned_clients(request):
         pending clients so they can be approved.
       - Regular admins: only clients they own, plus unowned pending clients
         so they can approve newly-registered devices.
+
+    The panel's own auto-created admin client (see _admin_self_client_q) is
+    always excluded so the dashboard only ever shows real endpoint devices.
     """
-    qs = Client.objects.filter(deleted=False).select_related("group", "owner")
+    qs = Client.objects.filter(deleted=False).select_related("group", "owner").exclude(_admin_self_client_q())
     if not request.user or not request.user.is_authenticated:
         return qs.none()
     # Show unowned clients (pending or auto-approved) so devices registered on
@@ -850,7 +871,7 @@ class AdminStatsView(APIView):
         from django.contrib.auth.models import User
         from .models import Client, ScanResult, ActivityLog
         company = get_user_company(request)
-        base = Client.objects.all()
+        base = Client.objects.all().exclude(_admin_self_client_q())
         if not request.user.is_superuser:
             base = base.filter(owner=request.user)
         total = base.count()
@@ -881,7 +902,7 @@ class ScanChangesView(APIView):
         from .serializers import ScanResultSerializer
         company = get_user_company(request)
         changes = []
-        clients = Client.objects.filter(approved=True, deleted=False, scans__isnull=False).distinct()
+        clients = Client.objects.filter(approved=True, deleted=False, scans__isnull=False).distinct().exclude(_admin_self_client_q())
         if not request.user.is_superuser:
             clients = clients.filter(owner=request.user)
         elif company:

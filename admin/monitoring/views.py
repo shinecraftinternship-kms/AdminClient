@@ -95,15 +95,20 @@ class AgentRegisterView(APIView):
                 if hasattr(existing_secret.client, "monitoring_info") else "unknown",
             })
 
-        client = Client.objects.filter(device_fingerprint=fingerprint, deleted=False).first()
-        if not client:
-            client = Client.objects.filter(hostname=hostname, deleted=False).first()
-        if not client:
-            # Try to find by registration key from the client
-            client_key = data.get("client_key", "") or request.data.get("registration_key", "")
-            if client_key:
-                client = Client.objects.filter(registration_key=client_key, deleted=False).first()
-        
+        # Prefer the client's own registration key, then fingerprint, then
+        # hostname as a fallback. Never bind an agent to the panel's own
+        # auto-created ADMIN-* client: when the client runs on the same machine
+        # as the admin its hostname matches, which would otherwise swallow the
+        # real device's monitoring data into the admin's own client row.
+        client = None
+        client_key = data.get("client_key", "") or request.data.get("registration_key", "")
+        if client_key:
+            client = Client.objects.filter(registration_key=client_key, deleted=False).exclude(registration_key__startswith="ADMIN-").first()
+        if not client and fingerprint:
+            client = Client.objects.filter(device_fingerprint=fingerprint, deleted=False).exclude(registration_key__startswith="ADMIN-").first()
+        if not client and hostname:
+            client = Client.objects.filter(hostname=hostname, deleted=False).exclude(registration_key__startswith="ADMIN-").first()
+
         if not client:
             # Only create new if no existing client found
             client = Client.objects.create(
@@ -525,7 +530,7 @@ class MonitorDashboardView(APIView):
     def get(self, request):
         infos = DeviceMonitoringInfo.objects.select_related("client").filter(
             client__deleted=False
-        )
+        ).exclude(client__registration_key__startswith="ADMIN-")
 
         total = infos.count()
         online = infos.filter(monitoring_status="online").count()
@@ -550,6 +555,7 @@ class MonitorDashboardView(APIView):
 
         platform_dist = list(
             Client.objects.filter(deleted=False, monitoring_info__isnull=False)
+            .exclude(registration_key__startswith="ADMIN-")
             .values(name=models.F("platform"))
             .annotate(count=Count("id")).order_by("-count")[:10]
         )
