@@ -1065,12 +1065,8 @@ def main():
     # Check if already approved (either auto_approved or existing approved client).
     # Only the server's answer is trusted: the client must never print
     # "Already approved" unless this admin server actually approved this device.
-    approved = bool(result.get("approved", result.get("auto_approved", False)))
-    if result.get("status") == "ok" and approved:
-        P("  [OK] Auto-approved by admin server.")
-    elif result.get("status") == "pending" and approved:
-        P("  [OK] Already approved.")
-    else:
+    approved = bool(result.get("approved") or result.get("auto_approved"))
+    if not approved:
         P("  [WAITING] Registration sent. Waiting for admin approval...")
         P(f"  [WAITING] Approve this device in the admin panel (key: {key})")
         while True:
@@ -1083,6 +1079,10 @@ def main():
                 # Row missing on the server (DB reset): re-register so the
                 # client becomes visible and can be approved again.
                 comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+    elif result.get("auto_approved"):
+        P("  [OK] Auto-approved by admin server.")
+    else:
+        P("  [OK] Already approved.")
 
     P()
     P("  Performing initial scan...")

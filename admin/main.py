@@ -133,6 +133,11 @@ def main():
     parser.add_argument("--domain", type=str, default=None,
         help="Public domain (e.g. scanner.example.com). Registers https://<domain> "
              "for cloud discovery and uses it as admin_server_url.")
+    parser.add_argument("--cloud", action="store_true",
+        help="OPT-IN: register this server's public IP in the cloud discovery registry. "
+             "Only the single production admin should do this. A local/dev panel must "
+             "NOT advertise itself, otherwise clients bounce between two 'admin systems' "
+             "and never see the correct server.")
     parser.add_argument("--asgi", action="store_true",
         help="Serve with daphne (ASGI + WebSocket). Use behind nginx with /ws/ proxy.")
     args = parser.parse_args()
@@ -249,7 +254,7 @@ def main():
             print(f"  [OK] Cloud discovery registered: https://{args.domain}")
         except Exception as e:
             print(f"  [WARN] Cloud discovery registration failed: {e}")
-    else:
+    elif args.cloud:
         protocol = "https" if args.port == 443 else "http"
         cloud_ok = register_with_cloud_discovery(args.port, protocol)
         if cloud_ok:
@@ -260,6 +265,14 @@ def main():
             )
             refresh_thread.start()
             print(f"  Cloud discovery refresh every {CLOUD_REFRESH_INTERVAL}s")
+    else:
+        # No domain and no --cloud flag: this is a local/dev panel. It must NOT
+        # write its public IP into the shared cloud registry, or every client
+        # doing cloud discovery would start bouncing between this local panel
+        # and the real production admin (which is exactly the "two admin systems"
+        # problem). The single cloud-registered admin stays authoritative.
+        print("  [INFO] Cloud discovery registration skipped (local/dev panel).")
+        print("  [INFO] Pass --cloud to advertise this server to clients, or --domain for a public domain.")
     print()
 
     if args.asgi:

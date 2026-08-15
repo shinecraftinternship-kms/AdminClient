@@ -161,7 +161,11 @@ class RegisterClientView(APIView):
                 existing.status = "pending"
                 update_fields += ["approved", "status"]
             existing.save(update_fields=update_fields)
-            return Response({"status": "pending", "approved": existing.approved})
+            # Never return a contradictory status: "approved" clients are "ok",
+            # unapproved ones are "pending". A "pending + approved" response
+            # made clients print "Already approved" while the admin still saw a
+            # pending/absent device.
+            return Response({"status": "ok" if existing.approved else "pending", "approved": existing.approved})
 
         if fingerprint:
             same_device = Client.objects.filter(device_fingerprint=fingerprint, deleted=False).first()
