@@ -1062,10 +1062,10 @@ def main():
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
     _log_crash(f"OK: register result={result}")
 
-    # Check if already approved (either auto_approved or existing approved client).
-    # Only the server's answer is trusted: the client must never print
-    # "Already approved" unless this admin server actually approved this device.
-    approved = bool(result.get("approved") or result.get("auto_approved"))
+    # Check if the server has actually approved this device. A stale
+    # "approved" flag without a fresh approval response is not enough to
+    # show the client as approved; the server's actual status must confirm it.
+    approved = bool(result.get("auto_approved") or (result.get("status") == "ok" and result.get("approved")))
     if not approved:
         P("  [WAITING] Registration sent. Waiting for admin approval...")
         P(f"  [WAITING] Approve this device in the admin panel (key: {key})")
