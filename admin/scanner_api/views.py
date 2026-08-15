@@ -184,14 +184,15 @@ class RegisterClientView(APIView):
                 existing.status = "pending"
                 update_fields += ["approved", "status"]
             elif stored_fp and incoming_fp and stored_fp == incoming_fp:
-                # Same device re-registering with the same key should keep the
-                # existing approval in the admin panel, but the client must not
-                # be told it has been approved again unless the admin server
-                # actually sent a fresh approval response for this session.
-                existing.status = "pending"
-                update_fields += ["status"]
+                # Same device re-registering with the same key. Keep its
+                # existing approval and status: the client re-registers on every
+                # start, and flipping an already-approved device back to
+                # "pending" would drop it out of the dashboard after each
+                # restart, which looks like the client "disappeared".
+                pass
             existing.save(update_fields=update_fields)
-            response_status = "pending" if (not auto_approve and stored_fp and incoming_fp and stored_fp == incoming_fp) else ("ok" if existing.approved else "pending")
+            # Approved devices get "ok"; not-yet-approved devices stay "pending".
+            response_status = "ok" if existing.approved else "pending"
             return Response({"status": response_status, "approved": existing.approved})
 
         if fingerprint:
