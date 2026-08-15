@@ -61,9 +61,17 @@ def get_admin_url():
     config = load_config()
     cached_url = config.get("admin_url", "")
 
-    # Cloud discovery is always checked first (even for manual URLs) so the
-    # client self-heals to the currently registered admin server. The manual
-    # URL is kept purely as a fallback when discovery is unavailable.
+    # A manually-configured admin URL is the user's explicit choice and must
+    # win over anything discovered on the network/cloud. Otherwise a client
+    # pointed at a local admin panel (e.g. http://192.168.x.x:8000) would be
+    # silently redirected to the cloud admin and never show up on the local
+    # dashboard the user is actually looking at.
+    if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
+        return cached_url
+
+    # Cloud discovery picks the currently registered admin server (works
+    # across any network). The cached URL is kept as a fallback when discovery
+    # is unavailable.
     try:
         from client.discovery import discover_admin_url
         discovered = discover_admin_url()
@@ -77,9 +85,6 @@ def get_admin_url():
         pass
     except Exception:
         pass
-
-    if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
-        return cached_url
 
     if cached_url and cached_url != LOCALHOST_URL:
         return cached_url
