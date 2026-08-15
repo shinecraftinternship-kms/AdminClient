@@ -184,11 +184,23 @@ def kv_table(rows, widths=None):
 
 
 def component_table(rows):
-    widths = [3.4 * cm, PAGE_W - 2 * MARGIN - 3.4 * cm]
-    header = [para("<b>Component</b>", TH), para("<b>Description</b>", TH)]
-    body = [header]
-    for name, desc in rows:
-        body.append([para(f"<b>{name}</b>", ParagraphStyle("c", parent=BODY, fontName="Helvetica-Bold")), para(desc, BODY)])
+    has_loc = bool(rows) and len(rows[0]) == 3
+    if has_loc:
+        widths = [3.8 * cm, 3.2 * cm, PAGE_W - 2 * MARGIN - 7.0 * cm]
+        header = [para("<b>Component</b>", TH), para("<b>Location</b>", TH), para("<b>Description</b>", TH)]
+        body = [header]
+        for name, loc, desc in rows:
+            body.append([
+                para(f"<b>{name}</b>", ParagraphStyle("c", parent=BODY, fontName="Helvetica-Bold")),
+                para(loc, CODE_STYLE),
+                para(desc, BODY),
+            ])
+    else:
+        widths = [3.4 * cm, PAGE_W - 2 * MARGIN - 3.4 * cm]
+        header = [para("<b>Component</b>", TH), para("<b>Description</b>", TH)]
+        body = [header]
+        for name, desc in rows:
+            body.append([para(f"<b>{name}</b>", ParagraphStyle("c", parent=BODY, fontName="Helvetica-Bold")), para(desc, BODY)])
     tbl = Table(body, colWidths=widths, repeatRows=1)
     tbl.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -3257,6 +3269,539 @@ def s32(E):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 33. Deep-Dive: Client Agent Source Walkthrough
+# ─────────────────────────────────────────────────────────────────────────────
+def s33(E):
+    E.append(h1("33. Deep-Dive: Client Agent Source Walkthrough"))
+    E.append(para(
+        "The client agent is a lightweight Python package under client/. It runs on every managed "
+        "machine, collects inventory and metrics, monitors system events, and talks to the admin "
+        "server over REST and WebSocket. The paths below are relative to client/. Every class and "
+        "function is referenced so any question about the agent can be traced to the exact location."))
+    E.append(h2("33.1 main.py - entry point (1247 lines)"))
+    E.append(para(
+        "Constants: DISCOVERY_PORT=45000 (main.py:134), VERSION=\"1.6.1\" (main.py:135), OUTPUT_DIR "
+        "under the data directory (main.py:136). CLI flags are parsed manually from sys.argv: "
+        "--silent (main.py:550) and --rescue (main.py:553)."))
+    E.append(component_table([
+        ("_log_crash", "main.py:12", "Bootstraps crash logging to a file before anything else runs."),
+        ("print_header", "main.py:159", "Prints the ASCII banner and connection info."),
+        ("cloud_discovery_loop", "main.py:209", "Background thread polling the cloud registry for the admin URL."),
+        ("listen_admin_broadcast", "main.py:228", "UDP listener on DISCOVERY_PORT 45000 to find the admin server on the LAN."),
+        ("_try_rediscover", "main.py:254", "Fallback discovery after repeated heartbeat failures."),
+        ("handle_ws_command", "main.py:279", "Handles WS commands: scan_now (runs collect_all + submits), config_update (merges scan config), ping (replies pong)."),
+        ("heartbeat_loop", "main.py:326", "Main loop: pings the server, re-registers if the row is missing, waits for approval, flushes offline queue, sends public heartbeats, and handles trigger_scan responses."),
+        ("HeartbeatWatchdog", "main.py:446", "Monitors the heartbeat thread and restarts it if it dies (up to 5 restarts)."),
+        ("start_websocket_client", "main.py:481", "Starts the WebSocketClient thread."),
+        ("_start_event_monitors", "main.py:495", "Starts USB, process, software, and file event monitors with their dispatchers."),
+        ("_spawn_background", "main.py:589", "Windows: spawns a hidden background copy (noconsole), redirecting output to client_agent.log."),
+        ("_ensure_single_instance", "main.py:668", "Named mutex so only one agent instance runs; closing the console window spawns a rescue copy."),
+        ("_register_autostart", "main.py:739", "Registers the agent to start at login (registry Run key / Startup folder)."),
+        ("main", "main.py:776", "Top-level orchestration: print header, load config, resolve admin URL, ensure single instance, start background if needed, run heartbeat loop + monitors + WS client."),
+    ]))
+    E.append(h2("33.2 communicator.py - HTTP + WebSocket (400 lines)"))
+    E.append(component_table([
+        ("class Communicator", "communicator.py:14", "HTTP client: register, ping, submit_scan, check_status, get_scan_config, monitor_register, monitor_heartbeat, monitor_heartbeat_public, and the offline queue. Retries 3 times with exponential backoff + jitter."),
+        ("register", "communicator.py:136", "POST /api/register with key, hostname, platform, version, fingerprint."),
+        ("ping", "communicator.py:145", "POST /api/ping; response drives approval/trigger_scan logic."),
+        ("submit_scan", "communicator.py:159", "POST /api/scan with the full scan payload."),
+        ("monitor_heartbeat", "communicator.py:189", "Signed POST /api/monitoring/agent/heartbeat using the monitoring secret."),
+        ("monitor_heartbeat_public", "communicator.py:209", "Unsigned POST /api/monitoring/agent/heartbeat-public (the variant actually used)."),
+        ("supports_websocket", "communicator.py:224", "Blocks .vercel.app domains; used to decide WS vs HTTP polling."),
+        ("class WebSocketClient", "communicator.py:235", "Async client wrapping websockets. connect with ping_interval=20, ping_timeout=10, close_timeout=5 (communicator.py:354-359)."),
+        ("_run_loop", "communicator.py:308", "Runs send_task + recv_task; on completion reconnects with exponential backoff 2s to 60s; on HTTP rejection sets ws_unsupported (permanent HTTP fallback, communicator.py:319-331)."),
+        ("_authenticate", "communicator.py:381", "Sends the auth frame: {type, agent_id, secret, timestamp}."),
+        ("_send_loop", "communicator.py:393", "Flushes queued messages while connected."),
+        ("message handling", "communicator.py:423-456", "Handles auth_success (runs pending_commands), auth_failed, command, ping (queues pong), heartbeat_ack (logs)."),
+    ]))
+    E.append(h2("33.3 config, discovery, runtime"))
+    E.append(component_table([
+        ("config.py", "config.py:9", "CONFIG_PATH = <data>/client_config.json; LOCALHOST_URL=http://localhost:80."),
+        ("load_config", "config.py:13", "Reads client_config.json (admin_url, scan_interval, auto_start)."),
+        ("get_admin_url", "config.py:47", "Resolution order: env ADMIN_SERVER_URL -> cached config -> cloud registry -> UDP discovery -> prompt (config.py:104 prompt_admin_url)."),
+        ("discover_admin", "config.py:134", "UDP broadcast on DISCOVERY_PORT 45000 to find a LAN admin."),
+        ("discovery.py", "discovery.py:24", "discover_admin_url + register_server against the Supabase server_registry table; detect_public_ip (discovery.py:99). Note: embeds a service-role JWT."),
+        ("runtime.py", "runtime.py:9", "is_frozen() and get_client_data_dir() (%APPDATA% on Windows)."),
+    ]))
+    E.append(h2("33.4 identity: fingerprint and keys"))
+    E.append(component_table([
+        ("fingerprint.py", "fingerprint.py:108", "generate_fingerprint: SHA-256 of motherboard serial + CPU id + disk serial + MACs, truncated to 16 hex chars."),
+        ("_get_motherboard_serial / _get_cpu_id / _get_disk_serial / _get_mac_addresses", "fingerprint.py:33/48/74/90", "Platform-specific hardware queries (WMI on Windows, /sys and /proc on Linux, system_profiler on macOS)."),
+        ("key_manager.py", "key_manager.py:14", "KEY_FILE = client_key.json; generate_key (8 chars), load_or_create_key, load_or_create_fingerprint."),
+    ]))
+    E.append(h2("33.5 scanner.py and metrics.py"))
+    E.append(component_table([
+        ("collect_all", "scanner.py:51", "Runs the full inventory and returns the scan payload."),
+        ("hardware collectors", "scanner.py:77-612", "_get_processor, _get_ram, _get_storage, _get_motherboard, _get_os_info, _get_network, _get_gpu, _get_accounts, _get_software, _get_updates, _get_peripherals, _get_antivirus (WMI/PowerShell on Windows, /proc/lspci/lsusb on Linux, system_profiler on macOS)."),
+        ("metrics.py", "metrics.py:34-181", "get_cpu_usage, get_ram_usage, get_disk_usage, get_uptime, get_network_connected (TCP probe 8.8.8.8:53 / 1.1.1.1:53), collect_metrics."),
+    ]))
+    E.append(h2("33.6 events/ - monitors and dispatcher"))
+    E.append(component_table([
+        ("dispatcher.py", "dispatcher.py:28", "class EventDispatcher: batches events (5s window / max 50), then sends via WS -> signed HTTP -> public HTTP -> disk queue. OFFLINE_QUEUE_DIR=<data>/offline_events (dispatcher.py:22); failed batches persisted as batch_*.json and replayed on next start."),
+        ("usb_monitor.py", "usb_monitor.py:124", "class USBMonitor polls every 5 s; get_usb_devices via WMI/lsusb/system_profiler (usb_monitor.py:113); emits usb_device_connected/disconnected events."),
+        ("file_monitor.py", "file_monitor.py:184", "class FileMonitor + CriticalFileHandler (watchdog real-time, 2s debounce). MONITOR_PATHS_* (file_monitor.py:26-42), CRITICAL_EXTENSIONS (file_monitor.py:44), CRITICAL_FILENAMES (file_monitor.py:51)."),
+        ("process_monitor.py", "process_monitor.py:157", "class ProcessMonitor polls every 10 s; SUSPICIOUS_NAMES (mimikatz, psexec, netcat, meterpreter... at process_monitor.py:130), SUSPICIOUS_PATHS_KEYWORDS (process_monitor.py:136)."),
+        ("software_monitor.py", "software_monitor.py:186", "class SoftwareMonitor polls every 60 s; _check_antivirus_status (software_monitor.py:118), _check_firewall_status (SecurityCenter2, software_monitor.py:148), AV_KEYWORDS (software_monitor.py:174)."),
+    ]))
+    E.append(h2("33.7 Startup sequence"))
+    E.append(code_block(
+        '1. _log_crash bootstraps logging.\n'
+        '2. main() prints the header and loads client_config.json.\n'
+        '3. get_admin_url resolves the admin URL (env -> cached -> cloud -> UDP -> prompt).\n'
+        '4. _ensure_single_instance (named mutex); if console mode and allowed, spawn background copy.\n'
+        '5. _register_autostart adds the agent to startup.\n'
+        '6. heartbeat_loop thread starts (ping + registration approval + public heartbeats).\n'
+        '7. _start_event_monitors starts USB/process/software/file monitors + dispatchers.\n'
+        '8. start_websocket_client connects ws/agent/<id>/ with auth + reconnect loop.\n'
+        '9. HeartbeatWatchdog watches the heartbeat thread and restarts it if it dies.'))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 34. Deep-Dive: Admin Server Source Walkthrough
+# ─────────────────────────────────────────────────────────────────────────────
+def s34(E):
+    E.append(h1("34. Deep-Dive: Admin Server Source Walkthrough"))
+    E.append(para(
+        "The admin server is a Django project under admin/. It hosts four apps (scanner_api, "
+        "monitoring, intelligence, maintenance) plus a project-config package (django_admin). "
+        "Paths below are relative to admin/ unless stated. File:line references allow every "
+        "behavior to be located in the source."))
+    E.append(h2("34.1 Project configuration (django_admin/)"))
+    E.append(component_table([
+        ("settings.py", "django_admin/settings.py", "301 lines. Env config (DJANGO_SECRET_KEY, DJANGO_DEBUG, DJANGO_ALLOWED_HOSTS, VERCEL, SCANNER_DATA_DIR), INSTALLED_APPS, middleware, REST_FRAMEWORK, CHANNEL_LAYERS (InMemory, capacity 1000), JWT settings, database isolation, logging. See section 35."),
+        ("urls.py", "django_admin/urls.py", "Mounts api/ -> scanner_api, api/monitoring/, api/maintenance/, api/intelligence/; health/diag; all template pages; catch-all _catch_all (django_admin/urls.py:13)."),
+        ("asgi.py", "django_admin/asgi.py", "ProtocolTypeRouter: HTTP + WebSocket via Channels AuthMiddlewareStack + monitoring.routing; falls back to plain ASGI on ImportError."),
+        ("wsgi.py / manage.py", "django_admin/wsgi.py, django_admin/manage.py", "WSGI entry; manage.py injects an AdminClient.admin namespace (manage.py:55 _setup_admin_client)."),
+        ("main.py", "main.py", "Local admin launcher (279 lines): migrate, superuser, ensure_admin_client, UDP discovery (main.py:98-122), cloud registration (main.py:69-95), --asgi daphne option."),
+        ("runtime.py", "runtime.py", "get_data_dir with legacy DB migration support."),
+        ("scanner.py", "scanner.py", "Local scan collector (625 lines), re-exported by scanner_api/scanner.py."),
+        ("api/index.py", "../api/index.py", "Vercel serverless WSGI bootstrap: migrate --run-syncdb, default superuser admin/admin123, skips ensure_admin_client when VERCEL=1."),
+    ]))
+    E.append(h2("34.2 scanner_api app (core)"))
+    E.append(component_table([
+        ("models.py", "scanner_api/models.py", "774 lines: Company:11, ClientGroup:30, Client:44, ScanResult:110, AddonDevice:125, ActivityLog:142, Setting:169, AdministratorProfile:196, AuditLog:222, LoginHistory:258, LoginAttempt:281, DeviceFingerprint:295, Location:312, Department:344, Employee:370, EmployeeAssetAssignment:408, OrgAuditLog:426, AssetCategory:466, AssetVendor:487, Asset:507, AssetAssignment:678, AssetTransfer:700, AssetHistory:723, AssetDocument:771."),
+        ("views.py", "scanner_api/views.py", "3863 lines. RegisterClientView:104, PingClientView:256, ClientListView:348, ClientDetailView:366, ScanConfigView:498, SubmitScanView:314, AuthLoginView:1071, AuthLogoutView:1154, AuthMeView:1166, AuthProfileView:1201, admin user/stats views:785-872, ChangePasswordView:939, ensure_admin_client:984, admin_self_scan:1020, admin_client_heartbeat_loop:1045, full org module:1425-2315, full asset module:2317-3541, GlobalSearchView:3442, ExecutiveAnalyticsView:3543, health_check:3763, diag_check:3799, SupabaseRegisterView:3814."),
+        ("serializers.py", "scanner_api/serializers.py", "543 lines, 45 serializer classes covering clients, scans, org, assets."),
+        ("urls.py", "scanner_api/urls.py", "130 lines: auth/JWT routes 44-57, org 61-95, assets 99-126, executive/global-search 128-129."),
+        ("diff_utils.py", "scanner_api/diff_utils.py", "compute_scan_diff:135, _compare_peripherals:98, _compare_storage:116."),
+        ("auth/security files", "scanner_api/", "jwt_auth.py (JWT auth backend), jwt_views.py (TokenObtainView:23, TokenRefreshView:80, TokenVerifyView:127, ApiKeyListView:167, ApiKeyDeleteView:236), api_key_auth.py (ApiKey model, SHA-256 hash), auth_utils.py (check_account_lock:31, record_login_attempt:52), validators.py (strong password + UA parsing), permissions.py (ROLE_HIERARCHY + 9 RBAC classes), session_auth.py (CsrfExemptSessionAuthentication), auth_backend.py (ResilientModelBackend), middleware.py (CookieAuthMiddleware:48, CompanyPrefixMiddleware:66, SessionTimeoutMiddleware:175, SecurityHeadersMiddleware:213), supabase_client.py (cloud registry + legacy clients)."),
+        ("templates.py", "scanner_api/templates.py", "305 lines: all HTML pages (dashboard, client detail, settings, login, signup, scans, audit log, org, assets)."),
+    ]))
+    E.append(h2("34.3 monitoring app (device intelligence)"))
+    E.append(component_table([
+        ("models.py", "monitoring/models.py", "344 lines: DeviceMonitoringInfo:6, HardwareInventory:79, SoftwareInventory:108, DeviceHeartbeat:143, DeviceMetrics:172, DeviceHistory:209 (immutable), DeviceAlert:255, AgentVersion:294, AgentSecret:313."),
+        ("scheduler_models.py", "monitoring/scheduler_models.py", "ScheduledScan:7, PendingScan:56 (immutable), ScanScheduleLog:94."),
+        ("views.py", "monitoring/views.py", "1113 lines: AgentRegisterView:74, AgentHeartbeatView:157, HeartbeatPublicView:279, AgentInventoryView:361, AgentVersionCheckView:491, MonitorDashboardView:522, MonitorDeviceListView:643, MonitorDeviceDetailView:678, MonitorDeviceApproveView:891, MonitorDeviceBlockView:928, MonitorAlertListView:961, MonitorAlertActionView:986, MonitorBulkActionView:1013, MonitorTrendsView:1049, MonitorAgentVersionsView:1070, MonitorUnauthorizedSwView:1085."),
+        ("consumers.py", "monitoring/consumers.py", "577 lines: AgentConsumer:15 (auth-first handshake then heartbeat/scan_result/event/status_update/pong handlers; dispatch table 74-80), DashboardConsumer:502."),
+        ("routing.py", "monitoring/routing.py", "ws/agent/<agent_id>/ and ws/dashboard/ routes."),
+        ("event_bus.py", "monitoring/event_bus.py", "EventType enum:28, Event dataclass:74, EventBus singleton:105."),
+        ("subscribers.py", "monitoring/subscribers.py", "353 lines: _on_hardware_change_alert:46, _on_software_change_alert:81, _on_device_offline_alert:141, _on_device_deleted:161, _broadcast_change:225, _broadcast_alert:245, _record_change_history:257, register_default_subscribers:294."),
+        ("scheduler.py", "monitoring/scheduler.py", "get_scheduler:19, _sync_schedules_to_jobs:55, _add_schedule_job:72, _execute_schedule:139, _get_target_clients:211, add_or_update_schedule:236."),
+        ("scheduler_views.py", "monitoring/scheduler_views.py", "ScheduleListView:22, ScheduleDetailView:103, ScheduleToggleView:171, ScheduleHistoryView:189, SchedulerStatusView:221, PendingScansView:234, AgentPendingScansView:275 (GET lists, POST acknowledges)."),
+        ("AI layer", "monitoring/", "health.py (calculate_health_score:4, determine_health_level:74), alerts.py (check_and_create_alerts:11, check_offline_alerts:35), change_detection.py (detect_hardware_changes:17, detect_software_changes:96), anomaly_detection.py (AnomalyDetector:59), feature_store.py (FeatureStore:24), predictive.py (PredictiveEngine:59)."),
+        ("security.py", "monitoring/security.py", "generate_api_secret:13, compute_signature:18, verify_signature:27, verify_timestamp:42, RateLimiter:63, authenticate_agent:92, validate_fingerprint_match:131, get_client_ip:153."),
+        ("signals_helpers.py", "monitoring/signals_helpers.py", "notify_agent:45, broadcast_to_dashboard:54, broadcast_alert:81, send_device_update:108."),
+        ("reports.py / report_views.py", "monitoring/reports.py", "Fleet/device/alerts PDF+CSV report builders; report_views.py exposes 6 csrf_exempt views (ReportFleetPDFView:22, ReportDevicePDFView:34, ReportAlertsPDFView:48)."),
+        ("urls.py", "monitoring/urls.py", "55 lines: agent endpoints, dashboard/devices, alerts, reports, schedules, agent-versions, unauthorized-software."),
+    ]))
+    E.append(h2("34.4 intelligence app (insights)"))
+    E.append(component_table([
+        ("models.py", "intelligence/models.py", "Alert:6, AlertHistory:77, AlertRule:100, Notification:151, NotificationPreference:189, Report:227, ScheduledReport:293, AuditLogEntry:337 (immutable), ComplianceLog:417, DashboardAnalytics:465, RetentionPolicy:486."),
+        ("views.py", "intelligence/views.py", "830 lines, 33 views: IntelligenceDashboardView:55, AlertListView:107, AlertActionView:182, AlertsRunChecksView:324, NotificationListView:341, NotificationPreferenceView:442, ReportListView:467, ReportGenerateView:494, AuditLogListView:613, AuditLogExportView:671, ComplianceDashboardView:765, IntelligenceSettingsView:818."),
+        ("alerts.py", "intelligence/alerts.py", "create_alert:17 (SHA-256 dedup), acknowledge_alert:49, resolve_alert:68, escalate_alerts:130, run_alert_checks:155."),
+        ("notifications.py", "intelligence/notifications.py", "create_alert_notifications:55."),
+        ("audit.py", "intelligence/audit.py", "log_audit_entry:7 + 10 helpers."),
+        ("reports.py", "intelligence/reports.py", "generate_report:15; implements 9 of the 25 report types (see section 37)."),
+        ("urls.py", "intelligence/urls.py", "66 lines incl. audit detail:53, compliance:57-59, retention:62, settings:65."),
+    ]))
+    E.append(h2("34.5 maintenance app (asset care)"))
+    E.append(component_table([
+        ("models.py", "maintenance/models.py", "MaintenanceRecord:12, MaintenanceHistory:134, MaintenanceDocument:162, WarrantyRecord:185, DowntimeRecord:273, SoftwareLicense:323, LicenseAssignment:446, LicenseHistory:488, ComplianceRecord:520, MaintenanceAlert:566."),
+        ("views.py", "maintenance/views.py", "1400 lines, 29 views: MaintenanceListView:95, MaintenanceDetailView:197, MaintenanceStatusView:252, MaintenanceApprovalView:305, MaintenanceDocumentUploadView:335, WarrantyListView:368, DowntimeListView:456, DowntimeEndView:501, LicenseListView:520, LicenseDetailView:613, LicenseAssignView:688, ComplianceListView:777, MaintenanceDashboardView:870, analytics 966-1260, exports 1261-1345, AlertCheckView:1346."),
+        ("alerts.py", "maintenance/alerts.py", "check_and_generate_alerts:15 (overdue, due within 7 days, warranty expiring 30/60/90 days, warranty expired, license expiring 7/30/60 days, license expired); ack/resolve/dismiss helpers."),
+        ("serializers.py", "maintenance/serializers.py", "298 lines, 22 classes incl. license-key masking (_mask_license_key)."),
+        ("urls.py", "maintenance/urls.py", "45 lines: all maintenance, warranty, downtime, license, compliance, alerts, dashboard, analytics, export routes."),
+    ]))
+    E.append(h2("34.6 Management commands and operations"))
+    E.append(component_table([
+        ("offline_detector.py", "monitoring/management/commands/offline_detector.py", "30s loop; flips devices to offline after stale_threshold_seconds (default 120s) and creates a device_offline DeviceAlert."),
+        ("health_checker.py", "monitoring/management/commands/health_checker.py", "300s; recalcs health via calculate_health_score + top-200 software."),
+        ("alert_checker.py", "monitoring/management/commands/alert_checker.py", "60s; runs check_offline_alerts at 300/900/1800s thresholds."),
+        ("stale_checker.py", "monitoring/management/commands/stale_checker.py", "Marks stale clients offline."),
+        ("scan_local.py", "monitoring/management/commands/scan_local.py", "Runs a local scan and stores a ScanResult."),
+        ("clear_data.py", "monitoring/management/commands/clear_data.py", "Wipes non-Django tables and recreates the admin client."),
+        ("run_alert_checks.py", "intelligence/management/commands/run_alert_checks.py", "Runs intelligence alert checks. Known issue: passes escalate_only to run_alert_checks(), which takes no arguments."),
+    ]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 35. Deep-Dive: Configuration and Environment Reference
+# ─────────────────────────────────────────────────────────────────────────────
+def s35(E):
+    E.append(h1("35. Deep-Dive: Configuration and Environment Reference"))
+    E.append(h2("35.1 Environment variables (admin/django_admin/settings.py)"))
+    E.append(field_table([
+        ("DJANGO_SECRET_KEY", "str", "Django secret key; signs sessions and JWTs."),
+        ("DJANGO_DEBUG", "bool", "Debug mode; default True."),
+        ("DJANGO_ALLOWED_HOSTS", "str", "Default \"*\"."),
+        ("VERCEL", "bool", "Presence switches to serverless behavior (IS_VERCEL)."),
+        ("SCANNER_DATA_DIR", "path", "Overrides the data directory (default: APPDATA / ~/.scanner)."),
+        ("DATABASE_URL", "url", "Used only on Vercel; Supabase pooler rewritten to port 6543 with sslmode=require."),
+        ("SUPABASE_URL / SUPABASE_KEY", "url / key", "Cloud registry (server_registry) access."),
+        ("ADMIN_SERVER_URL", "url", "Client side: forces the admin URL, bypassing discovery."),
+    ]))
+    E.append(h2("35.2 Django settings groups"))
+    E.append(kv_table([
+        ("INSTALLED_APPS", "Django defaults + rest_framework, corsheaders, daphne@0/channels@5 (only when not on Vercel), scanner_api, monitoring, maintenance, intelligence."),
+        ("MIDDLEWARE", "Security -> WhiteNoise -> CORS -> Session -> Common -> CSRF -> Auth -> CompanyPrefixMiddleware -> SessionTimeoutMiddleware -> SecurityHeadersMiddleware."),
+        ("REST_FRAMEWORK", "Default authentication CsrfExemptSessionAuthentication (settings.py:63-69); no global permissions; pagination handled manually in views."),
+        ("CORS_ALLOW_ALL_ORIGINS", "True (settings.py:61)."),
+        ("SESSION_COOKIE_AGE", "30 days; cookie name scanner_auth signed with TimestampSigner (salt scanner-auth-cookie)."),
+        ("AUTHENTICATION_BACKENDS", "ResilientModelBackend first (settings.py:250-253)."),
+        ("SESSION_ENGINE", "DB-backed locally; signed cookies on Vercel; secure cookies on Vercel."),
+        ("CHANNEL_LAYERS", "InMemoryChannelLayer capacity 1000 in both local and Vercel branches (settings.py:94-111); WS_DASHBOARD_GROUP=\"dashboard\", WS_HEARTBEAT_INTERVAL=30."),
+        ("MONITORING_THRESHOLDS", "offline alert thresholds 300/900/1800 s; stale_threshold_seconds default 120."),
+        ("SCHEDULER_CONFIG", "coalesce, max_instances=1, misfire_grace=300 (settings.py:122-128)."),
+        ("JWT", "secret=SECRET_KEY, HS256, access 60 min, refresh 7 days, issuer \"system-scanner-pro\"."),
+        ("STATIC", "WhiteNoise with WHITENOISE_USE_FINDERS=True (no collectstatic needed on Vercel)."),
+    ]))
+    E.append(h2("35.3 Database and storage modes"))
+    E.append(component_table([
+        ("Local / VPS (non-Vercel)", "Always SQLite at <data>/scanner.db (settings.py:138-227); DB_CONN_MAX_AGE 10."),
+        ("Vercel with DATABASE_URL", "Supabase/PostgreSQL via dj-database-url; pooler port rewritten to 6543, sslmode=require, connect_timeout=10, keepalives, DB_CONN_MAX_AGE=0."),
+        ("Vercel without DATABASE_URL", "Warning logged; ephemeral SQLite at /tmp/vercel.db."),
+        ("Data directory", "SCANNER_DATA_DIR or APPDATA (runtime.py get_data_dir); holds scanner.db, admin_config.json, client keys."),
+    ]))
+    E.append(h2("35.4 Client configuration"))
+    E.append(component_table([
+        ("client/client_config.json", "admin_url, scan_interval (3600), auto_start (true)."),
+        ("client/client_key.json", "registration_key + fingerprint (created by key_manager)."),
+        ("CLI flags", "--silent (suppress console UI), --rescue (rescue/background copy)."),
+        ("Admin URL resolution", "env ADMIN_SERVER_URL -> cached config -> cloud registry -> UDP discovery (port 45000) -> prompt."),
+        ("Events", "Monitors poll at fixed intervals (USB 5s, process 10s, software 60s); events batch 5s/50 max; offline queue at <data>/offline_events."),
+        ("WebSocket client", "connect ping_interval=20 s, ping_timeout=10 s, close_timeout=5 s; reconnect backoff 2s -> 60s; Vercel domains force HTTP polling."),
+    ]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 36. Deep-Dive: Event Bus, Change Detection and Intelligence Pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+def s36(E):
+    E.append(h1("36. Deep-Dive: Event Bus, Change Detection and Intelligence Pipeline"))
+    E.append(para(
+        "This section traces how a metric, a scan diff, or a monitor event becomes a history row, "
+        "a DeviceAlert, an intelligence Alert, a notification, and a dashboard message. Everything "
+        "is event-driven through the monitoring EventBus (admin/monitoring/event_bus.py) and its "
+        "subscribers (admin/monitoring/subscribers.py)."))
+    E.append(h2("36.1 Event catalog (EventType)"))
+    E.append(field_table([
+        ("hw_component_added / removed / modified", "Hardware", "Hardware inventory change detection."),
+        ("sw_installed / sw_removed / sw_version_changed", "Software", "Software inventory change detection."),
+        ("sw_unauthorized / sw_antivirus_removed", "Software", "Unauthorized software and AV removal."),
+        ("health_level_changed / health_score_updated", "Health", "Health level or score transitions."),
+        ("alert_created / acknowledged / resolved / dismissed", "Alerts", "Intelligence alert lifecycle."),
+        ("device_registered / status_changed / approved / blocked / deleted / offline / online", "Lifecycle", "Device lifecycle transitions."),
+        ("agent_version_changed", "Agent", "Agent version changed."),
+        ("heartbeat_received", "Heartbeat", "A heartbeat was stored."),
+        ("scan_completed / scan_scheduled", "Scan", "Scan execution events."),
+    ]))
+    E.append(h2("36.2 Subscribers (what each event does)"))
+    E.append(component_table([
+        ("_on_hardware_change_alert", "subscribers.py:46", "Creates a DeviceAlert for hardware changes."),
+        ("_on_software_change_alert", "subscribers.py:81", "Creates a DeviceAlert for software changes."),
+        ("_on_device_offline_alert", "subscribers.py:141", "Creates a DeviceAlert when a device goes offline."),
+        ("_on_device_deleted", "subscribers.py:161", "Handles device deletion (cascade cleanup + dashboard notify)."),
+        ("_broadcast_change", "subscribers.py:225", "Forwards every event to the dashboard group and to device subscribers."),
+        ("_record_change_history", "subscribers.py:257", "Writes DeviceHistory rows for changes."),
+        ("register_default_subscribers", "subscribers.py:294", "Wires all subscribers to the bus (called at app startup)."),
+    ]))
+    E.append(h2("36.3 Health scoring (admin/monitoring/health.py)"))
+    E.append(para(
+        "calculate_health_score (health.py:4) blends five sub-scores with fixed weights: CPU 25%, "
+        "RAM 25%, disk 20%, connectivity 15%, software 15%. Each sub-score maps usage to points "
+        "(e.g. cpu/ram 100 points at 70% or below, linear decline to 50 points at 85%, minimum 10 "
+        "above that; disk 100 at 80% or below, 30 at 95%, 0 above; connectivity 100/0; software 100 "
+        "with an antivirus present, 60 without). determine_health_level (health.py:74) returns "
+        "healthy >= 80, warning >= 50, critical below."))
+    E.append(h2("36.4 Anomaly detection (anomaly_detection.py)"))
+    E.append(field_table([
+        ("Threshold", "Static rules", "cpu/ram >= 95% critical, >= 85% warning; disk >= 98% critical, >= 90% warning; disk_free_gb <= 2 critical, <= 5 warning (confidence 0.95)."),
+        ("Z-score", "Statistical", "z > 2.5 (default z_threshold) flags; severity info/z>3 warning/z>4 critical; needs >= 10 samples."),
+        ("IQR", "Outlier", "Outside q1-1.5*IQR / q3+1.5*IQR; needs >= 20 samples; confidence 0.7."),
+        ("Trend", "Moving average", "Short (5) vs long (20) window; > 50% change flags rising/falling trend."),
+        ("History", "Lookback", "Per-device metric history trimmed to lookback_hours=168 (7 days)."),
+    ]))
+    E.append(h2("36.5 Predictive engine (predictive.py)"))
+    E.append(para(
+        "PredictiveEngine (predictive.py:59) uses linear regression and exponential smoothing on "
+        "feature-store time series (no external ML). It predicts disk-full time (when usage reaches "
+        "100%), device failure risk, and maintenance windows; each prediction carries metric, value, "
+        "unit, confidence, timeframe_hours, description, and recommended_action."))
+    E.append(h2("36.6 Change detection (change_detection.py)"))
+    E.append(para(
+        "detect_hardware_changes (change_detection.py:17) and detect_software_changes "
+        "(change_detection.py:96) diff new inventory snapshots against stored ones. Storage-related "
+        "changes are rated critical; other component changes are warning/info. Results publish the "
+        "hw_*/sw_* events above and write DeviceHistory rows."))
+    E.append(h2("36.7 Maintenance and license alert rules (maintenance/alerts.py)"))
+    E.append(field_table([
+        ("maintenance_overdue", "critical", "MaintenanceRecord status in Scheduled/In Progress/Waiting Parts and due_date before today."),
+        ("maintenance_due", "warning", "Status Approved/Scheduled and scheduled_date within the next 7 days."),
+        ("warranty_expiring", "warning/info", "Warranty end within 30 (warning), 60, or 90 (info) days."),
+        ("warranty_expired", "warning", "Warranty end before today; warranty status flips to Expired."),
+        ("license_expiration", "critical/warning/info", "License expiry within 7 (critical), 30 (warning), or 60 (info) days."),
+        ("license_expired", "critical", "License expiration before today."),
+    ]))
+    E.append(h2("36.8 Intelligence alert lifecycle (intelligence/alerts.py)"))
+    E.append(para(
+        "create_alert (alerts.py:17) computes a SHA-256 dedup_hash from module, category, title, and "
+        "source_object_id; if an open/acknowledged alert with the same hash exists it is refreshed "
+        "instead of duplicated. escalate_alerts (alerts.py:130) raises escalation_level over time. "
+        "run_alert_checks (alerts.py:155) drives the rule engine. Alerts write AlertHistory on every "
+        "transition, notify users via create_alert_notifications (notifications.py:55), and can "
+        "auto-resolve per AlertRule.auto_resolve_minutes."))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 37. Deep-Dive: Reports, Analytics and Dashboards
+# ─────────────────────────────────────────────────────────────────────────────
+def s37(E):
+    E.append(h1("37. Deep-Dive: Reports, Analytics and Dashboards"))
+    E.append(h2("37.1 Intelligence report types"))
+    E.append(para(
+        "The Report model defines 25 report types (intelligence/models.py:228-254). The generator "
+        "(intelligence/reports.py generate_report, reports.py:15) currently implements 9 of them:"))
+    E.append(field_table([
+        ("asset_inventory", "reports.py:27", "Full asset inventory export."),
+        ("asset_assignment", "reports.py:44", "Asset-to-employee assignments."),
+        ("expiring_licenses", "reports.py:60", "Licenses expiring soon."),
+        ("upcoming_maintenance", "reports.py:74", "Scheduled maintenance ahead."),
+        ("device_health", "reports.py:87", "Per-device health scores and levels."),
+        ("compliance_report", "reports.py:98", "Compliance findings."),
+        ("monthly_summary", "reports.py:110", "Monthly aggregate summary."),
+        ("software_inventory", "reports.py:134", "Installed software across the fleet."),
+        ("audit_report", "reports.py:144", "Audit log extract."),
+    ]))
+    E.append(para(
+        "The remaining 16 report types (asset_lifecycle, asset_utilization, online_devices, "
+        "hardware_change, maintenance_cost, downtime_analysis, vendor_performance, seat_utilization, "
+        "cost_analysis, unauthorized_software, security_violations, device_risk, department_performance, "
+        "top_problematic_assets, cost_overview, compliance_summary) are selectable and stored but do "
+        "not yet have a generator branch - requesting one returns an unsupported-type result."))
+    E.append(h2("37.2 Monitoring reports (PDF and CSV)"))
+    E.append(field_table([
+        ("GET /api/monitoring/reports/fleet/pdf", "report_views.py:22", "Fleet summary as a PDF attachment."),
+        ("GET /api/monitoring/reports/fleet/csv", "-", "Fleet summary CSV."),
+        ("GET /api/monitoring/reports/device/<uuid>/pdf", "report_views.py:34", "Single device report PDF (404 JSON if missing)."),
+        ("GET /api/monitoring/reports/device/<uuid>/csv", "-", "Single device report CSV."),
+        ("GET /api/monitoring/reports/alerts/pdf", "report_views.py:48", "Alerts report PDF."),
+        ("GET /api/monitoring/reports/alerts/csv", "-", "Alerts report CSV."),
+    ]))
+    E.append(h2("37.3 Maintenance exports and analytics"))
+    E.append(field_table([
+        ("GET /api/maintenance/maintenance/export", "views.py:1261", "Maintenance records as CSV / XLSX / PDF."),
+        ("GET /api/maintenance/licenses/export", "views.py:1301", "License list export."),
+        ("GET /api/maintenance/dashboard", "views.py:870", "Aggregated counts + cost."),
+        ("GET /api/maintenance/analytics/cost-trend", "views.py:966", "Maintenance cost over N months."),
+        ("GET /api/maintenance/analytics/vendor-performance", "views.py:1001", "Vendor reliability metrics."),
+        ("GET /api/maintenance/analytics/failure-rate", "views.py:1026", "Asset failure rates."),
+        ("GET /api/maintenance/analytics/downtime", "views.py:1052", "Downtime analytics."),
+        ("GET /api/maintenance/analytics/license-dashboard", "views.py:1122", "License counts, seats, utilization, cost, compliance issues."),
+        ("GET /api/maintenance/analytics/license-utilization", "views.py:1186", "Per-license seat utilization percentages."),
+        ("GET /api/maintenance/analytics/license-cost", "views.py:1209", "License cost breakdown."),
+    ]))
+    E.append(h2("37.4 Dashboards and analytics endpoints"))
+    E.append(component_table([
+        ("Monitoring dashboard", "/api/monitoring/dashboard (views.py:522)", "Totals for online/offline/blocked/pending devices, alerts, and heartbeats in the last 24h."),
+        ("Fleet trends", "/api/monitoring/trends (views.py:1049)", "Trend data over N days."),
+        ("Maintenance dashboard", "/api/maintenance/dashboard (views.py:870)", "Maintenance, warranty, license, compliance, and alert aggregates."),
+        ("Asset dashboard", "/api/assets/dashboard", "Asset counts, categories, and states."),
+        ("Executive analytics", "/api/executive-analytics (views.py:3543)", "Cross-module KPIs (assets, licenses, alerts, maintenance)."),
+        ("Global search", "/api/global-search (views.py:3442)", "Search across clients, assets, employees, locations, departments."),
+        ("Intelligence dashboard", "/api/intelligence/dashboard (views.py:55)", "Alert/notification/compliance/report overview."),
+        ("DashboardAnalytics snapshots", "intelligence/models.py:465", "Periodic 9-counter KPI snapshots (total/open/critical alerts, notifications_today, reports_generated, security_violations, audit_events_today, compliance_violations, pending_notifications)."),
+    ]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 38. Deep-Dive: Troubleshooting Matrix
+# ─────────────────────────────────────────────────────────────────────────────
+def s38(E):
+    E.append(h1("38. Deep-Dive: Troubleshooting Matrix"))
+    E.append(para(
+        "Common symptoms, their verified root causes (with code locations), and the fix. If a "
+        "symptom is not listed, use the file map (sections 33-34) to locate the responsible "
+        "component and check the relevant endpoint (section 30) and WebSocket message (section 31)."))
+    E.append(component_table([
+        ("Agent never appears online", "Heartbeats fail or are throttled", "Verify the agent reaches POST /api/monitoring/agent/heartbeat-public (client/main.py:407-412, monitoring/views.py:279). Check firewall/port 80 and the offline_detector stale threshold (default 120s)."),
+        ("Agent shows pending forever", "Client not approved", "POST /api/approve with the client key (scanner_api/views.py:202) or approve from the panel. Approval is never auto-granted for deleted clients."),
+        ("WS connection drops in a loop", "Upgrade rejected (serverless) or auth timestamp expired", "Check ws_unsupported HTTP fallback (client/communicator.py:319-331); on Vercel the agent intentionally polls HTTP. Timestamp check is 300s max age (monitoring/security.py:42)."),
+        ("Agent offline queue grows", "HTTP POST fails repeatedly", "Inspect <data>/offline_events/batch_*.json; flushed when consecutive failures return to 0 (client/main.py:383-387)."),
+        ("Scan requested but nothing happens", "Agent offline / schedule targets", "Online agents get WS scan_now; offline agents get PendingScan rows fetched over /agent/pending-scans (scheduler_views.py:275). Confirm scan_enabled on the client (scanner_api/views.py:498)."),
+        ("Dashboard shows stale device data", "WebSocket reconnect or InMemory layer reset", "Channel layer is InMemory (settings.py:94-111) - data is not retained across server restarts. Refresh triggers the offline_detector/heartbeat paths."),
+        ("new_alert toasts never fire on monitoring page", "alert_created vs new_alert mismatch", "The frontend listens for alert_created (monitoring.js:33) but the server only emits new_alert (consumers.py:496). Expected behaviour: WS events still deliver device_event/new_alert."),
+        ("Report returns unsupported type", "Not implemented in generator", "Only 9 of 25 report types have branches in intelligence/reports.py (see section 37.1)."),
+        ("run_alert_checks crashes from CLI", "Signature mismatch", "intelligence/management/commands/run_alert_checks.py passes escalate_only, but run_alert_checks() takes no args (intelligence/alerts.py:155)."),
+        ("Version check reports old client", "Version skew", "client/main.py VERSION=\"1.6.1\" vs the exe resource version 3.0.0.0; AgentVersion table is authoritative for update decisions."),
+        ("Scheduled reports never generate", "No background executor", "ScheduledReport is CRUD-only; nothing computes next_run or runs reports automatically."),
+        ("Admin self-scan behaves unexpectedly", "ensure_admin_client / admin_client_heartbeat_loop", "Located at scanner_api/views.py:984 and :1045; skipped when VERCEL=1 (api/index.py)."),
+    ]))
+    E.append(note(
+        "Verified repository-level issues: README claims Mangum serverless but api/index.py is plain "
+        "WSGI; README claims Redis for prod but settings.py uses InMemoryChannelLayer everywhere; "
+        "service-role JWT is embedded in client/discovery.py and real Supabase keys exist in .env* "
+        "files (rotate before production); admin/admin_config.json hosts 0.0.0.0 while "
+        "admin/data/admin_config.json hosts 10.140.4.1."))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 39. FAQ
+# ─────────────────────────────────────────────────────────────────────────────
+def s39(E):
+    E.append(h1("39. FAQ"))
+    E.append(h2("How does an agent get approved?"))
+    E.append(para(
+        "The agent registers (POST /api/register), the server creates a Client with status pending, "
+        "and the admin approves via POST /api/approve or the panel. The agent's heartbeat loop "
+        "watches the approval flag and only scans once approved."))
+    E.append(h2("What is the difference between the two registration flows?"))
+    E.append(para(
+        "scanner_api /api/register manages the core Client row (hostname, fingerprint, scans). "
+        "monitoring /api/monitoring/agent/register creates the DeviceMonitoringInfo + AgentSecret "
+        "(HMAC secret) pair used for live metrics and health. The agent runs both."))
+    E.append(h2("Why does the agent use HTTP heartbeats instead of WebSocket?"))
+    E.append(para(
+        "The WS consumer fully implements heartbeat, but the current agent sends metrics over "
+        "POST /api/monitoring/agent/heartbeat-public every ~5s (client/main.py:407-412). The WS "
+        "channel carries events and scan_now commands."))
+    E.append(h2("How are offline clients handled during scheduled scans?"))
+    E.append(para(
+        "The scheduler sends scan_now over WS to online agents and creates PendingScan rows for "
+        "offline ones (monitoring/scheduler.py:139-208). Agents fetch pending scans over HTTP "
+        "(/agent/pending-scans) and acknowledge them as executed or failed."))
+    E.append(h2("Where is the scan diff computed?"))
+    E.append(para(
+        "scanner_api/diff_utils.py compute_scan_diff (diff_utils.py:135) compares the newest "
+        "ScanResult against the previous one; the client detail page highlights the changes."))
+    E.append(h2("Can the admin server run without a database?"))
+    E.append(para(
+        "No. Non-Vercel uses SQLite at <data>/scanner.db; on Vercel you must provide DATABASE_URL "
+        "(Supabase), otherwise it falls back to an ephemeral /tmp/vercel.db."))
+    E.append(h2("What ports does the agent use?"))
+    E.append(para(
+        "HTTP on port 80 (admin), UDP discovery on port 45000, and WebSocket ws://HOST/ws/agent/<id>/."))
+    E.append(h2("How do I reset a locked admin account?"))
+    E.append(para(
+        "Login lockout is enforced by auth_utils.py check_account_lock (auth_utils.py:31). Reset "
+        "via Django shell (python manage.py shell) by clearing the failed-attempt counters or "
+        "setting the user active, then change the password through /api/auth/change-password."))
+    E.append(h2("Why does the PDF say some WebSocket features are dormant?"))
+    E.append(para(
+        "Section 31 documents the protocol as implemented. heartbeat over WS, ping/pong, "
+        "status_update, and the pending_commands channel are implemented on the server but not "
+        "actively driven by the current agent; documenting them lets you find the exact lines if "
+        "they are enabled later."))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 40. Glossary
+# ─────────────────────────────────────────────────────────────────────────────
+def s40(E):
+    E.append(h1("40. Glossary"))
+    E.append(kv_table([
+        ("Agent", "The installed client process (client/) running on a managed machine."),
+        ("Admin server", "The Django server (admin/) that aggregates agents, devices, alerts, and reports."),
+        ("Registration key", "The 8-character Client.registration_key that identifies a client."),
+        ("Fingerprint", "16-hex-char SHA-256 hash of motherboard/CPU/disk/MAC identity (client/fingerprint.py)."),
+        ("AgentSecret", "The per-agent HMAC secret issued by /api/monitoring/agent/register."),
+        ("Health score", "0-100 composite of CPU/RAM/disk/connectivity/software (admin/monitoring/health.py)."),
+        ("Health level", "healthy (>=80) / warning (>=50) / critical (<50)."),
+        ("Event bus", "The pub/sub singleton (admin/monitoring/event_bus.py) that fans events out to subscribers and dashboards."),
+        ("DeviceAlert", "Monitoring-scope alert (monitoring/models.py:255) with active/acknowledged/resolved/dismissed states."),
+        ("Intelligence Alert", "Cross-module alert (intelligence/models.py:6) with dedup, escalation, and history."),
+        ("PendingScan", "An offline queue entry created when a scheduled scan cannot reach an agent."),
+        ("Scan diff", "The added/removed/changed comparison between two ScanResult payloads."),
+        ("Online/offline", "Driven by last heartbeat vs stale_threshold_seconds (default 120s)."),
+        ("HMAC", "SHA-256 HMAC over the raw request body used to sign agent HTTP calls (monitoring/security.py)."),
+        ("JWT", "HS256 tokens (access 60 min, refresh 7 days) for admin API access."),
+        ("API key", "Hashed admin keys (token_hex(32)) rate limited at 60/min."),
+        ("Session cookie", "scanner_auth signed cookie (30 days with remember_me)."),
+        ("Company", "Tenant root for most tables; scoped by CompanyPrefixMiddleware."),
+        ("Vercel mode", "Serverless runtime: HTTP polling only, ephemeral DB without DATABASE_URL."),
+        ("Manual scan", "An on-demand scan triggered by the admin (WS scan_now or HTTP trigger_scan)."),
+        ("Scheduled scan", "A scan fired by the APScheduler according to a ScheduledScan."),
+        ("Compliance", "Records/findings for ISO 27001, ITIL, SOC 2, internal, and GDPR frameworks."),
+        ("Maintenance record", "Work-order style record with approval and status workflow (MNT%06d ids)."),
+        ("Software license", "Seat-tracked entitlement (LIC%06d ids) with expiration and utilization."),
+        ("Retention policy", "Per-scope (alerts/notifications/reports/audit_logs/compliance_logs) retention periods."),
+        ("Dashboard group", "The Channels group \"dashboard\" receiving real-time broadcast messages."),
+    ]))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 41. Appendix: Quick Reference
+# ─────────────────────────────────────────────────────────────────────────────
+def s41(E):
+    E.append(h1("41. Appendix: Quick Reference"))
+    E.append(h2("41.1 Ports and protocols"))
+    E.append(field_table([
+        ("80 / 443", "HTTP(S)", "Admin server REST API and pages (agent uses port 80 by default)."),
+        ("45000", "UDP", "LAN discovery broadcast (client DISCOVERY_PORT, main.py:134; admin main.py:98-122)."),
+        ("ws/agent/&lt;id&gt; / ws/dashboard", "WebSocket", "Agent and dashboard sockets (monitoring/routing.py)."),
+        ("6543", "PostgreSQL", "Supabase pooler port used on Vercel (settings.py database isolation)."),
+    ]))
+    E.append(h2("41.2 Key constants"))
+    E.append(kv_table([
+        ("Agent VERSION", "1.6.1 (client/main.py:135); exe resource says 3.0.0.0."),
+        ("Scan interval default", "3600 s (Client.scan_interval)."),
+        ("Session lifetime", "30 days (scanner_auth cookie; remember_me)."),
+        ("JWT access / refresh", "60 minutes / 7 days, HS256, issuer system-scanner-pro."),
+        ("HMAC timestamp max age", "300 s (monitoring/security.py:42)."),
+        ("API key rate limit", "60 requests/minute."),
+        ("Stale threshold", "120 s default (Setting stale_threshold_seconds)."),
+        ("Offline alert thresholds", "300 / 900 / 1800 s (monitoring/alerts.py check_offline_alerts)."),
+        ("Health weights", "cpu .25, ram .25, disk .20, connectivity .15, software .15."),
+        ("Health levels", "healthy >= 80, warning >= 50, critical < 50."),
+        ("Anomaly defaults", "z=2.5, IQR x1.5, lookback 168 h."),
+        ("Maintenance id prefix", "MNT%06d; warranty WAR%06d; license LIC%06d; asset AST%06d."),
+        ("Warranty/license alert tiers", "warranty 30/60/90 days; license 7/30/60 days."),
+    ]))
+    E.append(h2("41.3 HTTP status conventions"))
+    E.append(field_table([
+        ("200 / 201", "Success", "200 for reads/actions; 201 for created resources (register, scan, schedules, maintenance, licenses)."),
+        ("204", "No content", "DELETE /api/auth/api-keys/&lt;id&gt; and similar."),
+        ("400", "Bad request", "Invalid or missing JSON fields."),
+        ("401", "Unauthorized", "Bad credentials; includes attempts_remaining on login/token failure."),
+        ("403", "Forbidden", "Disabled account, locked account, or RBAC denial."),
+        ("404", "Not found", "Missing client/device/alert/etc.; JSON detail body."),
+        ("409", "Conflict", "Duplicate registration key or fingerprint collision."),
+    ]))
+    E.append(h2("41.4 Where-is-it index"))
+    E.append(kv_table([
+        ("Client registration", "POST /api/register (scanner_api/views.py:104); agent client/communicator.py:136."),
+        ("Monitoring agent registration", "POST /api/monitoring/agent/register (monitoring/views.py:74); HMAC security.py:92."),
+        ("Heartbeats", "HTTP public (monitoring/views.py:279; client/main.py:407-412); WS heartbeat consumers.py:147."),
+        ("WebSocket auth", "AgentConsumer._handle_auth (consumers.py:91-145); client _authenticate communicator.py:381."),
+        ("Scheduled scans", "Scheduler jobs (monitoring/scheduler.py:139); pending scans scheduler_views.py:275."),
+        ("Scan diffs", "scanner_api/diff_utils.py:135."),
+        ("Health scoring", "monitoring/health.py:4."),
+        ("Anomaly detection", "monitoring/anomaly_detection.py:59."),
+        ("Predictive analytics", "monitoring/predictive.py:59."),
+        ("Event bus", "monitoring/event_bus.py:105 (singleton); subscribers.py:294."),
+        ("Intelligence alerts", "intelligence/alerts.py:17; dedup + escalation; AlertHistory on transitions."),
+        ("Maintenance alerts", "maintenance/alerts.py:15."),
+        ("Dashboard broadcasts", "monitoring/consumers.py:472-499 and signals_helpers.py:54."),
+        ("Reports", "intelligence/reports.py:15; monitoring/reports.py; exports maintenance/views.py:1261."),
+        ("Admin auth/session", "scanner_api/views.py:1071 (login), jwt_views.py:23 (JWT), api_key_auth.py (API keys), auth_utils.py:31 (lockout)."),
+        ("Deployment", "admin/main.py (local), api/index.py (Vercel), vercel.json, build_client.py (agent exe)."),
+    ]))
+    E.append(note(
+        "Every claim in this document was verified against the source tree at the referenced "
+        "file:line. If something misbehaves, start from section 38 (troubleshooting) or the "
+        "where-is-it index above, open the referenced file, and trace the flow."))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Build
 # ─────────────────────────────────────────────────────────────────────────────
 def build():
@@ -3315,6 +3860,15 @@ def build():
     s30(E)
     s31(E)
     s32(E)
+    s33(E)
+    s34(E)
+    s35(E)
+    s36(E)
+    s37(E)
+    s38(E)
+    s39(E)
+    s40(E)
+    s41(E)
 
     doc.multiBuild(E)
 
