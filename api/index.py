@@ -66,6 +66,17 @@ def _bootstrap():
             _init_log.append("[OK] Default admin user created (username=admin, password=admin123)")
         else:
             _init_log.append("[OK] Admin user already exists")
+
+        # Ensure the admin panel's own client record exists so the admin
+        # machine appears automatically on the dashboard. get_admin_client_key()
+        # persists the key in Settings, so it stays stable across Vercel cold
+        # starts and never floods the DB with junk ADMIN-* rows.
+        try:
+            from scanner_api.views import ensure_admin_client
+            admin_key = ensure_admin_client()
+            _init_log.append(f"[OK] Admin client ensured: {admin_key}")
+        except Exception as e:
+            _init_log.append(f"[WARN] Admin client setup failed: {e}")
     else:
         _init_log.append("[SKIP] Skipped admin user creation (SQLite /tmp is ephemeral, use Signup instead)")
 
@@ -91,10 +102,11 @@ def _bootstrap():
         # domain and overwrote a good setting. Keep the existing value instead.
         _init_log.append("[WARN] VERCEL_URL empty → keeping existing admin_server_url setting")
     
-    # Auto-approve clients on Vercel so they don't get stuck in "Checking..."
-    if os.getenv("VERCEL", "0") == "1":
-        Setting.set("auto_approve", "false")
-        _init_log.append("[OK] Auto-approve disabled for Vercel (manual approval required)")
+    # Auto-approve clients so they connect and show online on the dashboard
+    # immediately instead of getting stuck in "Pending / Checking..." waiting
+    # for a manual approval that never arrives.
+    Setting.set("auto_approve", "true")
+    _init_log.append("[OK] Auto-approve enabled for clients")
     
     if not Setting.get("admin_connection_token", ""):
         Setting.set("admin_connection_token", secrets.token_hex(16))

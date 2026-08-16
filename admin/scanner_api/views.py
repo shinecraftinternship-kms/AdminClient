@@ -48,18 +48,19 @@ def get_user_company(request):
 
 
 def _admin_self_client_q():
-    """Q filter matching the panel's own auto-created admin client record(s).
+    """Q filter matching stale admin self-client junk rows.
 
     ensure_admin_client() adds the admin server itself under an ``ADMIN-``
-    registration key so it can self-scan and stay healthy. Those rows are the
-    panel machine, not real endpoint devices, so they must never appear in the
-    client dashboard, stats, scan changes, or search results.
+    registration key so it can self-scan and appear on the dashboard. Only
+    leftover ADMIN-* rows from old hostnames / Vercel cold starts (any key
+    that is NOT the currently-persisted admin client) are excluded, so the
+    real admin machine shows up on the dashboard while junk stays hidden.
     """
     q = models.Q(registration_key__startswith="ADMIN-")
     try:
         stored = (Setting.get("admin_client_key", "") or "").strip()
-        if stored and not stored.startswith("ADMIN-"):
-            q |= models.Q(registration_key=stored)
+        if stored:
+            q = q & ~models.Q(registration_key=stored)
     except Exception:
         pass
     return q
@@ -74,8 +75,9 @@ def get_admin_owned_clients(request):
       - Regular admins: only clients they own, plus unowned pending clients
         so they can approve newly-registered devices.
 
-    The panel's own auto-created admin client (see _admin_self_client_q) is
-    always excluded so the dashboard only ever shows real endpoint devices.
+    The panel's own admin client (see _admin_self_client_q) stays visible so
+    the admin machine appears automatically; only stale junk ADMIN-* rows are
+    hidden from the dashboard.
     """
     qs = Client.objects.filter(deleted=False).select_related("group", "owner").exclude(_admin_self_client_q())
     if not request.user or not request.user.is_authenticated:
@@ -1048,14 +1050,20 @@ class ChangePasswordView(APIView):
 
 
 def get_admin_client_key():
-    """Return the admin's own client key. Reuses the persisted setting when the
-    matching Client still exists so the key stays stable across restarts and
-    hostname changes (e.g. Vercel cold starts / VPS hostnames)."""
+    """Return the admin's own client key, persisting it on first use.
+
+    Persisting the key keeps it stable across restarts and Vercel cold starts
+    (where the hostname differs every time), so the DB never fills up with
+    junk ADMIN-* clients - every cold start reuses the same key.
+    """
     stored = Setting.get("admin_client_key", "")
     if stored and Client.objects.filter(registration_key=stored).exists():
         return stored
-    hostname = socket.gethostname().upper().replace("-", "").replace(".", "")[:12]
-    return f"ADMIN-{hostname}"
+    if not stored:
+        hostname = socket.gethostname().upper().replace("-", "").replace(".", "")[:12]
+        stored = f"ADMIN-{hostname}"
+        Setting.set("admin_client_key", stored)
+    return stored
 
 
 def ensure_admin_client():

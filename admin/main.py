@@ -180,8 +180,13 @@ def main():
         User.objects.create_superuser(args.username, "", args.password)
         print(f"  Admin user created: {args.username} / {args.password}")
 
+    from scanner_api.views import ensure_admin_client, admin_self_scan, admin_client_heartbeat_loop
     from scanner_api.models import Setting, AdministratorProfile, Company
     import threading
+    admin_key = ensure_admin_client()
+    threading.Thread(target=admin_self_scan, daemon=True).start()
+    threading.Thread(target=admin_client_heartbeat_loop, daemon=True).start()
+    print(f"  Admin client key: {admin_key}")
 
     protocol = "https" if args.port == 443 else "http"
     if args.domain:
