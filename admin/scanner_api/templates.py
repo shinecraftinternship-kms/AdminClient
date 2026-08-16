@@ -117,8 +117,7 @@ def asset_dashboard_page(request):
 @csrf_exempt
 def login_view(request):
     if request.user.is_authenticated:
-        _p = request.session.get("url_prefix", "")
-        return redirect(f"/{_p}/" if _p else "/")
+        return redirect("/")
 
     timeout_msg = request.GET.get("timeout") == "1"
     registered = request.GET.get("registered") == "1"
@@ -205,15 +204,10 @@ def login_view(request):
             _profile.save(update_fields=["company"])
         ActivityLog.objects.create(action="login", company=_profile.company, details=f"Admin user {user.username} logged in")
 
-        from django.utils.text import slugify as _slugify2
-        _user_part = _slugify2(user.username) or "admin"
-        _company_part = _slugify2(_profile.company.slug) or _slugify2(_profile.company.name) or "default"
-        _prefix_val = f"{_user_part}-{_company_part}"
-        request.session["url_prefix"] = _prefix_val
-        request.session.modified = True
+        request.session.pop("url_prefix", None)
 
         next_url = request.POST.get("next") or request.GET.get("next") or "/"
-        response = redirect(normalize_next_url(next_url, _prefix_val))
+        response = redirect(normalize_next_url(next_url, ""))
         response.set_cookie(
             "scanner_auth",
             payload,
@@ -241,8 +235,7 @@ def logout_view(request):
 
 def signup_view(request):
     if request.user.is_authenticated:
-        _p = request.session.get("url_prefix", "")
-        return redirect(f"/{_p}/" if _p else "/")
+        return redirect("/")
 
     if request.method == "POST":
         username = request.POST.get("username", "").strip()

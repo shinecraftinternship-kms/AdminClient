@@ -58,4 +58,4 @@ class AuthRedirectTests(SimpleTestCase):
             response = templates.login_view(request)
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, "/asdf-acme/executive-dashboard/")
+        self.assertEqual(response.url, "/executive-dashboard/")

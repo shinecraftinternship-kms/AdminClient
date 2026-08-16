@@ -64,6 +64,10 @@ class CookieAuthMiddleware:
 
 
 class CompanyPrefixMiddleware:
+    """Backward-compat shim: strips any legacy /<user>-<company>/ URL prefix so the
+    panel always lives at the root URL (https://<host>/), no matter which admin or
+    user is logged in. Never redirects and never writes to the session."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -74,63 +78,16 @@ class CompanyPrefixMiddleware:
         if any(path.startswith(p) for p in skip_paths):
             return self.get_response(request)
 
-        if path in ("/login/", "/signup/", "/logout/"):
-            return self.get_response(request)
-
-        # Ensure we have a user (fallback to cookie if AuthenticationMiddleware missed it)
-        if not getattr(request.user, "is_authenticated", False):
-            cookie_user = _get_user_from_cookie(request)
-            if cookie_user:
-                request.user = cookie_user
-
-        prefix = self._get_prefix(request, path)
-
-        # Persist prefix in session for later requests
-        if prefix and request.session.get("url_prefix") != prefix:
-            request.session["url_prefix"] = prefix
-            request.session.modified = True
-
-        if prefix:
-            expected = "/" + prefix
-            if path == expected:
-                return redirect(expected + "/")
-            if path.startswith(expected + "/"):
-                suffix = path[len(expected):]
-                request.path_info = suffix or "/"
-                request.path = suffix or "/"
-                return self.get_response(request)
-            # Authenticated user but missing prefix → redirect to prefixed URL
-            if request.user.is_authenticated:
-                target = expected + path
-                if target.endswith("//"):
-                    target = target.rstrip("/") + "/"
-                return redirect(target)
-
-        # No prefix in URL and user authenticated → compute prefix and redirect
-        if request.user.is_authenticated and not prefix:
-            computed = self._compute_prefix_from_user(request.user)
-            if computed:
-                request.session["url_prefix"] = computed
-                request.session.modified = True
-                target = f"/{computed}{path}"
-                if target.endswith("//"):
-                    target = target.rstrip("/") + "/"
-                return redirect(target)
+        if path.count("/") >= 2:
+            prefix = self._extract_prefix_from_url(path)
+            if prefix:
+                suffix = path[len(prefix) + 1:] or "/"
+                if not suffix.startswith("/"):
+                    suffix = "/" + suffix
+                request.path_info = suffix
+                request.path = suffix
 
         return self.get_response(request)
-
-    def _get_prefix(self, request, path):
-        # 1️⃣ session
-        prefix_from_session = request.session.get("url_prefix", "")
-        if prefix_from_session:
-            return prefix_from_session
-
-        # 2️⃣ URL
-        prefix_from_url = self._extract_prefix_from_url(path)
-        if prefix_from_url:
-            return prefix_from_url
-
-        return ""
 
     def _extract_prefix_from_url(self, path):
         try:
@@ -153,21 +110,11 @@ class CompanyPrefixMiddleware:
                         pass
         return ""
 
-    def _compute_prefix_from_user(self, user):
-        from django.utils.text import slugify
-        from .models import AdministratorProfile
-        profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
-        if not profile or not profile.company:
-            return ""
-        user_part = slugify(user.username) or "admin"
-        company_part = slugify(profile.company.slug) or slugify(profile.company.name) or "default"
-        return f"{user_part}-{company_part}"
-
 
 def url_prefix_context(request):
     from django.conf import settings
     return {
-        "url_prefix": request.session.get("url_prefix", ""),
+        "url_prefix": "",
         "IS_VERCEL": getattr(settings, "IS_VERCEL", False),
     }
 
