@@ -925,6 +925,18 @@ def main():
             P("  Invalid option. Using saved/default server.")
             P()
 
+    try:
+        from urllib.parse import urlsplit
+        _p = urlsplit(admin_url)
+        if _p.path and _p.path != "/":
+            _base = f"{_p.scheme}://{_p.netloc}"
+            if Communicator(_base).is_reachable():
+                admin_url = _base
+                config["admin_url"] = _base
+                save_config(config)
+    except Exception:
+        pass
+
     hostname = socket.gethostname()
     _log_crash(f"OK: admin_url={admin_url} hostname={hostname}")
 
