@@ -122,56 +122,6 @@ def app(environ, start_response):
 
     path = environ.get("PATH_INFO", "")
 
-    # TEMPORARY danger reset - wipes the entire DB. REMOVE AFTER USE.
-    if path == "/__reset":
-        from urllib.parse import parse_qs
-        import json as _json
-        qs = parse_qs(environ.get("QUERY_STRING", ""))
-        if qs.get("token", [""])[0] != "1bf5307c47563fd09a403b6cdc3382b7":
-            start_response("403 Forbidden", [("Content-Type", "application/json")])
-            return [b'{"error":"forbidden"}']
-        cleared = []
-        skipped = []
-        try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
-                )
-                tables = [r[0] for r in cursor.fetchall()]
-                for table in tables:
-                    if table == "django_migrations":
-                        continue
-                    try:
-                        cursor.execute(f'TRUNCATE TABLE "{table}" CASCADE')
-                        cursor.execute(
-                            f"SELECT setval(pg_get_serial_sequence('{table}','id'), 1, false)"
-                        )
-                        cleared.append(table)
-                    except Exception as e:
-                        skipped.append(f"{table}: {e}")
-            from django.contrib.auth.models import User
-            if not User.objects.filter(username="admin").exists():
-                User.objects.create_superuser("admin", "admin@example.com", "admin123")
-            from django.apps import apps
-            Setting = apps.get_model("scanner_api", "Setting")
-            Setting.set("auto_approve", "false")
-            if not Setting.get("admin_connection_token", ""):
-                import secrets as _secrets
-                Setting.set("admin_connection_token", _secrets.token_hex(16))
-            vercel_url = os.getenv("VERCEL_URL", "").strip()
-            if vercel_url:
-                Setting.set("admin_server_url", f"https://{vercel_url}")
-            body = _json.dumps(
-                {"status": "ok", "cleared": len(cleared), "skipped": skipped}
-            ).encode()
-            start_response("200 OK", [("Content-Type", "application/json")])
-            return [body]
-        except Exception as e:
-            body = _json.dumps({"status": "error", "error": str(e)}).encode()
-            start_response("500 Internal Server Error", [("Content-Type", "application/json")])
-            return [body]
-
     # Diagnostic endpoint: visit /__diag to see full init log
     if path == "/__diag":
         lines = list(_init_log)
