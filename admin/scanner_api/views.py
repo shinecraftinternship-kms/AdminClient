@@ -89,7 +89,13 @@ def get_admin_owned_clients(request):
         # company) from the main admin, so the panel showed "nothing" even
         # though clients were registered and approved.
         return qs
-    return qs.filter(models.Q(owner=request.user) | unowned_clients)
+    # Regular admins see the clients they own, unowned pending/auto-approved
+    # clients, AND clients belonging to their own company (even if a different
+    # admin in the same company approved them). Otherwise an approved client
+    # can be invisible to every admin in its own company.
+    company = get_user_company(request)
+    same_company_clients = models.Q(company=company) if company else models.Q()
+    return qs.filter(models.Q(owner=request.user) | unowned_clients | same_company_clients)
 
 
 def client_is_visible(request, client):
@@ -123,6 +129,31 @@ from .serializers import (
 logger = logging.getLogger("scanner_api")
 
 
+def _auto_approve_enabled():
+    return Setting.get("auto_approve", "false").lower() == "true"
+
+
+def _has_real_admin_approval(client):
+    """True only if the client was approved by an explicit admin action.
+
+    Auto-approved clients (auto_approved=True) and legacy rows that were
+    approved without an ``approve`` ActivityLog do NOT count, so a device the
+    admin never actually approved is demoted back to pending instead of
+    staying silently approved.
+    """
+    if getattr(client, "auto_approved", False):
+        return False
+    return ActivityLog.objects.filter(client=client, action="approve").exists()
+
+
+def _demote_approval(client, update_fields, status="pending"):
+    """Drop a client back to pending so it becomes visible and approvable."""
+    client.approved = False
+    client.auto_approved = False
+    client.status = status
+    update_fields += ["approved", "auto_approved", "status"]
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class RegisterClientView(APIView):
     def post(self, request):
@@ -135,7 +166,7 @@ class RegisterClientView(APIView):
         client_version = data.get("client_version", "")
         fingerprint = data.get("device_fingerprint", "")
 
-        auto_approve = Setting.get("auto_approve", "false").lower() == "true"
+        auto_approve = _auto_approve_enabled()
 
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
@@ -146,6 +177,7 @@ class RegisterClientView(APIView):
                 # approved) would report "already approved" and stay invisible.
                 existing.deleted = False
                 existing.approved = False
+                existing.auto_approved = False
                 existing.status = "pending"
                 existing.hostname = hostname
                 existing.platform = platform_name
@@ -154,7 +186,7 @@ class RegisterClientView(APIView):
                 existing.last_seen = timezone.now()
                 existing.last_ip = _client_ip(request)
                 existing.save(update_fields=[
-                    "deleted", "approved", "status", "hostname", "platform",
+                    "deleted", "approved", "auto_approved", "status", "hostname", "platform",
                     "client_version", "device_fingerprint", "last_seen", "last_ip",
                 ])
                 ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion, waiting for re-approval (key {key})")
@@ -172,8 +204,9 @@ class RegisterClientView(APIView):
                 update_fields.append("device_fingerprint")
             if auto_approve:
                 existing.approved = True
+                existing.auto_approved = True
                 existing.status = "online"
-                update_fields += ["approved", "status"]
+                update_fields += ["approved", "auto_approved", "status"]
             elif stored_fp and incoming_fp and stored_fp != incoming_fp:
                 # The same registration key is being reused by a DIFFERENT
                 # physical device. Never hand out the previous device's
@@ -181,15 +214,18 @@ class RegisterClientView(APIView):
                 # approve THIS device (the panel would otherwise show nothing
                 # to approve while the new client wrongly reports "approved").
                 existing.approved = False
+                existing.auto_approved = False
                 existing.status = "pending"
-                update_fields += ["approved", "status"]
+                update_fields += ["approved", "auto_approved", "status"]
             elif stored_fp and incoming_fp and stored_fp == incoming_fp:
-                # Same device re-registering with the same key. Keep its
-                # existing approval and status: the client re-registers on every
-                # start, and flipping an already-approved device back to
-                # "pending" would drop it out of the dashboard after each
-                # restart, which looks like the client "disappeared".
-                pass
+                # Same device re-registering with the same key. Keep the
+                # approval ONLY if it was granted by an explicit admin action.
+                # A device that is merely auto-approved (or a legacy row
+                # approved without an approval log) is dropped back to pending
+                # once auto-approve is off, so it can never claim "approved"
+                # while the admin never actually approved it.
+                if existing.approved and not _has_real_admin_approval(existing):
+                    _demote_approval(existing, update_fields)
             existing.save(update_fields=update_fields)
             # Approved devices get "ok"; not-yet-approved devices stay "pending".
             response_status = "ok" if existing.approved else "pending"
@@ -215,7 +251,8 @@ class RegisterClientView(APIView):
                 same_device.last_ip = _client_ip(request)
                 same_device.status = "online" if auto_approve else "pending"
                 same_device.approved = bool(auto_approve)
-                same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved"])
+                same_device.auto_approved = bool(auto_approve)
+                same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved", "auto_approved"])
                 ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
                 return Response({"status": "ok", "auto_approved": same_device.approved})
 
@@ -223,7 +260,7 @@ class RegisterClientView(APIView):
             registration_key=key, hostname=hostname, platform=platform_name,
             client_version=client_version, device_fingerprint=fingerprint,
             status="online" if auto_approve else "pending",
-            approved=auto_approve, last_seen=timezone.now(),
+            approved=auto_approve, auto_approved=auto_approve, last_seen=timezone.now(),
             last_ip=_client_ip(request),
         )
         ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}")
@@ -246,13 +283,14 @@ class ApproveClientView(APIView):
             return Response({"status": "error", "message": "Access denied"}, status=status.HTTP_403_FORBIDDEN)
 
         client.approved = True
+        client.auto_approved = False
         client.status = "online"
         client.deleted = False
         client.last_seen = timezone.now()
         client.owner = request.user
         if company:
             client.company = company
-        client.save(update_fields=["approved", "status", "deleted", "last_seen", "owner", "company"])
+        client.save(update_fields=["approved", "auto_approved", "status", "deleted", "last_seen", "owner", "company"])
         ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved by {request.user.username}")
         return Response({"status": "ok"})
 
@@ -273,13 +311,14 @@ class ApproveMultipleView(APIView):
         count = 0
         for client in clients:
             client.approved = True
+            client.auto_approved = False
             client.status = "online"
             client.deleted = False
             client.last_seen = timezone.now()
             client.owner = request.user
             if company:
                 client.company = company
-            client.save(update_fields=["approved", "status", "deleted", "last_seen", "owner", "company"])
+            client.save(update_fields=["approved", "auto_approved", "status", "deleted", "last_seen", "owner", "company"])
             count += 1
 
         ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients by {request.user.username}")
@@ -315,6 +354,15 @@ class PingClientView(APIView):
             # approved again — never keep it hidden while it keeps pinging.
             client.deleted = False
             client.approved = False
+            client.auto_approved = False
+            client.status = "pending"
+            resurrected_pending = True
+        elif not _auto_approve_enabled() and client.approved and not _has_real_admin_approval(client):
+            # Auto-approve is off and this client's approval never came from an
+            # explicit admin action (auto-approved or legacy). Demote it so it
+            # shows up as PENDING on the panel and the client stops claiming it
+            # was approved when no admin ever approved it.
+            client.approved = False
             client.status = "pending"
             resurrected_pending = True
 
@@ -324,7 +372,7 @@ class PingClientView(APIView):
 
         client.save(update_fields=["status", "last_seen", "last_ip", "hostname", "client_version", "device_fingerprint", "scan_requested"])
         if resurrected_pending:
-            client.save(update_fields=["deleted", "approved", "status"])
+            client.save(update_fields=["deleted", "approved", "auto_approved", "status"])
 
         # Keep the monitoring module in sync so it flips back online right away
         # via the regular ping, not only through the separate heartbeat endpoint.

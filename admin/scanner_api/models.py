@@ -48,6 +48,8 @@ class Client(models.Model):
     status = models.CharField(max_length=32, default="pending")
     last_seen = models.DateTimeField(null=True, blank=True)
     approved = models.BooleanField(default=False)
+    auto_approved = models.BooleanField(default=False,
+        help_text="Approved automatically at registration; demoted to pending if auto-approve is turned off")
 
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_clients",
         help_text="Admin user who owns this client")

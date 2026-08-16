@@ -10,8 +10,8 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 
-from scanner_api.models import Client
-from scanner_api.views import RegisterClientView, ApproveClientView
+from scanner_api.models import ActivityLog, Client
+from scanner_api.views import RegisterClientView, ApproveClientView, PingClientView
 
 User = get_user_model()
 
@@ -50,7 +50,7 @@ class RegistrationApprovalTests(TestCase):
         self.assertFalse(client.approved)
         self.assertEqual(client.status, "pending")
 
-    def test_existing_key_same_device_keeps_approval(self):
+    def test_existing_key_same_device_demoted_when_never_admin_approved(self):
         Client.objects.create(
             registration_key="KEY-1",
             hostname="Host A",
@@ -77,10 +77,71 @@ class RegistrationApprovalTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "pending")
-        self.assertTrue(response.data["approved"])
+        self.assertFalse(response.data["approved"])
 
         client = Client.objects.get(registration_key="KEY-1")
+        self.assertFalse(client.approved)
+        self.assertEqual(client.status, "pending")
+
+    def test_existing_key_same_device_keeps_approval_when_admin_approved(self):
+        client = Client.objects.create(
+            registration_key="KEY-1",
+            hostname="Host A",
+            platform="Windows",
+            device_fingerprint="fp-abc",
+            approved=True,
+            status="online",
+        )
+        ActivityLog.objects.create(action="approve", client=client)
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/register",
+            {
+                "registration_key": "KEY-1",
+                "hostname": "Host A",
+                "platform": "Windows",
+                "client_version": "2.0",
+                "device_fingerprint": "fp-abc",
+            },
+            content_type="application/json",
+        )
+
+        response = RegisterClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ok")
+        self.assertTrue(response.data["approved"])
+
+        client.refresh_from_db()
         self.assertTrue(client.approved)
+
+    def test_ping_demotes_stale_auto_approval_when_auto_approve_is_off(self):
+        Client.objects.create(
+            registration_key="KEY-1",
+            hostname="Host A",
+            platform="Windows",
+            device_fingerprint="fp-abc",
+            approved=True,
+            auto_approved=True,
+            status="online",
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/ping",
+            {"registration_key": "KEY-1", "hostname": "Host A"},
+            content_type="application/json",
+        )
+
+        response = PingClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["approved"])
+
+        client = Client.objects.get(registration_key="KEY-1")
+        self.assertFalse(client.approved)
+        self.assertEqual(client.status, "pending")
 
     def test_existing_key_different_device_resets_approval(self):
         Client.objects.create(
