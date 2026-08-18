@@ -76,7 +76,7 @@ try:
     from client.key_manager import load_config as km_load_config, save_config as km_save_config
     _log_crash("OK: imported client.key_manager (config)")
 
-    from client.config import prompt_admin_url, discover_admin
+    from client.config import prompt_admin_url, discover_admin, get_display_admin_url, get_base_admin_url
     _log_crash("OK: imported client.config (funcs)")
 
     from client.config import load_config as cfg_load_config, save_config as cfg_save_config
