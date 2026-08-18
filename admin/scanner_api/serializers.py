@@ -77,7 +77,7 @@ class ClientListSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         from datetime import timedelta
         from scanner_api.models import Setting
-        
+
         if not obj.last_seen:
             return False
         try:
@@ -105,7 +105,7 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         from datetime import timedelta
         from scanner_api.models import Setting
-        
+
         if not obj.last_seen:
             return False
         try:
@@ -141,6 +141,8 @@ class RegisterRequestSerializer(serializers.Serializer):
     platform = serializers.CharField(required=False, default="")
     client_version = serializers.CharField(required=False, default="")
     device_fingerprint = serializers.CharField(required=False, default="")
+    admin_username = serializers.CharField(required=False, default="", allow_blank=True)
+    company_slug = serializers.CharField(required=False, default="", allow_blank=True)
 
 
 class ApproveRequestSerializer(serializers.Serializer):

@@ -240,6 +240,26 @@ class RegisterClientView(APIView):
         platform_name = data.get("platform", "")
         client_version = data.get("client_version", "")
         fingerprint = data.get("device_fingerprint", "")
+        admin_username = data.get("admin_username", "").strip()
+        company_slug = data.get("company_slug", "").strip()
+
+        # Try to find the target company based on admin_username and company_slug
+        target_company = None
+        if company_slug:
+            try:
+                target_company = Company.objects.get(slug=company_slug)
+            except Company.DoesNotExist:
+                pass
+
+        if not target_company and admin_username:
+            try:
+                from django.contrib.auth.models import User
+                admin_user = User.objects.get(username=admin_username, is_superuser=True)
+                profile = AdministratorProfile.objects.filter(user=admin_user).select_related("company").first()
+                if profile and profile.company:
+                    target_company = profile.company
+            except User.DoesNotExist:
+                pass
 
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
@@ -316,8 +336,13 @@ class RegisterClientView(APIView):
             status="pending",
             approved=False, auto_approved=False, last_seen=timezone.now(),
             last_ip=_client_ip(request),
+            company=target_company,
         )
-        ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}, waiting for admin approval")
+        ActivityLog.objects.create(
+            action="register",
+            company=target_company,
+            details=f"Client {hostname} registered with key {key}, waiting for admin approval"
+        )
         return Response({"status": "pending", "approved": False}, status=status.HTTP_201_CREATED)
 
 

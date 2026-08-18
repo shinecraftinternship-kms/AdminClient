@@ -133,14 +133,20 @@ class Communicator:
 
         return sent
 
-    def register(self, key, hostname, platform_name, client_version="", device_fingerprint=""):
-        return self._request("POST", "/api/register", {
+    def register(self, key, hostname, platform_name, client_version="", device_fingerprint="",
+                admin_username=None, company_slug=None):
+        data = {
             "registration_key": key,
             "hostname": hostname,
             "platform": platform_name,
             "client_version": client_version,
             "device_fingerprint": device_fingerprint,
-        })
+        }
+        if admin_username:
+            data["admin_username"] = admin_username
+        if company_slug:
+            data["company_slug"] = company_slug
+        return self._request("POST", "/api/register", data)
 
     def ping(self, key, hostname, client_version="", device_fingerprint=""):
         return self._request("POST", "/api/ping", {

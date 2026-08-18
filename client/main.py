@@ -1091,7 +1091,13 @@ def main():
             P()
 
     P("  Connecting to admin server...")
-    result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+
+    # Extract admin username and company from the admin_url if it's a connect URL
+    from client.config import extract_admin_info
+    admin_username, company_slug = extract_admin_info(admin_url)
+
+    result = comm.register(key, hostname, platform.system(), VERSION, fingerprint,
+                          admin_username=admin_username, company_slug=company_slug)
     _log_crash(f"OK: register result={result}")
 
     # Only consider approved if the server explicitly says so AND

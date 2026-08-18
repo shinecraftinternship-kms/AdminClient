@@ -10,6 +10,30 @@ CONFIG_PATH = os.path.join(get_client_data_dir(), "client_config.json")
 LOCALHOST_URL = "http://localhost:80"
 
 
+def extract_admin_info(raw_url):
+    """Extract admin username and company slug from a connect URL.
+    Returns tuple (username, company_slug) or (None, None) if not a connect URL.
+    Example: https://example.com/connect/asdf/asdf/ → ('asdf', 'asdf')
+    """
+    value = (raw_url or "").strip()
+    if not value or "/connect/" not in value.lower():
+        return None, None
+
+    try:
+        from urllib.parse import urlsplit
+        parsed = urlsplit(value)
+        path = parsed.path.strip("/")
+        parts = path.split("/")
+        if len(parts) >= 3 and parts[0].lower() == "connect":
+            username = parts[1]
+            company_slug = parts[2]
+            return username, company_slug
+    except Exception:
+        pass
+
+    return None, None
+
+
 def normalize_admin_url(raw_url):
     value = (raw_url or "").strip().rstrip("/")
     if not value:
