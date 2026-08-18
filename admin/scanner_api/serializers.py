@@ -137,10 +137,10 @@ class ScanConfigSerializer(serializers.Serializer):
 
 class RegisterRequestSerializer(serializers.Serializer):
     registration_key = serializers.CharField()
-    hostname = serializers.CharField(required=False, default="")
-    platform = serializers.CharField(required=False, default="")
-    client_version = serializers.CharField(required=False, default="")
-    device_fingerprint = serializers.CharField(required=False, default="")
+    hostname = serializers.CharField(required=False, default="", allow_blank=True)
+    platform = serializers.CharField(required=False, default="", allow_blank=True)
+    client_version = serializers.CharField(required=False, default="", allow_blank=True)
+    device_fingerprint = serializers.CharField(required=False, default="", allow_blank=True)
     admin_username = serializers.CharField(required=False, default="", allow_blank=True)
     company_slug = serializers.CharField(required=False, default="", allow_blank=True)
 
@@ -155,9 +155,9 @@ class ApproveMultipleSerializer(serializers.Serializer):
 
 class PingRequestSerializer(serializers.Serializer):
     registration_key = serializers.CharField()
-    hostname = serializers.CharField(required=False, default="")
-    client_version = serializers.CharField(required=False, default="")
-    device_fingerprint = serializers.CharField(required=False, default="")
+    hostname = serializers.CharField(required=False, default="", allow_blank=True)
+    client_version = serializers.CharField(required=False, default="", allow_blank=True)
+    device_fingerprint = serializers.CharField(required=False, default="", allow_blank=True)
 
 
 class ScanSubmitSerializer(serializers.Serializer):

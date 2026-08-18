@@ -236,7 +236,7 @@ class RegisterClientView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         key = data["registration_key"]
-        hostname = data.get("hostname", "")
+        hostname = (data.get("hostname", "") or "").strip() or socket.gethostname() or "Unknown Device"
         platform_name = data.get("platform", "")
         client_version = data.get("client_version", "")
         fingerprint = data.get("device_fingerprint", "")
@@ -417,7 +417,7 @@ class PingClientView(APIView):
         except Client.DoesNotExist:
             return Response({"status": "error", "message": "Client not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        client.status = "online"
+        client.status = "online" if client.approved else "pending"
         client.last_seen = timezone.now()
         client.last_ip = _client_ip(request)
         client.hostname = data.get("hostname", client.hostname)

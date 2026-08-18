@@ -1124,7 +1124,10 @@ def main():
         P(f"  [WAITING] Approve this device in the admin panel (key: {key})")
         while True:
             time.sleep(2)
-            status_res = comm.check_status(key)
+            # Keep last_seen fresh while approval is pending. The status
+            # endpoint only reads state and cannot tell the admin panel that
+            # this background client is still alive.
+            status_res = comm.ping(key, hostname, VERSION, fingerprint)
             if status_res.get("status") == "approved":
                 P("  [OK] Admin approved registration.")
                 break

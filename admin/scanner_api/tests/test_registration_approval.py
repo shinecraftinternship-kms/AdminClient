@@ -143,6 +143,29 @@ class RegistrationApprovalTests(TestCase):
         self.assertFalse(client.approved)
         self.assertEqual(client.status, "pending")
 
+    def test_pending_client_ping_keeps_pending_status_and_refreshes_last_seen(self):
+        client = Client.objects.create(
+            registration_key="PENDING-PING",
+            hostname="Pending Host",
+            platform="Windows",
+            approved=False,
+            status="pending",
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/ping",
+            {"registration_key": "PENDING-PING", "hostname": "Pending Host"},
+            content_type="application/json",
+        )
+
+        response = PingClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        client.refresh_from_db()
+        self.assertEqual(client.status, "pending")
+        self.assertIsNotNone(client.last_seen)
+
     def test_existing_key_different_device_resets_approval(self):
         Client.objects.create(
             registration_key="KEY-1",
@@ -199,6 +222,27 @@ class RegistrationApprovalTests(TestCase):
         client = Client.objects.get(registration_key="BRAND-NEW")
         self.assertFalse(client.approved)
         self.assertEqual(client.status, "pending")
+
+    def test_blank_hostname_falls_back_to_machine_name(self):
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/register",
+            {
+                "registration_key": "BLANK-HOST",
+                "hostname": "",
+                "platform": "Windows",
+                "client_version": "2.0",
+                "device_fingerprint": "fp-blank-host",
+            },
+            content_type="application/json",
+        )
+
+        response = RegisterClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 201)
+        client = Client.objects.get(registration_key="BLANK-HOST")
+        self.assertTrue(client.hostname)
+        self.assertNotEqual(client.hostname, "")
 
     def test_default_admin_seed_creates_company_and_dynamic_url(self):
         User.objects.all().delete()
