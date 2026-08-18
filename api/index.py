@@ -67,6 +67,18 @@ def _bootstrap():
         else:
             _init_log.append("[OK] Admin user already exists")
 
+        # Auto-create admin profile with company for every superuser
+        from scanner_api.models import AdministratorProfile, Company
+        from django.utils.text import slugify as _slugify
+        for su in User.objects.filter(is_superuser=True):
+            profile, _ = AdministratorProfile.objects.get_or_create(user=su)
+            if not profile.company:
+                _slug = _slugify(su.username) or su.username.lower().replace(" ", "-")
+                company, _ = Company.objects.get_or_create(name=su.username, defaults={"slug": _slug})
+                profile.company = company
+                profile.save(update_fields=["company"])
+        _init_log.append("[OK] Admin profiles with company ensured")
+
         # Ensure the admin panel's own client record exists so the admin
         # machine appears automatically on the dashboard. get_admin_client_key()
         # persists the key in Settings, so it stays stable across Vercel cold
@@ -102,11 +114,9 @@ def _bootstrap():
         # domain and overwrote a good setting. Keep the existing value instead.
         _init_log.append("[WARN] VERCEL_URL empty → keeping existing admin_server_url setting")
     
-    # Auto-approve clients so they connect and show online on the dashboard
-    # immediately instead of getting stuck in "Pending / Checking..." waiting
-    # for a manual approval that never arrives.
-    Setting.set("auto_approve", "true")
-    _init_log.append("[OK] Auto-approve enabled for clients")
+    # Auto-approve is DISABLED by default. All clients require explicit admin approval.
+    Setting.set("auto_approve", "false")
+    _init_log.append("[OK] Auto-approve is OFF (clients require admin approval)")
     
     if not Setting.get("admin_connection_token", ""):
         Setting.set("admin_connection_token", secrets.token_hex(16))
@@ -178,6 +188,60 @@ def app(environ, start_response):
         body = _json.dumps(status, indent=2).encode()
         start_response("200 OK", [("Content-Type", "application/json")])
         return [body]
+
+    # Reset endpoint: visit /__reset?token=SECRET to wipe all data and start fresh
+    if path.startswith("/__reset"):
+        import json as _json
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(path)
+        params = parse_qs(parsed.query)
+        token = params.get("token", [""])[0]
+        secret = os.getenv("RESET_TOKEN", "scanner-reset-2024")
+        if token != secret:
+            start_response("403 Forbidden", [("Content-Type", "application/json")])
+            return [b'{"error": "Invalid reset token"}']
+        if _handler is None:
+            start_response("503 Service Unavailable", [("Content-Type", "application/json")])
+            return [b'{"error": "App not ready"}']
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                # Delete all data from all tables
+                cursor.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+                tables = [row[0] for row in cursor.fetchall()]
+                for table in tables:
+                    cursor.execute(f'TRUNCATE TABLE "{table}" CASCADE')
+            # Re-create admin user
+            from django.contrib.auth.models import User
+            if not User.objects.filter(username="admin").exists():
+                User.objects.create_superuser("admin", "admin@example.com", "admin123")
+            # Re-create admin profile
+            from scanner_api.models import AdministratorProfile, Company
+            from django.utils.text import slugify as _slugify
+            su = User.objects.filter(is_superuser=True).first()
+            if su:
+                profile, _ = AdministratorProfile.objects.get_or_create(user=su)
+                if not profile.company:
+                    _slug = _slugify(su.username) or "admin"
+                    company, _ = Company.objects.get_or_create(name=su.username, defaults={"slug": _slug})
+                    profile.company = company
+                    profile.save(update_fields=["company"])
+            # Re-set settings
+            import secrets as _secrets
+            Setting.set("auto_approve", "false")
+            Setting.set("admin_connection_token", _secrets.token_hex(16))
+            vercel_url = os.getenv("VERCEL_URL", "").strip()
+            if vercel_url:
+                Setting.set("admin_server_url", f"https://{vercel_url}")
+            result = {"status": "ok", "message": "Database reset complete. All users, clients, and data deleted. Fresh admin user created (admin/admin123)."}
+            body = _json.dumps(result, indent=2).encode()
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [body]
+        except Exception as e:
+            result = {"status": "error", "message": str(e)}
+            body = _json.dumps(result, indent=2).encode()
+            start_response("500 Internal Server Error", [("Content-Type", "application/json")])
+            return [body]
 
     if _handler is None:
         msg = (_init_error or "App is still initializing, please retry in a moment")[:1000]
