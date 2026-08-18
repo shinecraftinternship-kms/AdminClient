@@ -166,6 +166,39 @@ class RegistrationApprovalTests(TestCase):
         self.assertEqual(client.status, "pending")
         self.assertIsNotNone(client.last_seen)
 
+    def test_explicit_approval_survives_client_ping(self):
+        admin = User.objects.create_user(username="approver", password="pass1234", is_superuser=True)
+        client = Client.objects.create(
+            registration_key="APPROVE-PING",
+            hostname="Approved Host",
+            platform="Windows",
+            approved=False,
+            status="pending",
+        )
+
+        factory = RequestFactory()
+        approve_request = factory.post(
+            "/api/approve",
+            {"registration_key": "APPROVE-PING"},
+            content_type="application/json",
+        )
+        approve_request.user = admin
+        approve_response = ApproveClientView.as_view()(approve_request)
+        self.assertEqual(approve_response.status_code, 200)
+
+        ping_request = factory.post(
+            "/api/ping",
+            {"registration_key": "APPROVE-PING", "hostname": "Approved Host"},
+            content_type="application/json",
+        )
+        ping_response = PingClientView.as_view()(ping_request)
+
+        self.assertEqual(ping_response.status_code, 200)
+        self.assertTrue(ping_response.data["approved"])
+        client.refresh_from_db()
+        self.assertTrue(client.approved)
+        self.assertEqual(client.status, "online")
+
     def test_existing_key_different_device_resets_approval(self):
         Client.objects.create(
             registration_key="KEY-1",

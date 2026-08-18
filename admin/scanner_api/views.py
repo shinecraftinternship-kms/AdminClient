@@ -370,7 +370,10 @@ class ApproveClientView(APIView):
         if company:
             client.company = company
         client.save(update_fields=["approved", "auto_approved", "status", "deleted", "last_seen", "owner", "company"])
-        ActivityLog.objects.create(action="approve", company=company, details=f"Client with key {key} approved by {request.user.username}")
+        ActivityLog.objects.create(
+            action="approve", client=client, company=company,
+            details=f"Client with key {key} approved by {request.user.username}",
+        )
         return Response({"status": "ok"})
 
 
@@ -400,7 +403,10 @@ class ApproveMultipleView(APIView):
             client.save(update_fields=["approved", "auto_approved", "status", "deleted", "last_seen", "owner", "company"])
             count += 1
 
-        ActivityLog.objects.create(action="approve", company=company, details=f"Bulk approved {count} clients by {request.user.username}")
+            ActivityLog.objects.create(
+                action="approve", client=client, company=company,
+                details=f"Client with key {client.registration_key} approved by {request.user.username}",
+            )
         return Response({"status": "ok", "count": count})
 
 
