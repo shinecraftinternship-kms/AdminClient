@@ -40,23 +40,34 @@ def normalize_next_url(next_url, prefix):
 
 
 def public_root(request):
-    """Default public landing page. Redirects to the admin/company-specific
-    connect URL so the browser URL shows which admin/client pair is active.
+    """Default public landing page.
+    - If not authenticated: redirect to login
+    - If authenticated: redirect to user's personal connect page
     """
-    if request.user.is_authenticated:
-        return render(request, "dashboard.html")
+    if not request.user.is_authenticated:
+        return redirect("/login/")
 
     from django.contrib.auth.models import User
     from .models import AdministratorProfile, Company
-    from .views import build_dynamic_admin_server_url
+    from django.utils.text import slugify as _slugify
 
-    admin_user = User.objects.filter(is_superuser=True).order_by("id").first()
-    if not admin_user:
-        return redirect("/login/")
+    user = request.user
+    profile = AdministratorProfile.objects.filter(user=user).select_related("company").first()
 
-    profile = AdministratorProfile.objects.filter(user=admin_user).select_related("company").first()
-    company = profile.company if profile and profile.company else Company.objects.filter(name=admin_user.username).first()
-    connect_url = build_dynamic_admin_server_url(request.build_absolute_uri("/").rstrip("/"), admin_user.username, company)
+    if not profile or not profile.company:
+        # User doesn't have a company, create one
+        _slug = _slugify(user.username) or user.username.lower().replace(" ", "-")
+        company, _ = Company.objects.get_or_create(name=user.username, defaults={"slug": _slug})
+        if profile:
+            profile.company = company
+            profile.save(update_fields=["company"])
+        else:
+            profile, _ = AdministratorProfile.objects.get_or_create(user=user, defaults={"company": company})
+    else:
+        company = profile.company
+
+    company_slug = company.slug if company else (_slugify(user.username) or user.username.lower().replace(" ", "-"))
+    connect_url = f"/connect/{user.username}/{company_slug}/"
     return redirect(connect_url)
 
 
