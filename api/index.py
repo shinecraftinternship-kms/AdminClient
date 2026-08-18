@@ -92,8 +92,7 @@ def _bootstrap():
     else:
         _init_log.append("[SKIP] Skipped admin user creation (SQLite /tmp is ephemeral, use Signup instead)")
 
-    from django.apps import apps
-    Setting = apps.get_model("scanner_api", "Setting")
+    from scanner_api.models import Setting
     import secrets
     vercel_url = os.getenv("VERCEL_URL", "").strip()
     if vercel_url:
@@ -228,11 +227,12 @@ def app(environ, start_response):
                     profile.save(update_fields=["company"])
             # Re-set settings
             import secrets as _secrets
-            Setting.set("auto_approve", "false")
-            Setting.set("admin_connection_token", _secrets.token_hex(16))
+            from scanner_api.models import Setting as _Setting
+            _Setting.set("auto_approve", "false")
+            _Setting.set("admin_connection_token", _secrets.token_hex(16))
             vercel_url = os.getenv("VERCEL_URL", "").strip()
             if vercel_url:
-                Setting.set("admin_server_url", f"https://{vercel_url}")
+                _Setting.set("admin_server_url", f"https://{vercel_url}")
             result = {"status": "ok", "message": "Database reset complete. All users, clients, and data deleted. Fresh admin user created (admin/admin123)."}
             body = _json.dumps(result, indent=2).encode()
             start_response("200 OK", [("Content-Type", "application/json")])
