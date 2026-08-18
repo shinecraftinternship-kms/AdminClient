@@ -10,6 +10,21 @@ CONFIG_PATH = os.path.join(get_client_data_dir(), "client_config.json")
 LOCALHOST_URL = "http://localhost:80"
 
 
+def normalize_admin_url(raw_url):
+    value = (raw_url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
+        return value
+    from urllib.parse import urlsplit
+    parsed = urlsplit(value)
+    if "/connect/" in parsed.path.lower():
+        return f"{parsed.scheme}://{parsed.netloc}"
+    if parsed.path and parsed.path != "/":
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def load_config():
     defaults = {"admin_url": "", "scan_interval": 3600, "auto_start": True, "manual_url": False}
     try:
@@ -56,10 +71,10 @@ def get_admin_url():
     """
     env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
     if env_url:
-        return env_url.rstrip("/")
+        return normalize_admin_url(env_url)
 
     config = load_config()
-    cached_url = config.get("admin_url", "")
+    cached_url = normalize_admin_url(config.get("admin_url", ""))
 
     # A manually-configured admin URL is the user's explicit choice and must
     # win over anything discovered on the network/cloud. Otherwise a client
@@ -68,6 +83,8 @@ def get_admin_url():
     # dashboard the user is actually looking at.
     if config.get("manual_url") and cached_url and cached_url != LOCALHOST_URL:
         return cached_url
+    if cached_url == LOCALHOST_URL:
+        cached_url = ""
 
     # Cloud discovery picks the currently registered admin server (works
     # across any network). The cached URL is kept as a fallback when discovery

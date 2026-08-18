@@ -156,6 +156,21 @@ def safe_input(prompt=""):
         return ""
 
 
+def normalize_admin_url(raw_url):
+    value = (raw_url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
+        return value
+    from urllib.parse import urlsplit
+    parsed = urlsplit(value)
+    if "/connect/" in parsed.path.lower():
+        return f"{parsed.scheme}://{parsed.netloc}"
+    if parsed.path and parsed.path != "/":
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def print_header():
     P("=" * 55)
     P(f"  System Scanner Pro Client v{VERSION}")
@@ -806,25 +821,13 @@ def main():
 
     env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
     if env_url:
-        admin_url = env_url.rstrip("/")
+        admin_url = normalize_admin_url(env_url)
         config["admin_url"] = admin_url
+        config["manual_url"] = True
         save_config(config)
     elif len(sys.argv) > 1 and sys.argv[1].startswith("http"):
         raw_url = sys.argv[1].rstrip("/")
-        # Support pasting a connect URL like:
-        #   http://host:port/connect/username/company/
-        # Strip the /connect/... path to get the base admin URL.
-        if "/connect/" in raw_url:
-            from urllib.parse import urlsplit
-            _parsed = urlsplit(raw_url)
-            admin_url = f"{_parsed.scheme}://{_parsed.netloc}"
-        else:
-            from urllib.parse import urlsplit
-            _parsed = urlsplit(raw_url)
-            if _parsed.path and _parsed.path != "/":
-                admin_url = f"{_parsed.scheme}://{_parsed.netloc}"
-            else:
-                admin_url = raw_url
+        admin_url = normalize_admin_url(raw_url)
         config["admin_url"] = admin_url
         config["manual_url"] = True
         save_config(config)
@@ -881,7 +884,7 @@ def main():
                 P("  No URL entered. Keeping current server.")
                 P()
             else:
-                admin_url = new_url.rstrip("/")
+                admin_url = normalize_admin_url(new_url)
                 config["admin_url"] = admin_url
                 config["manual_url"] = True
                 save_config(config)
@@ -1005,7 +1008,7 @@ def main():
             P()
             choice = safe_input("  Select option [1-3]: ").strip()
             if choice == "1":
-                admin_url = prompt_admin_url()
+                admin_url = normalize_admin_url(prompt_admin_url())
                 config["admin_url"] = admin_url
                 config["manual_url"] = True
                 save_config(config)
@@ -1063,7 +1066,7 @@ def main():
         P()
         choice = safe_input("  Select option [1-3]: ").strip()
         if choice == "1":
-            admin_url = prompt_admin_url()
+            admin_url = normalize_admin_url(prompt_admin_url())
             config["admin_url"] = admin_url
             config["manual_url"] = True
             save_config(config)
