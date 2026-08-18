@@ -114,6 +114,52 @@ def asset_dashboard_page(request):
     return render(request, "asset_dashboard.html")
 
 
+def connect_page(request, username, company_slug):
+    """Public-facing connect page for a specific admin.
+
+    Displays the admin's connection URL and a download link for the client.
+    The URL format is: /connect/<username>/<company>/
+    """
+    from django.contrib.auth.models import User
+    from .models import AdministratorProfile, Company, Setting
+
+    admin_user = None
+    company = None
+    try:
+        company = Company.objects.get(slug=company_slug)
+    except Company.DoesNotExist:
+        try:
+            company = Company.objects.get(name__iexact=company_slug.replace("-", " "))
+        except Company.DoesNotExist:
+            pass
+
+    if company:
+        profile = AdministratorProfile.objects.filter(company=company).select_related("user").first()
+        if profile:
+            admin_user = profile.user
+
+    if not admin_user:
+        try:
+            admin_user = User.objects.get(username__iexact=username)
+        except User.DoesNotExist:
+            pass
+
+    server_url = Setting.get("admin_server_url", "")
+    token = Setting.get("admin_connection_token", "")
+    base_url = request.build_absolute_uri("/").rstrip("/")
+
+    context = {
+        "admin_username": username,
+        "company_name": company.name if company else company_slug,
+        "company_slug": company_slug,
+        "server_url": server_url,
+        "base_url": base_url,
+        "token": token[:8] + "..." if token else "",
+        "admin_found": admin_user is not None,
+    }
+    return render(request, "connect.html", context)
+
+
 @csrf_exempt
 def login_view(request):
     if request.user.is_authenticated:

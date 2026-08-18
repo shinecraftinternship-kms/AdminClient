@@ -81,6 +81,15 @@
                         <span class="text-secondary small">Admin Server Key:</span>
                         <code id="adminClientKey" class="ms-1 small">---</code>
                     </div>
+                    <div class="mt-3 p-3 bg-dark rounded border border-info">
+                        <label class="form-label fw-semibold text-info"><i class="bi bi-link-45deg me-1"></i>Client Connect Link</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary"><i class="bi bi-person-check"></i></span>
+                            <input type="text" id="connectUrl" class="form-control bg-dark border-secondary text-info" readonly value="Generating..." style="font-size:0.85rem;">
+                            <button class="btn btn-outline-info" onclick="copyConnectUrl()" title="Copy connect link"><i class="bi bi-clipboard"></i></button>
+                        </div>
+                        <div class="form-text">Share this link with clients. It connects directly to your admin account.</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -215,6 +224,34 @@
             }
         })
         .catch(() => {});
+
+    // Fetch the connect URL for this admin
+    fetch('/api/auth/me', _fetchOpts)
+        .then(r => r.json())
+        .then(res => {
+            var uname = (res.user && res.user.username) || res.username;
+            if (uname) {
+                var slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                var base = window.location.origin;
+                document.getElementById('connectUrl').value = base + '/connect/' + uname + '/' + slug + '/';
+            }
+        })
+        .catch(() => {
+            document.getElementById('connectUrl').value = 'Login first to generate connect link';
+        });
+
+    window.copyConnectUrl = function() {
+        var val = document.getElementById('connectUrl').value;
+        if (!val || val === 'Generating...' || val.includes('Login first')) {
+            showMsg('Connect URL not ready yet', 'warning');
+            return;
+        }
+        navigator.clipboard.writeText(val).then(() => {
+            showMsg('Connect link copied! Share with clients.', 'success');
+        }).catch(() => {
+            showMsg('Copy failed - select and copy manually', 'warning');
+        });
+    };
 })();
 </script>
 {% endblock %}

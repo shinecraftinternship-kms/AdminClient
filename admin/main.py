@@ -140,6 +140,8 @@ def main():
              "and never see the correct server.")
     parser.add_argument("--asgi", action="store_true",
         help="Serve with daphne (ASGI + WebSocket). Use behind nginx with /ws/ proxy.")
+    parser.add_argument("--fresh", action="store_true",
+        help="Delete the database and start fresh (all users, clients, data removed).")
     args = parser.parse_args()
 
     print("=" * 55)
@@ -171,6 +173,17 @@ def main():
         os.environ["DJANGO_ALLOWED_HOSTS"] = ",".join(dict.fromkeys(allowed))
     os.environ["SCANNER_DATA_DIR"] = DATA_DIR
 
+    if args.fresh:
+        db_path = os.path.join(DATA_DIR, "scanner.db")
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            print(f"  [FRESH] Deleted database: {db_path}")
+        else:
+            print(f"  [FRESH] No existing database found at {db_path}")
+        config_file = os.path.join(DATA_DIR, "admin_config.json")
+        if os.path.exists(config_file):
+            os.remove(config_file)
+
     django.setup()
     os.chdir(RESOURCES_DIR)
     print("  Running database migrations...")
@@ -183,6 +196,17 @@ def main():
     from scanner_api.views import ensure_admin_client, admin_self_scan, admin_client_heartbeat_loop
     from scanner_api.models import Setting, AdministratorProfile, Company
     import threading
+
+    # Auto-create admin profile with company for every superuser
+    from django.utils.text import slugify as _slugify
+    for su in User.objects.filter(is_superuser=True):
+        profile, _ = AdministratorProfile.objects.get_or_create(user=su)
+        if not profile.company:
+            _slug = _slugify(su.username) or su.username.lower().replace(" ", "-")
+            company, _ = Company.objects.get_or_create(name=su.username, defaults={"slug": _slug})
+            profile.company = company
+            profile.save(update_fields=["company"])
+
     admin_key = ensure_admin_client()
     threading.Thread(target=admin_self_scan, daemon=True).start()
     threading.Thread(target=admin_client_heartbeat_loop, daemon=True).start()
@@ -232,6 +256,15 @@ def main():
 
     print(f"  Dashboard: {startup_url}")
     print(f"  Login:     {startup_url}/login/")
+    # Show the connect URL for this admin
+    try:
+        su = User.objects.filter(is_superuser=True).first()
+        if su:
+            from django.utils.text import slugify as _slug2
+            _company_slug = _slug2(su.username) or "admin"
+            print(f"  Connect:   {startup_url}/connect/{su.username}/{_company_slug}/")
+    except Exception:
+        pass
     print()
 
     if args.host not in ("0.0.0.0", "127.0.0.1", "localhost", ""):

@@ -132,7 +132,7 @@ _log_crash("OK: all imports done")
 _log_crash(f"OK: data_dir={get_client_data_dir()}")
 
 DISCOVERY_PORT = 45000
-VERSION = "1.6.1"
+VERSION = "1.7.0"
 OUTPUT_DIR = os.path.join(get_client_data_dir(), "scans")
 
 
@@ -343,18 +343,11 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
             if not isinstance(resp, dict) or resp.get("status") != "ok":
                 missing = isinstance(resp, dict) and "not found" in str(resp.get("message", "")).lower()
                 if missing:
-                    # The server lost this client's row (DB reset/restore or
-                    # permanent removal). Re-register so the client reappears
-                    # on the panel instead of erroring forever. Approval is
-                    # never re-granted here - the server returns the true
-                    # state and the admin still has to approve it.
                     reg = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
                     if reg and reg.get("status") != "error":
                         resp = dict(reg)
-                        if "approved" not in resp and "auto_approved" in resp:
-                            resp["approved"] = resp["auto_approved"]
-                        if resp.get("status") == "ok":
-                            resp["status"] = "pending" if not resp.get("approved") else "ok"
+                        resp["approved"] = resp.get("approved", False)
+                        resp["status"] = "pending" if not resp.get("approved") else "ok"
                         just_registered = True
                     else:
                         raise ConnectionError("re-register failed")
@@ -817,8 +810,23 @@ def main():
         config["admin_url"] = admin_url
         save_config(config)
     elif len(sys.argv) > 1 and sys.argv[1].startswith("http"):
-        admin_url = sys.argv[1].rstrip("/")
+        raw_url = sys.argv[1].rstrip("/")
+        # Support pasting a connect URL like:
+        #   http://host:port/connect/username/company/
+        # Strip the /connect/... path to get the base admin URL.
+        if "/connect/" in raw_url:
+            from urllib.parse import urlsplit
+            _parsed = urlsplit(raw_url)
+            admin_url = f"{_parsed.scheme}://{_parsed.netloc}"
+        else:
+            from urllib.parse import urlsplit
+            _parsed = urlsplit(raw_url)
+            if _parsed.path and _parsed.path != "/":
+                admin_url = f"{_parsed.scheme}://{_parsed.netloc}"
+            else:
+                admin_url = raw_url
         config["admin_url"] = admin_url
+        config["manual_url"] = True
         save_config(config)
     elif silent:
         if not admin_url or admin_url == "http://localhost:80":
@@ -1074,10 +1082,10 @@ def main():
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint)
     _log_crash(f"OK: register result={result}")
 
-    # Check if the server has actually approved this device. A stale
-    # "approved" flag without a fresh approval response is not enough to
-    # show the client as approved; the server's actual status must confirm it.
-    approved = bool(result.get("auto_approved") or (result.get("status") == "ok" and result.get("approved")))
+    # Only consider approved if the server explicitly says so AND
+    # status is "ok". Never trust auto_approved from the server -
+    # only an explicit admin approval counts.
+    approved = bool(result.get("status") == "ok" and result.get("approved") is True)
     if not approved:
         P("  [WAITING] Registration sent. Waiting for admin approval...")
         P(f"  [WAITING] Approve this device in the admin panel (key: {key})")
@@ -1088,13 +1096,9 @@ def main():
                 P("  [OK] Admin approved registration.")
                 break
             elif status_res.get("status") == "error":
-                # Row missing on the server (DB reset): re-register so the
-                # client becomes visible and can be approved again.
                 comm.register(key, hostname, platform.system(), VERSION, fingerprint)
-    elif result.get("auto_approved"):
-        P("  [OK] Auto-approved by admin server.")
     else:
-        P("  [OK] Already approved.")
+        P("  [OK] Already approved by admin.")
 
     P()
     P("  Performing initial scan...")

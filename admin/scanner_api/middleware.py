@@ -64,9 +64,9 @@ class CookieAuthMiddleware:
 
 
 class CompanyPrefixMiddleware:
-    """Backward-compat shim: strips any legacy /<user>-<company>/ URL prefix so the
-    panel always lives at the root URL (https://<host>/), no matter which admin or
-    user is logged in. Never redirects and never writes to the session."""
+    """Strips any legacy /<user>-<company>/ URL prefix so the panel always
+    lives at the root URL. Also handles /connect/<user>/<company>/ routes
+    by stripping the company prefix when accessed via the prefixed URL."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -76,6 +76,10 @@ class CompanyPrefixMiddleware:
 
         skip_paths = ("/api/", "/static/", "/download-client/", "/favicon")
         if any(path.startswith(p) for p in skip_paths):
+            return self.get_response(request)
+
+        # Never redirect connect pages - they are public
+        if "/connect/" in path:
             return self.get_response(request)
 
         if path.count("/") >= 2:

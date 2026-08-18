@@ -101,7 +101,13 @@ def get_admin_owned_clients(request):
 
 
 def client_is_visible(request, client):
-    """Return True if the current admin may view/modify the given client."""
+    """Return True if the current admin may view/modify the given client.
+
+    Multi-admin visibility:
+      - Unowned clients are visible to everyone (so pending clients can be approved).
+      - Clients owned by any admin in the same company are visible to all company admins.
+      - Superusers see everything.
+    """
     if not request.user or not request.user.is_authenticated:
         return False
     if client.owner is None:
@@ -110,6 +116,11 @@ def client_is_visible(request, client):
         return True
     if request.user.is_superuser:
         return True
+    # Multiple admins in same company can see each other's clients
+    if client.company:
+        my_profile = AdministratorProfile.objects.filter(user=request.user).first()
+        if my_profile and my_profile.company and my_profile.company_id == client.company_id:
+            return True
     return False
 from .serializers import (
     ClientListSerializer, ClientDetailSerializer,
@@ -132,7 +143,7 @@ logger = logging.getLogger("scanner_api")
 
 
 def _auto_approve_enabled():
-    return Setting.get("auto_approve", "false").lower() == "true"
+    return False
 
 
 def _has_real_admin_approval(client):
@@ -168,15 +179,9 @@ class RegisterClientView(APIView):
         client_version = data.get("client_version", "")
         fingerprint = data.get("device_fingerprint", "")
 
-        auto_approve = _auto_approve_enabled()
-
         existing = Client.objects.filter(registration_key=key).first()
         if existing:
             if existing.deleted:
-                # Device reconnecting after being soft-deleted by an admin: bring
-                # it back VISIBLY but as PENDING. Approval is never auto-granted
-                # on re-register, otherwise a client the admin deleted (or never
-                # approved) would report "already approved" and stay invisible.
                 existing.deleted = False
                 existing.approved = False
                 existing.auto_approved = False
@@ -204,32 +209,17 @@ class RegisterClientView(APIView):
             if incoming_fp:
                 existing.device_fingerprint = incoming_fp
                 update_fields.append("device_fingerprint")
-            if auto_approve:
-                existing.approved = True
-                existing.auto_approved = True
-                existing.status = "online"
-                update_fields += ["approved", "auto_approved", "status"]
-            elif stored_fp and incoming_fp and stored_fp != incoming_fp:
-                # The same registration key is being reused by a DIFFERENT
-                # physical device. Never hand out the previous device's
-                # approval: reset to pending so the admin has to explicitly
-                # approve THIS device (the panel would otherwise show nothing
-                # to approve while the new client wrongly reports "approved").
+            # NEVER auto-approve on registration. Only an explicit admin
+            # approval action counts. This prevents clients from showing
+            # "already approved" before the admin has actually approved them.
+            if stored_fp and incoming_fp and stored_fp != incoming_fp:
                 existing.approved = False
                 existing.auto_approved = False
                 existing.status = "pending"
                 update_fields += ["approved", "auto_approved", "status"]
-            elif stored_fp and incoming_fp and stored_fp == incoming_fp:
-                # Same device re-registering with the same key. Keep the
-                # approval ONLY if it was granted by an explicit admin action.
-                # A device that is merely auto-approved (or a legacy row
-                # approved without an approval log) is dropped back to pending
-                # once auto-approve is off, so it can never claim "approved"
-                # while the admin never actually approved it.
-                if existing.approved and not _has_real_admin_approval(existing):
-                    _demote_approval(existing, update_fields)
+            elif existing.approved and not _has_real_admin_approval(existing):
+                _demote_approval(existing, update_fields)
             existing.save(update_fields=update_fields)
-            # Approved devices get "ok"; not-yet-approved devices stay "pending".
             response_status = "ok" if existing.approved else "pending"
             return Response({"status": response_status, "approved": existing.approved})
 
@@ -251,22 +241,22 @@ class RegisterClientView(APIView):
                 same_device.client_version = client_version
                 same_device.last_seen = timezone.now()
                 same_device.last_ip = _client_ip(request)
-                same_device.status = "online" if auto_approve else "pending"
-                same_device.approved = bool(auto_approve)
-                same_device.auto_approved = bool(auto_approve)
+                same_device.status = "pending"
+                same_device.approved = False
+                same_device.auto_approved = False
                 same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved", "auto_approved"])
-                ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key})")
-                return Response({"status": "ok", "auto_approved": same_device.approved})
+                ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key}), waiting for admin approval")
+                return Response({"status": "pending", "approved": False})
 
         client = Client.objects.create(
             registration_key=key, hostname=hostname, platform=platform_name,
             client_version=client_version, device_fingerprint=fingerprint,
-            status="online" if auto_approve else "pending",
-            approved=auto_approve, auto_approved=auto_approve, last_seen=timezone.now(),
+            status="pending",
+            approved=False, auto_approved=False, last_seen=timezone.now(),
             last_ip=_client_ip(request),
         )
-        ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}")
-        return Response({"status": "ok", "auto_approved": auto_approve}, status=status.HTTP_201_CREATED)
+        ActivityLog.objects.create(action="register", details=f"Client {hostname} registered with key {key}, waiting for admin approval")
+        return Response({"status": "pending", "approved": False}, status=status.HTTP_201_CREATED)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

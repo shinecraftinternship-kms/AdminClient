@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect - System Scanner Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0a0e17;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .connect-card {
+            max-width: 560px;
+            width: 100%;
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 16px;
+            padding: 2.5rem;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+        }
+        .connect-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+            color: white;
+        }
+        .admin-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+        .admin-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+        }
+        .url-box {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: #94a3b8;
+            word-break: break-all;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .url-box:hover {
+            border-color: #3b82f6;
+        }
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #3b82f6;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .btn-download {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .btn-download:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(59,130,246,0.3);
+            color: white;
+        }
+        .copy-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="copy-toast" id="copyToast">URL copied to clipboard!</div>
+    <div class="connect-card text-center">
+        <div class="connect-icon">
+            <i class="bi bi-hdd-network"></i>
+        </div>
+        <h3 class="text-white mb-1">System Scanner Pro</h3>
+        <p class="text-secondary mb-4">Connect a device to this admin panel</p>
+
+        <div class="d-flex justify-content-center mb-4">
+            <div class="admin-badge">
+                <span class="dot"></span>
+                <span class="text-white fw-semibold">{{ admin_username }}</span>
+                <span class="text-secondary">|</span>
+                <span class="text-info">{{ company_name }}</span>
+            </div>
+        </div>
+
+        {% if not admin_found %}
+        <div class="alert alert-warning py-2 mb-3">
+            <i class="bi bi-exclamation-triangle"></i> Admin user not found. This link may be invalid.
+        </div>
+        {% endif %}
+
+        <div class="text-start mb-4">
+            <h6 class="text-secondary text-uppercase mb-3" style="font-size:0.75rem; letter-spacing:0.1em;">Connection URL</h6>
+            <div class="url-box" onclick="copyURL()" id="urlBox">
+                {{ base_url }}/connect/{{ admin_username }}/{{ company_slug }}/
+            </div>
+        </div>
+
+        <div class="text-start mb-4">
+            <h6 class="text-secondary text-uppercase mb-3" style="font-size:0.75rem; letter-spacing:0.1em;">How to connect</h6>
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <span class="step-num">1</span>
+                <div>
+                    <div class="text-white fw-semibold">Download the client</div>
+                    <div class="text-secondary small">Get the client agent for Windows</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <span class="step-num">2</span>
+                <div>
+                    <div class="text-white fw-semibold">Run the client</div>
+                    <div class="text-secondary small">Launch client_scanner.exe on the device</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-start gap-3 mb-3">
+                <span class="step-num">3</span>
+                <div>
+                    <div class="text-white fw-semibold">Paste this URL</div>
+                    <div class="text-secondary small">When prompted, paste the connection URL above</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-start gap-3">
+                <span class="step-num">4</span>
+                <div>
+                    <div class="text-white fw-semibold">Approve in admin panel</div>
+                    <div class="text-secondary small">The admin approves the device from the dashboard</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a href="{{ base_url }}/download-client/" class="btn btn-download flex-grow-1">
+                <i class="bi bi-download me-2"></i>Download Client
+            </a>
+            <button class="btn btn-outline-secondary" onclick="copyURL()" title="Copy connection URL">
+                <i class="bi bi-clipboard"></i>
+            </button>
+        </div>
+
+        {% if admin_found %}
+        <div class="mt-4 pt-3 border-top border-secondary">
+            <small class="text-secondary">
+                <i class="bi bi-shield-check me-1"></i>
+                This connection link is unique to <strong class="text-white">{{ admin_username }}</strong> at <strong class="text-info">{{ company_name }}</strong>.
+                Devices connected through this link will appear on this admin's dashboard.
+            </small>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function copyURL() {
+            var url = '{{ base_url }}/connect/{{ admin_username }}/{{ company_slug }}/';
+            navigator.clipboard.writeText(url).then(function() {
+                var toast = document.getElementById('copyToast');
+                toast.style.display = 'block';
+                setTimeout(function() { toast.style.display = 'none'; }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

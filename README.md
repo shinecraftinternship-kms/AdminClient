@@ -1,4 +1,4 @@
-# System Scanner Pro v3.0
+# System Scanner Pro v3.1
 
 AI-powered distributed endpoint monitoring and remote scanning platform with real-time WebSocket communication, client event monitoring, scheduled scanning, JWT security, and predictive analytics.
 
@@ -44,8 +44,16 @@ AI-powered distributed endpoint monitoring and remote scanning platform with rea
 - **Hardware Scanning** — CPU, RAM, storage, motherboard, GPU, OS, network, software, peripherals, antivirus (Windows/Linux/macOS)
 - **Admin Dashboard** — Real-time client overview with stats, charts, search/filter, bulk actions
 - **Change Detection** — Automatic diff between scans, alerts on hardware/software changes
-- **Client Management** — Registration with approval workflow, heartbeat monitoring, stale detection, grouping
+- **Client Management** — Registration with mandatory admin approval, heartbeat monitoring, stale detection, grouping
 - **Authentication** — Login-protected admin panel with JWT tokens, API keys, and RBAC permissions
+
+### Client Connection (v3.1)
+- **Dynamic Connect URLs** — Each admin gets a unique `/connect/<username>/<company>/` URL to share with clients
+- **Paste-to-Connect** — Clients accept the connect URL as a command-line argument, auto-parse it, and connect to the correct admin
+- **Multi-Admin Visibility** — Multiple admins in the same company can see and manage all company clients
+- **Mandatory Approval** — All clients start as "pending" and require explicit admin approval (no auto-approve bypass)
+- **Fresh Database** — `--fresh` flag deletes all data and starts clean (users, clients, settings)
+- **Auto Profile Creation** — Admin profiles and company associations are auto-created on first startup
 
 ### Real-Time (WebSocket)
 - **Live Dashboard** — WebSocket connection pushes device updates, alerts, and health changes instantly
@@ -122,28 +130,36 @@ python admin/main.py
 First run will:
 - Create the SQLite database at `admin/data/scanner.db`
 - Create a default admin user (`admin` / `admin123`)
+- Auto-create admin profile with company association
 - Prompt for the IP address to bind to (use `0.0.0.0` for all interfaces)
 - Start UDP auto-discovery on port 45000
 - Start the Django server on port 80
+- Display your unique **Connect URL** for sharing with clients
 
 **Dashboard:** Open `http://localhost` in your browser.
 
 **Default login:** `admin` / `admin123`
 
+**Connect URL:** Shown on startup (e.g., `http://localhost/connect/admin/admin/`)
+
 ### 3. Start a Client Agent
 
-On any machine you want to monitor:
+On any machine you want to monitor, use the **Connect URL** from the admin:
 
 ```bash
-python client/main.py
+# Option A: Paste the connect URL directly
+python client/main.py http://localhost/connect/admin/admin/
+
+# Option B: Use the base admin URL
+python client/main.py http://192.168.1.100:80
 ```
 
 First run will:
 - Generate a unique registration key (saved to `client_key.json`)
 - Generate a hardware fingerprint (saved to `client_key.json`)
-- Prompt for the admin server URL (or auto-discover via UDP)
+- Connect to the admin server specified in the URL
 - Register with the admin server
-- Wait for admin approval
+- **Wait for admin approval** (all clients start as pending)
 - Perform an initial hardware scan
 - Enter a heartbeat loop (pings every 30 seconds)
 - Start WebSocket connection for real-time commands
@@ -155,7 +171,7 @@ First run will:
 2. You'll see the new client with a yellow "Pending" dot
 3. Click **Approve** (or use bulk actions to approve multiple)
 
-Once approved, the client starts reporting heartbeat data, health scores, and alerts.
+**Important:** Clients NEVER auto-approve. Every client must be explicitly approved by an admin.
 
 ## How to Add a Domain Name
 
@@ -171,7 +187,7 @@ If you have a domain (e.g., `scanner.yourcompany.com`):
 3. Restart the admin server
 4. Clients connect using:
    ```bash
-   python client/main.py http://scanner.yourcompany.com
+   python client/main.py http://scanner.yourcompany.com/connect/admin/mycompany/
    ```
 
 ### Option 2: Use a Domain with HTTPS (Production)
@@ -232,7 +248,7 @@ For production with HTTPS:
 
 5. Clients connect using:
    ```bash
-   python client/main.py http://scanner.yourcompany.com
+   python client/main.py https://scanner.yourcompany.com/connect/admin/mycompany/
    ```
 
 ### Option 3: Use a Free Dynamic DNS (No Domain Needed)
@@ -245,7 +261,7 @@ If you don't have a domain, the system has built-in auto-discovery:
 
 For remote access without a domain, use the admin server's public IP directly:
 ```bash
-python client/main.py http://YOUR.PUBLIC.IP.ADDRESS
+python client/main.py http://YOUR.PUBLIC.IP.ADDRESS/connect/admin/mycompany/
 ```
 
 ## How to Reset the Domain / Admin URL
@@ -339,13 +355,13 @@ curl -X POST http://localhost/api/scan/local
 
 ```bash
 cd admin-client
-python client/main.py
+python client/main.py http://SERVER-IP/connect/admin/mycompany/
 ```
 
 You'll see:
 ```
 ==========================================================
-  System Scanner Pro Client v1.0.0
+  System Scanner Pro Client v1.6.1
   Runs on this machine and reports to admin server
   WebSocket + HTTP fallback communication
   Event monitoring: USB, File, Process, Software
@@ -354,31 +370,40 @@ You'll see:
   Your Registration Key: ABCD1234
   Device Fingerprint:    A1B2C3D4E5F6G7H8
 
-  First-time setup required.
-  Enter admin server URL (e.g., http://192.168.1.100:80): _
-```
+  Admin Server:  http://192.168.1.100:80
+  Client Key:    ABCD1234
+  Fingerprint:   A1B2C3D4E5F6G7H8
+  Client Version: 1.6.1
 
-Enter the admin server URL and press Enter.
+  Connecting to admin server...
+  [WAITING] Registration sent. Waiting for admin approval...
+  [WAITING] Approve this device in the admin panel (key: ABCD1234)
+```
 
 ### With a Known Admin URL
 
 ```bash
+# Using the connect URL (recommended)
+python client/main.py http://192.168.1.100:80/connect/admin/mycompany/
+
+# Using the base URL
 python client/main.py http://192.168.1.100:80
 ```
 
 ### What the Client Does
 
-1. Registers with the admin server
-2. Waits for admin approval (if auto-approve is off)
-3. Performs initial hardware scan
-4. Starts heartbeat loop (every 30 seconds)
-5. Connects WebSocket for real-time commands
-6. Starts event monitors:
+1. Parses the connect URL and resolves the admin server
+2. Registers with the admin server
+3. **Waits for explicit admin approval** (mandatory - no auto-approve)
+4. Performs initial hardware scan
+5. Starts heartbeat loop (every 30 seconds)
+6. Connects WebSocket for real-time commands
+7. Starts event monitors:
    - USB device changes
    - Critical file modifications
    - Process start/stop
    - Software install/uninstall
-7. Performs scheduled scans at the configured interval
+8. Performs scheduled scans at the configured interval
 
 ### Client Data Files
 
@@ -459,6 +484,10 @@ sudo systemctl start scanner-client
 | `--username NAME` | Default admin username | admin |
 | `--password PASS` | Default admin password | admin123 |
 | `--reset` | Re-ask for bind IP | — |
+| `--fresh` | Delete database and start fresh | False |
+| `--domain DOMAIN` | Public domain for cloud discovery | — |
+| `--cloud` | Register public IP in cloud discovery | False |
+| `--asgi` | Serve with daphne (ASGI + WebSocket) | False |
 
 ## Management Commands
 
@@ -493,6 +522,9 @@ python admin/main.py --reset
 # Option 2: Delete the database
 rm admin/data/scanner.db
 python admin/main.py   # Re-creates DB + default admin user
+
+# Option 3: Use --fresh flag (deletes DB and config, starts clean)
+python admin/main.py --fresh
 ```
 
 ### Reset a Client (Clear Registration)
@@ -517,6 +549,10 @@ python client/main.py   # Prompts for new admin URL
 ### Full Factory Reset (Delete Everything)
 
 ```bash
+# Option 1: Use the --fresh flag (recommended)
+python admin/main.py --fresh
+
+# Option 2: Manual cleanup
 # Delete the database
 rm admin/data/scanner.db
 
@@ -535,10 +571,14 @@ python client/main.py
 |-------|------|-------------|
 | `/` | Dashboard | Client overview with stats, charts, search/filter, bulk actions |
 | `/login/` | Login | Admin authentication |
+| `/signup/` | Signup | Create new admin account with company |
 | `/logout/` | Logout | End session |
+| `/connect/<user>/<company>/` | Connect Page | **NEW** Public page for clients to connect to a specific admin |
+| `/download-client/` | Download | Download client EXE/ZIP |
 | `/client/<key>/` | Client Detail | Full client info, scan data, manual fields, add-ons, scan config |
 | `/settings/` | Settings | Auto-approve, stale threshold, scan interval, groups, system info |
 | `/admin-page/` | Admin Panel | User management, scan change notifications, activity log, stats |
+| `/admin-server/` | Admin Server | Server URL, connection token, and **connect link** |
 | `/account/` | Account | Profile view and password change |
 | `/scans/` | Scan History | Browse all scan results with device details and filtering |
 | `/audit-log/` | Audit Log | Security and admin action audit trail |
@@ -716,10 +756,7 @@ pip install pyinstaller
 ### Build
 
 ```bash
-python build/build.py all     # Build both admin and client
-python build/build.py admin   # Build admin only
-python build/build.py client  # Build client only
-python build/build.py clean   # Clean build artifacts
+python build_client.py   # Build client EXE (outputs to dist/ and admin/data/)
 ```
 
 ### Running Packaged Executables
@@ -728,10 +765,15 @@ python build/build.py clean   # Clean build artifacts
 ```cmd
 SystemScannerAdmin.exe --port 8080 --username admin --password mypass
 SystemScannerAdmin.exe --reset   # Re-enter bind IP
+SystemScannerAdmin.exe --fresh   # Delete DB and start clean
 ```
 
 **Client:**
 ```cmd
+# Using connect URL (recommended)
+SystemScannerClient.exe http://192.168.1.100:80/connect/admin/mycompany/
+
+# Using base URL
 SystemScannerClient.exe http://192.168.1.100:80
 ```
 
@@ -776,7 +818,8 @@ SystemScannerClient.exe http://192.168.1.100:80
 ### Client stays "Pending" forever
 
 - Admin must approve the client from the dashboard
-- Or enable auto-approve in Settings (`/settings/`)
+- **Note:** Auto-approve is disabled by default. All clients require explicit admin approval.
+- Check the admin dashboard at `/` for pending clients
 
 ### No real-time updates on dashboard
 
@@ -803,3 +846,38 @@ python admin/manage.py migrate
 ## License
 
 Internal use.
+
+## Changelog
+
+### v3.1 (Latest)
+
+**Breaking Changes:**
+- **Auto-approve removed** — All clients now start as "pending" and require explicit admin approval. No client can bypass approval.
+
+**New Features:**
+- **Dynamic Connect URLs** — Each admin gets a unique `/connect/<username>/<company>/` URL. Share this with clients for direct connection.
+- **Paste-to-Connect** — Client accepts connect URLs as command-line arguments. Paste the URL when prompted and it auto-connects.
+- **Multi-Admin Visibility** — Multiple admins in the same company can see and manage all company clients.
+- **Fresh Database Flag** — `python admin/main.py --fresh` deletes all data and starts clean.
+- **Auto Profile Creation** — Admin profiles and company associations are auto-created on first startup.
+- **Connect Link in Admin Panel** — Admin Server page (`/admin-server/`) now shows a copyable connect link.
+
+**Bug Fixes:**
+- Fixed clients showing "already approved" before admin actually approved them.
+- Fixed approval status not being properly validated on registration.
+- Fixed client re-registration auto-approving without admin action.
+
+**Files Changed:**
+- `admin/scanner_api/views.py` — Removed auto-approve, fixed registration flow
+- `admin/scanner_api/templates.py` — Added connect page view
+- `admin/scanner_api/middleware.py` — Updated prefix stripping for connect URLs
+- `admin/django_admin/urls.py` — Added `/connect/<user>/<company>/` route
+- `admin/main.py` — Added `--fresh` flag, auto-create admin profile
+- `admin/templates/connect.html` — New public connect page
+- `admin/templates/admin_server.html` — Added connect link display
+- `client/main.py` — Strict approval check, connect URL parsing, version bump
+- `admin/data/client_scanner.exe` — Rebuilt client executable
+- `README.md` — Updated documentation
+
+### v3.0
+- Initial release with AI analytics, monitoring, maintenance modules
