@@ -462,7 +462,8 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
 
 
 class HeartbeatWatchdog:
-    def __init__(self, comm, key, hostname, fingerprint):
+    def __init__(self, hb_thread, comm, key, hostname, fingerprint):
+        self.hb_thread = hb_thread
         self.comm = comm
         self.key = key
         self.hostname = hostname
@@ -480,19 +481,19 @@ class HeartbeatWatchdog:
 
     def _watch_loop(self):
         while not self._stop.is_set():
-            if self._thread and not self._thread.is_alive():
+            if self.hb_thread and not self.hb_thread.is_alive():
                 self._restart_count += 1
                 now = datetime.now().strftime('%H:%M:%S')
                 if self._restart_count > 5:
                     P(f"  [{now}] [WATCHDOG] Too many restarts ({self._restart_count}). Giving up.")
                     break
                 P(f"  [{now}] [WATCHDOG] Heartbeat thread died. Restarting (attempt {self._restart_count})...")
-                self._thread = threading.Thread(
+                self.hb_thread = threading.Thread(
                     target=heartbeat_loop,
                     args=(self.comm, self.key, self.hostname, self.fingerprint),
                     daemon=True,
                 )
-                self._thread.start()
+                self.hb_thread.start()
             self._stop.wait(10)
 
 
@@ -1150,6 +1151,15 @@ def main():
         P("  [OK] Already approved by admin.")
 
     P()
+    P("  Starting heartbeat (keeps client online)...")
+    hb_thread = threading.Thread(
+        target=heartbeat_loop,
+        args=(comm, key, hostname, fingerprint),
+        daemon=True,
+    )
+    hb_thread.start()
+    P("  [OK] Heartbeat thread started")
+
     P("  Performing initial scan...")
     initial_data = collect_all()
     init_result = comm.submit_scan(key, initial_data)
@@ -1165,7 +1175,7 @@ def main():
     try:
         import uuid as _uuid
         monitoring_agent_id = str(_uuid.uuid4())
-        comm._client_key = key  # Pass client key for monitoring registration
+        comm._client_key = key
         reg_resp = comm.monitor_register(
             monitoring_agent_id, fingerprint,
             hostname, platform.system(), VERSION,
@@ -1177,32 +1187,25 @@ def main():
         P(f"  [WARN] Monitoring agent registration failed: {e}")
 
     if not silent and getattr(sys, "frozen", False):
-        # Move to the background: spawn a hidden detached copy of this exe
-        # and exit, which closes the terminal window. The background copy
-        # keeps the client online and scanning after the window closes.
+        try:
+            comm.ping(key, hostname, VERSION, fingerprint)
+        except Exception:
+            pass
         if _spawn_background():
             P("  Connected to admin server. Moving to background...")
             P()
             _log_crash("OK: spawned background agent; closing terminal")
             return
-        # Fallback: if we could not spawn a copy, keep running in this process.
         _silent_output()
         _detach_console()
         _log_crash("WARN: could not spawn background agent; continuing in place")
         P("  Connected to admin server. Running in background...")
         P()
 
-    P("  Starting communication channels...")
+    P("  Starting additional communication channels...")
     P()
 
-    hb_thread = threading.Thread(
-        target=heartbeat_loop,
-        args=(comm, key, hostname, fingerprint),
-        daemon=True,
-    )
-    hb_thread.start()
-
-    watchdog = HeartbeatWatchdog(comm, key, hostname, fingerprint)
+    watchdog = HeartbeatWatchdog(hb_thread, comm, key, hostname, fingerprint)
     watchdog.start()
     P("  [OK] Heartbeat watchdog started")
 
@@ -1228,7 +1231,7 @@ def main():
         P("  Starting event monitors...")
         _start_event_monitors(comm, key, ws_client, monitoring_agent_id, monitoring_secret)
 
-    P("  Starting heartbeat loop (every 30 seconds)...")
+    P("  Entering main loop...")
     P("  Press Ctrl+C to stop.")
     P()
     _log_crash("OK: entering main loop")
