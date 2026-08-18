@@ -818,19 +818,24 @@ def main():
 
     config = load_config()
     admin_url = config.get("admin_url", "")
+    display_admin_url = get_display_admin_url(admin_url)
 
     env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
     if env_url:
         admin_url = normalize_admin_url(env_url)
         config["admin_url"] = admin_url
+        config["admin_connect_url"] = env_url.rstrip("/") if "/connect/" in env_url.lower() else ""
         config["manual_url"] = True
         save_config(config)
+        display_admin_url = get_display_admin_url(config.get("admin_connect_url") or admin_url)
     elif len(sys.argv) > 1 and sys.argv[1].startswith("http"):
         raw_url = sys.argv[1].rstrip("/")
         admin_url = normalize_admin_url(raw_url)
         config["admin_url"] = admin_url
+        config["admin_connect_url"] = raw_url if "/connect/" in raw_url.lower() else ""
         config["manual_url"] = True
         save_config(config)
+        display_admin_url = get_display_admin_url(config.get("admin_connect_url") or admin_url)
     elif silent:
         if not admin_url or admin_url == "http://localhost:80":
             discovered = False
@@ -866,10 +871,10 @@ def main():
         P("  Admin Server Configuration")
         P("  " + "=" * 50)
         P()
-        if admin_url and admin_url != "http://localhost:80":
-            P(f"  Current Admin Server: {admin_url}")
+        if display_admin_url and display_admin_url != "http://localhost:80":
+            P(f"  Current Admin Server: {display_admin_url}")
         P()
-        P("  [1] Continue with this admin server" + (f" ({admin_url})" if admin_url and admin_url != "http://localhost:80" else ""))
+        P("  [1] Continue with this admin server" + (f" ({display_admin_url})" if display_admin_url and display_admin_url != "http://localhost:80" else ""))
         P("  [2] Enter new admin server URL")
         P("  [3] Continue on localhost")
         P("  [4] Exit")
@@ -883,9 +888,11 @@ def main():
             new_url = choice
             admin_url = normalize_admin_url(new_url)
             config["admin_url"] = admin_url
+            config["admin_connect_url"] = new_url.rstrip("/") if "/connect/" in new_url.lower() else ""
             config["manual_url"] = True
             save_config(config)
-            P(f"  Admin server set to: {admin_url}")
+            display_admin_url = get_display_admin_url(config.get("admin_connect_url") or admin_url)
+            P(f"  Admin server set to: {display_admin_url}")
             P()
         elif choice == "2":
             new_url = safe_input("  Enter admin server URL (e.g., http://192.168.1.100:80): ").strip()
@@ -895,9 +902,11 @@ def main():
             else:
                 admin_url = normalize_admin_url(new_url)
                 config["admin_url"] = admin_url
+                config["admin_connect_url"] = new_url.rstrip("/") if "/connect/" in new_url.lower() else ""
                 config["manual_url"] = True
                 save_config(config)
-                P(f"  Admin server set to: {admin_url}")
+                display_admin_url = get_display_admin_url(config.get("admin_connect_url") or admin_url)
+                P(f"  Admin server set to: {display_admin_url}")
                 P()
         elif choice == "3":
             admin_url = "http://localhost:80"
@@ -966,10 +975,12 @@ def main():
         _install_console_close_handler()
 
     retry_count = 0
+    connect_url = str(config.get("admin_connect_url") or admin_url or "").strip()
+    display_url = get_display_admin_url(connect_url or admin_url)
     while True:
         comm = Communicator(admin_url)
 
-        P(f"  Admin Server:  {admin_url}")
+        P(f"  Admin Server:  {display_url or admin_url}")
         P(f"  Client Key:    {key}")
         P(f"  Fingerprint:   {fingerprint}")
         P(f"  Client Version: {VERSION}")
@@ -1092,9 +1103,13 @@ def main():
 
     P("  Connecting to admin server...")
 
-    # Extract admin username and company from the admin_url if it's a connect URL
+    # Keep the original connect URL for admin/company context, while using the
+    # normalized base URL for HTTP requests.
     from client.config import extract_admin_info
-    admin_username, company_slug = extract_admin_info(admin_url)
+    connect_url = str(config.get("admin_connect_url") or admin_url or "").strip()
+    admin_username, company_slug = extract_admin_info(connect_url or admin_url)
+    if not admin_username and "/connect/" in str(admin_url or "").lower():
+        admin_username, company_slug = extract_admin_info(admin_url)
 
     result = comm.register(key, hostname, platform.system(), VERSION, fingerprint,
                           admin_username=admin_username, company_slug=company_slug)

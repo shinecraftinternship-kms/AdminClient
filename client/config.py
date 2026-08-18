@@ -50,12 +50,17 @@ def normalize_admin_url(raw_url):
 
 
 def load_config():
-    defaults = {"admin_url": "", "scan_interval": 3600, "auto_start": True, "manual_url": False}
+    defaults = {"admin_url": "", "admin_connect_url": "", "scan_interval": 3600, "auto_start": True, "manual_url": False}
     try:
         if os.path.exists(CONFIG_PATH):
             import json
             with open(CONFIG_PATH) as f:
                 data = json.load(f)
+                if data.get("admin_url"):
+                    raw_admin_url = str(data.get("admin_url") or "").strip()
+                    if "/connect/" in raw_admin_url.lower():
+                        data["admin_connect_url"] = raw_admin_url.rstrip("/")
+                        data["admin_url"] = normalize_admin_url(raw_admin_url)
                 defaults.update(data)
                 if "manual_url" not in data:
                     url = str(data.get("admin_url") or "").strip()
@@ -64,6 +69,28 @@ def load_config():
     except Exception:
         pass
     return defaults
+
+
+def get_display_admin_url(raw_url=None):
+    value = (raw_url or "").strip()
+    config = load_config()
+
+    if value:
+        base = normalize_admin_url(value)
+        if base:
+            return base.rstrip("/")
+
+    saved = (config.get("admin_connect_url") or "").strip()
+    if saved:
+        base = normalize_admin_url(saved)
+        if base:
+            return base.rstrip("/")
+
+    base = normalize_admin_url(config.get("admin_url", ""))
+    if base:
+        return base.rstrip("/")
+
+    return (value or config.get("admin_url", "") or "").strip().rstrip("/")
 
 
 def save_config(data):
