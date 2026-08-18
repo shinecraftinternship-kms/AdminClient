@@ -35,6 +35,7 @@ urlpatterns = [
     path("logout/", templates.logout_view, name="logout"),
     path("download-client/", templates.download_client_view, name="download-client"),
     path("connect/<str:username>/<str:company_slug>/", templates.connect_page, name="connect-page"),
+    path("dashboard/", templates.dashboard, name="dashboard"),
     path("", templates.public_root, name="public-root"),
     path("client/<str:key>/", templates.client_detail, name="client-detail"),
     path("settings/", templates.settings_page, name="settings"),
