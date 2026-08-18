@@ -40,12 +40,17 @@ def normalize_admin_url(raw_url):
         return ""
     if not value.startswith(("http://", "https://")):
         return value
+    return value
+
+
+def get_base_admin_url(raw_url):
+    value = (raw_url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.startswith(("http://", "https://")):
+        return value
     from urllib.parse import urlsplit
     parsed = urlsplit(value)
-    if "/connect/" in parsed.path.lower():
-        return f"{parsed.scheme}://{parsed.netloc}"
-    if parsed.path and parsed.path != "/":
-        return f"{parsed.scheme}://{parsed.netloc}"
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
@@ -73,24 +78,14 @@ def load_config():
 
 def get_display_admin_url(raw_url=None):
     value = (raw_url or "").strip()
-    config = load_config()
-
     if value:
-        base = normalize_admin_url(value)
-        if base:
-            return base.rstrip("/")
+        return normalize_admin_url(value).rstrip("/")
 
-    saved = (config.get("admin_connect_url") or "").strip()
+    config = load_config()
+    saved = (config.get("admin_url") or config.get("admin_connect_url") or "").strip()
     if saved:
-        base = normalize_admin_url(saved)
-        if base:
-            return base.rstrip("/")
-
-    base = normalize_admin_url(config.get("admin_url", ""))
-    if base:
-        return base.rstrip("/")
-
-    return (value or config.get("admin_url", "") or "").strip().rstrip("/")
+        return normalize_admin_url(saved).rstrip("/")
+    return ""
 
 
 def save_config(data):

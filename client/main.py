@@ -817,7 +817,7 @@ def main():
     P()
 
     config = load_config()
-    admin_url = config.get("admin_url", "")
+    admin_url = config.get("admin_url", "") or config.get("admin_connect_url", "")
     display_admin_url = get_display_admin_url(admin_url)
 
     env_url = os.getenv("ADMIN_SERVER_URL", "").strip()
@@ -955,14 +955,12 @@ def main():
             P()
 
     try:
-        from urllib.parse import urlsplit
-        _p = urlsplit(admin_url)
-        if _p.path and _p.path != "/":
-            _base = f"{_p.scheme}://{_p.netloc}"
-            if Communicator(_base).is_reachable():
-                admin_url = _base
-                config["admin_url"] = _base
-                save_config(config)
+        from client.config import get_base_admin_url
+        base_url = get_base_admin_url(admin_url)
+        if base_url and base_url != admin_url and Communicator(base_url).is_reachable():
+            config["admin_url"] = admin_url
+            config["admin_base_url"] = base_url
+            save_config(config)
     except Exception:
         pass
 
@@ -976,11 +974,13 @@ def main():
 
     retry_count = 0
     connect_url = str(config.get("admin_connect_url") or admin_url or "").strip()
-    display_url = get_display_admin_url(connect_url or admin_url)
+    current_server_url = admin_url or connect_url
+    display_url = get_display_admin_url(current_server_url)
+    base_request_url = get_base_admin_url(current_server_url) or current_server_url
     while True:
-        comm = Communicator(admin_url)
+        comm = Communicator(base_request_url)
 
-        P(f"  Admin Server:  {display_url or admin_url}")
+        P(f"  Admin Server:  {display_url or current_server_url}")
         P(f"  Client Key:    {key}")
         P(f"  Fingerprint:   {fingerprint}")
         P(f"  Client Version: {VERSION}")
@@ -991,7 +991,7 @@ def main():
             break
 
         retry_count += 1
-        P(f"  [ERROR] Cannot reach admin server at {admin_url}")
+        P(f"  [ERROR] Cannot reach admin server at {display_url or current_server_url}")
 
         if silent:
             if retry_count >= 3:
@@ -1104,7 +1104,7 @@ def main():
     P("  Connecting to admin server...")
 
     # Keep the original connect URL for admin/company context, while using the
-    # normalized base URL for HTTP requests.
+    # base host for HTTP requests.
     from client.config import extract_admin_info
     connect_url = str(config.get("admin_connect_url") or admin_url or "").strip()
     admin_username, company_slug = extract_admin_info(connect_url or admin_url)
