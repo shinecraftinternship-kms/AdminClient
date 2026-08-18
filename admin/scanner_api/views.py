@@ -142,6 +142,68 @@ from .serializers import (
 logger = logging.getLogger("scanner_api")
 
 
+def build_dynamic_admin_server_url(base_url, username=None, company=None):
+    """Build the specific admin connect URL shown to clients.
+
+    The client should always connect to the individual admin/company URL, not a
+    generic host-only URL, so a shared client installer can target one admin
+    without leaking other admin systems into the same connection flow.
+    """
+    from django.utils.text import slugify
+    from django.contrib.auth.models import User
+
+    if not base_url:
+        return ""
+    base = str(base_url).strip().rstrip("/")
+    if not base:
+        return ""
+
+    if not username:
+        username = "admin"
+    user_slug = slugify(str(username)) or "admin"
+
+    if company is None:
+        try:
+            admin_user = User.objects.filter(username__iexact=username).first()
+        except Exception:
+            admin_user = None
+        if admin_user:
+            profile = AdministratorProfile.objects.filter(user=admin_user).select_related("company").first()
+            if profile and profile.company:
+                company = profile.company
+
+    company_name = getattr(company, "name", None) or getattr(company, "company_name", None) or "company"
+    company_slug = getattr(company, "slug", None) or slugify(str(company_name)) or "company"
+    return f"{base}/connect/{user_slug}/{company_slug}/"
+
+
+def ensure_default_admin_user(username="admin", password="admin123", email="admin@example.com"):
+    """Ensure the default admin exists, has a company, and is always available."""
+    from django.contrib.auth.models import User
+    from django.utils.text import slugify
+
+    user = User.objects.filter(username__iexact=username).first()
+    if user:
+        user.is_superuser = True
+        user.is_staff = True
+        if not user.email:
+            user.email = email
+        user.save(update_fields=["is_superuser", "is_staff", "email"])
+    else:
+        user = User.objects.create_superuser(username, email, password)
+
+    profile, _ = AdministratorProfile.objects.get_or_create(user=user)
+    if not profile.company:
+        company_name = user.username or username
+        company, _ = Company.objects.get_or_create(
+            name=company_name,
+            defaults={"slug": slugify(company_name) or company_name.lower().replace(" ", "-")},
+        )
+        profile.company = company
+        profile.save(update_fields=["company"])
+    return user
+
+
 def _auto_approve_enabled():
     return False
 
@@ -789,11 +851,7 @@ class ConnectionSettingsView(APIView):
             return base_url
         try:
             company = get_user_company(request)
-            if company:
-                from django.utils.text import slugify
-                user_part = slugify(request.user.username) or "admin"
-                company_part = slugify(company.slug) or slugify(company.name) or "default"
-                return f"{base_url.rstrip('/')}/{user_part}-{company_part}"
+            return build_dynamic_admin_server_url(base_url, getattr(request.user, "username", None), company)
         except Exception:
             pass
         return base_url

@@ -193,9 +193,11 @@ def main():
         User.objects.create_superuser(args.username, "", args.password)
         print(f"  Admin user created: {args.username} / {args.password}")
 
-    from scanner_api.views import ensure_admin_client, admin_self_scan, admin_client_heartbeat_loop
+    from scanner_api.views import ensure_admin_client, admin_self_scan, admin_client_heartbeat_loop, ensure_default_admin_user, build_dynamic_admin_server_url
     from scanner_api.models import Setting, AdministratorProfile, Company
     import threading
+
+    ensure_default_admin_user()
 
     # Auto-create admin profile with company for every superuser
     from django.utils.text import slugify as _slugify
@@ -224,16 +226,12 @@ def main():
         try:
             su = User.objects.filter(is_superuser=True).first()
             if su:
-                from django.utils.text import slugify
-                profile = AdministratorProfile.objects.filter(user=su).first()
+                profile = AdministratorProfile.objects.filter(user=su).select_related("company").first()
                 company = profile.company if profile and profile.company else Company.objects.filter(name=su.username).first()
-                if company:
-                    user_part = slugify(su.username) or "admin"
-                    company_part = slugify(company.slug) or slugify(company.name) or "default"
-                    return f"{base.rstrip('/')}/{user_part}-{company_part}"
+                return build_dynamic_admin_server_url(base, su.username, company)
         except Exception:
             pass
-        return base
+        return build_dynamic_admin_server_url(base, "admin", None)
 
     stored_url = Setting.get("admin_server_url", "")
     if args.domain:

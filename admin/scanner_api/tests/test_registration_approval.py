@@ -10,8 +10,8 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 
-from scanner_api.models import ActivityLog, Client
-from scanner_api.views import RegisterClientView, ApproveClientView, PingClientView
+from scanner_api.models import ActivityLog, Client, Setting
+from scanner_api.views import RegisterClientView, ApproveClientView, PingClientView, ensure_default_admin_user, build_dynamic_admin_server_url
 
 User = get_user_model()
 
@@ -43,8 +43,8 @@ class RegistrationApprovalTests(TestCase):
         response = RegisterClientView.as_view()(request)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "ok")
-        self.assertFalse(response.data["auto_approved"])
+        self.assertEqual(response.data["status"], "pending")
+        self.assertFalse(response.data["approved"])
 
         client = Client.objects.get(registration_key="new-key")
         self.assertFalse(client.approved)
@@ -194,11 +194,23 @@ class RegistrationApprovalTests(TestCase):
         response = RegisterClientView.as_view()(request)
 
         self.assertEqual(response.status_code, 201)
-        self.assertFalse(response.data["auto_approved"])
+        self.assertFalse(response.data["approved"])
 
         client = Client.objects.get(registration_key="BRAND-NEW")
         self.assertFalse(client.approved)
         self.assertEqual(client.status, "pending")
+
+    def test_default_admin_seed_creates_company_and_dynamic_url(self):
+        User.objects.all().delete()
+        Setting.objects.all().delete()
+
+        user = ensure_default_admin_user()
+        self.assertEqual(user.username, "admin")
+        self.assertTrue(user.is_superuser)
+
+        self.assertTrue(User.objects.filter(username="admin").exists())
+        self.assertIsNotNone(user.admin_profile.company)
+        self.assertTrue(build_dynamic_admin_server_url("https://example.com", user.username, user.admin_profile.company).endswith("/connect/admin/admin/"))
 
     def test_approving_deleted_client_reactivates_and_shows_it(self):
         admin = User.objects.create_user(username="admin", password="pass1234", is_superuser=True)
