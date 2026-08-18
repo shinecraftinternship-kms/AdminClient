@@ -875,10 +875,19 @@ def main():
         P("  [4] Exit")
         P("  " + "=" * 50)
         P()
-        choice = safe_input("  Select option [1-4]: ").strip()
+        choice = safe_input("  Select option [1-4] or paste a URL: ").strip()
         _log_crash(f"OK: user chose '{choice}'")
 
-        if choice == "2":
+        # Check if user pasted a URL directly (starts with http:// or https://)
+        if choice.startswith(("http://", "https://")):
+            new_url = choice
+            admin_url = normalize_admin_url(new_url)
+            config["admin_url"] = admin_url
+            config["manual_url"] = True
+            save_config(config)
+            P(f"  Admin server set to: {admin_url}")
+            P()
+        elif choice == "2":
             new_url = safe_input("  Enter admin server URL (e.g., http://192.168.1.100:80): ").strip()
             if not new_url:
                 P("  No URL entered. Keeping current server.")
