@@ -39,6 +39,27 @@ def normalize_next_url(next_url, prefix):
     return candidate
 
 
+def public_root(request):
+    """Default public landing page. Redirects to the admin/company-specific
+    connect URL so the browser URL shows which admin/client pair is active.
+    """
+    if request.user.is_authenticated:
+        return render(request, "dashboard.html")
+
+    from django.contrib.auth.models import User
+    from .models import AdministratorProfile, Company
+    from .views import build_dynamic_admin_server_url
+
+    admin_user = User.objects.filter(is_superuser=True).order_by("id").first()
+    if not admin_user:
+        return redirect("/login/")
+
+    profile = AdministratorProfile.objects.filter(user=admin_user).select_related("company").first()
+    company = profile.company if profile and profile.company else Company.objects.filter(name=admin_user.username).first()
+    connect_url = build_dynamic_admin_server_url(request.build_absolute_uri("/").rstrip("/"), admin_user.username, company)
+    return redirect(connect_url)
+
+
 @login_required
 def dashboard(request):
     return render(request, "dashboard.html")
