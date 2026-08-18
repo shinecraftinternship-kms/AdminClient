@@ -273,8 +273,17 @@ def login_view(request):
 
         request.session.pop("url_prefix", None)
 
-        next_url = request.POST.get("next") or request.GET.get("next") or "/"
-        response = redirect(normalize_next_url(next_url, ""))
+        # Redirect to user's personal connect page after login so they can see their unique connection URL
+        from django.utils.text import slugify as _slugify
+        user_company = _profile.company
+        company_slug = user_company.slug if user_company else (_slugify(user.username) or user.username.lower().replace(" ", "-"))
+        connect_url = f"/connect/{user.username}/{company_slug}/"
+
+        next_url = request.POST.get("next") or request.GET.get("next")
+        if next_url and next_url != "/":
+            response = redirect(normalize_next_url(next_url, ""))
+        else:
+            response = redirect(connect_url)
         response.set_cookie(
             "scanner_auth",
             payload,
