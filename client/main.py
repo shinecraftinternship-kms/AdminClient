@@ -30,13 +30,17 @@ _log_crash(f"executable={sys.executable}")
 _log_crash(f"argv={sys.argv}")
 
 try:
+    import io
+
     if getattr(sys, "frozen", False):
         try:
-            sys.stdout.reconfigure(line_buffering=True)
+            if isinstance(sys.stdout, io.TextIOWrapper):
+                sys.stdout.reconfigure(line_buffering=True)
         except Exception:
             pass
         try:
-            sys.stderr.reconfigure(line_buffering=True)
+            if isinstance(sys.stderr, io.TextIOWrapper):
+                sys.stderr.reconfigure(line_buffering=True)
         except Exception:
             pass
         try:
@@ -240,7 +244,7 @@ def cloud_discovery_loop(comm):
             pass
 
 
-def listen_admin_broadcast(comm, hostname):
+def listen_admin_broadcast(comm):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", DISCOVERY_PORT))
@@ -292,6 +296,12 @@ def _try_rediscover(comm, current_url):
 
 
 def handle_ws_command(command):
+    comm = _global_comm
+    key = _global_key
+    if comm is None or key is None:
+        P("  [WS] Command ignored: communication channel is not ready")
+        return
+
     cmd_type = command.get("command_type", "")
     payload = command.get("payload", {})
     now = datetime.now().strftime('%H:%M:%S')
@@ -299,7 +309,7 @@ def handle_ws_command(command):
     if cmd_type == "scan_now":
         P(f"  [{now}] [WS] Admin requested scan. Running...")
         scan_data = collect_all()
-        result = _global_comm.submit_scan(_global_key, scan_data)
+        result = comm.submit_scan(key, scan_data)
         if result.get("status") == "ok":
             P(f"  [{now}] [WS] Scan submitted successfully!")
             if _global_ws_client:
@@ -315,7 +325,7 @@ def handle_ws_command(command):
         enabled = payload.get("enabled")
         if interval is not None or enabled is not None:
             P(f"  [{now}] [WS] Config update received")
-            cfg = _global_comm.get_scan_config(_global_key)
+            cfg = comm.get_scan_config(key)
             if interval is not None:
                 cfg["interval_seconds"] = interval
             if enabled is not None:
@@ -349,7 +359,7 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
     monitoring_agent_id = None
     monitoring_secret = None
     approval_ok = True
-    threading.Thread(target=listen_admin_broadcast, args=(comm, hostname), daemon=True).start()
+    threading.Thread(target=listen_admin_broadcast, args=(comm,), daemon=True).start()
 
     while True:
         try:
@@ -1128,11 +1138,14 @@ def main():
             # endpoint only reads state and cannot tell the admin panel that
             # this background client is still alive.
             status_res = comm.ping(key, hostname, VERSION, fingerprint)
-            if status_res.get("status") == "approved":
+            if status_res.get("status") == "approved" or status_res.get("approved") is True:
                 P("  [OK] Admin approved registration.")
                 break
             elif status_res.get("status") == "error":
-                comm.register(key, hostname, platform.system(), VERSION, fingerprint)
+                comm.register(
+                    key, hostname, platform.system(), VERSION, fingerprint,
+                    admin_username=admin_username, company_slug=company_slug,
+                )
     else:
         P("  [OK] Already approved by admin.")
 
@@ -1225,8 +1238,11 @@ def main():
         try:
             now = datetime.now().strftime('%H:%M:%S')
             config = comm.get_scan_config(key)
-            interval = config.get("interval_seconds", 3600)
-            enabled = config.get("enabled", True)
+            try:
+                interval = max(60.0, float(config.get("interval_seconds", 3600)))
+            except (TypeError, ValueError):
+                interval = 3600.0
+            enabled = bool(config.get("enabled", True))
             _global_scan_config.update(config)
 
             elapsed = time.time() - last_scan

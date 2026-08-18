@@ -10,7 +10,7 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 
-from scanner_api.models import ActivityLog, Client, Setting
+from scanner_api.models import ActivityLog, Client, Company, Setting
 from scanner_api.views import RegisterClientView, ApproveClientView, PingClientView, ensure_default_admin_user, build_dynamic_admin_server_url
 
 User = get_user_model()
@@ -115,6 +115,36 @@ class RegistrationApprovalTests(TestCase):
 
         client.refresh_from_db()
         self.assertTrue(client.approved)
+
+    def test_existing_client_moves_to_company_from_new_user_connect_url(self):
+        first_company = Company.objects.create(name="First Company", slug="first-company")
+        second_company = Company.objects.create(name="Second Company", slug="second-company")
+        Client.objects.create(
+            registration_key="MOVE-KEY",
+            hostname="Moving Host",
+            platform="Windows",
+            company=first_company,
+            device_fingerprint="move-fingerprint",
+        )
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/register",
+            {
+                "registration_key": "MOVE-KEY",
+                "hostname": "Moving Host",
+                "platform": "Windows",
+                "device_fingerprint": "move-fingerprint",
+                "company_slug": "second-company",
+            },
+            content_type="application/json",
+        )
+
+        response = RegisterClientView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        client = Client.objects.get(registration_key="MOVE-KEY")
+        self.assertEqual(client.company_id, second_company.id)
 
     def test_ping_demotes_stale_auto_approval_when_auto_approve_is_off(self):
         Client.objects.create(

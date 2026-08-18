@@ -28,6 +28,7 @@ class Communicator:
         self._offline_queue = []
         self._offline_lock = threading.Lock()
         self._consecutive_failures = 0
+        self._client_key = ""
 
     def _request(self, method, path, data=None, timeout=30, extra_headers=None,
                  _retries=None):

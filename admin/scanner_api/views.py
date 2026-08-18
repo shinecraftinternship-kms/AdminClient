@@ -254,7 +254,7 @@ class RegisterClientView(APIView):
         if not target_company and admin_username:
             try:
                 from django.contrib.auth.models import User
-                admin_user = User.objects.get(username=admin_username, is_superuser=True)
+                admin_user = User.objects.get(username=admin_username)
                 profile = AdministratorProfile.objects.filter(user=admin_user).select_related("company").first()
                 if profile and profile.company:
                     target_company = profile.company
@@ -274,9 +274,11 @@ class RegisterClientView(APIView):
                 existing.device_fingerprint = fingerprint
                 existing.last_seen = timezone.now()
                 existing.last_ip = _client_ip(request)
+                if target_company:
+                    existing.company = target_company
                 existing.save(update_fields=[
                     "deleted", "approved", "auto_approved", "status", "hostname", "platform",
-                    "client_version", "device_fingerprint", "last_seen", "last_ip",
+                    "client_version", "device_fingerprint", "last_seen", "last_ip", "company",
                 ])
                 ActivityLog.objects.create(action="register", company=existing.company, details=f"Client {hostname} re-registered after deletion, waiting for re-approval (key {key})")
                 return Response({"status": "pending", "approved": False})
@@ -288,6 +290,9 @@ class RegisterClientView(APIView):
             existing.last_seen = timezone.now()
             existing.last_ip = _client_ip(request)
             update_fields = ["hostname", "platform", "client_version", "last_seen", "last_ip"]
+            if target_company:
+                existing.company = target_company
+                update_fields.append("company")
             if incoming_fp:
                 existing.device_fingerprint = incoming_fp
                 update_fields.append("device_fingerprint")
@@ -323,10 +328,15 @@ class RegisterClientView(APIView):
                 same_device.client_version = client_version
                 same_device.last_seen = timezone.now()
                 same_device.last_ip = _client_ip(request)
+                if target_company:
+                    same_device.company = target_company
                 same_device.status = "pending"
                 same_device.approved = False
                 same_device.auto_approved = False
-                same_device.save(update_fields=["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved", "auto_approved"])
+                update_fields = ["registration_key", "hostname", "platform", "client_version", "last_seen", "last_ip", "status", "approved", "auto_approved"]
+                if target_company:
+                    update_fields.append("company")
+                same_device.save(update_fields=update_fields)
                 ActivityLog.objects.create(action="register", company=same_device.company, details=f"Client {hostname} re-registered (same device, new key {key}), waiting for admin approval")
                 return Response({"status": "pending", "approved": False})
 
