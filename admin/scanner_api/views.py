@@ -988,6 +988,8 @@ class AdminUsersView(APIView):
         email = data.get("email", "")
         password = data["password"]
         is_superuser = data.get("is_superuser", False)
+        if is_superuser and not request.user.is_superuser:
+            return Response({"status": "error", "message": "Only superusers can create superuser accounts"}, status=status.HTTP_403_FORBIDDEN)
 
         if User.objects.filter(username=username).exists():
             return Response({"status": "error", "message": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
