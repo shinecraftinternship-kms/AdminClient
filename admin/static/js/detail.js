@@ -155,16 +155,37 @@ function getGPU(sd) {
 }
 
 function getOSInfo(sd) {
-    if (sd && sd.os_info && sd.os_info.version !== undefined) return sd.os_info;
+    if (sd && sd.os_info && sd.os_info.version !== undefined) {
+        const o = Object.assign({}, sd.os_info);
+        if (!o.user_accounts || o.user_accounts.length === 0) {
+            const ad2 = getAssetDetails(sd);
+            if (ad2 && ad2['Operating System']) o.user_accounts = ad2['Operating System']['user_accounts'] || [];
+        }
+        return o;
+    }
     const ad = getAssetDetails(sd);
     if (ad && ad['Operating System']) {
         const os = ad['Operating System'];
         return {
             version: os['OS Version'], build: os['build number'],
             architecture: os['System type'], hostname: os['registered_to'],
-            user_accounts: os['user_accounts'] || []
+            user_accounts: os['user_accounts'] || [],
+            domain: os['domain'] || {}
         };
     }
+    return null;
+}
+
+function getDomainInfo(sd) {
+    if (sd && sd.os_info && sd.os_info.domain) return sd.os_info.domain;
+    const ad = getAssetDetails(sd);
+    if (ad && ad['Operating System'] && ad['Operating System']['domain']) return ad['Operating System']['domain'];
+    return null;
+}
+
+function getAdminGroup(sd) {
+    const ad = getAssetDetails(sd);
+    if (ad && ad['Admin Group Members']) return ad['Admin Group Members'];
     return null;
 }
 
@@ -205,7 +226,9 @@ function getAccounts(sd) {
     if (sd && sd['system accounts']) {
         const sa = sd['system accounts'];
         return (sa['accounts names'] || []).map(a => ({
-            name: a['Account Name'], disabled: a['Status'] === 'Disabled', sid: a['SID']
+            name: a['Account Name'], disabled: a['Status'] === 'Disabled',
+            sid: a['SID'], description: a['Description'] || '',
+            domain: a['Domain'] || '', computer: a['Computer Name'] || ''
         }));
     }
     return [];
@@ -214,7 +237,7 @@ function getAccounts(sd) {
 function getUpdates(sd) {
     if (sd && sd.updates) return sd.updates;
     if (sd && sd.installed_updates && sd.installed_updates.updates) {
-        return sd.installed_updates.updates.map(u => ({ kb: u.kb, description: u.description }));
+        return sd.installed_updates.updates.map(u => ({ kb: u.kb, description: u.description, installed_on: u.installed_on || '' }));
     }
     return [];
 }
@@ -445,6 +468,7 @@ function renderSystem() {
 
     // ── Operating System ──
     if (osi) {
+        const domainInfo = getDomainInfo(sd);
         html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
             <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-windows me-1"></i>Operating System</h6>
             <table class="table table-sm table-borderless">
@@ -452,7 +476,55 @@ function renderSystem() {
                 <tr><td class="text-secondary">Build</td><td>${escapeHtml(osi.build || '-')}</td></tr>
                 <tr><td class="text-secondary">Architecture</td><td>${escapeHtml(osi.architecture || '-')}</td></tr>
                 <tr><td class="text-secondary">Hostname</td><td>${escapeHtml(osi.hostname || '-')}</td></tr>
+                ${domainInfo ? `<tr><td class="text-secondary">Domain</td><td>${escapeHtml(domainInfo.domain_name || '-')}</td></tr>
+                <tr><td class="text-secondary">Domain Role</td><td>${escapeHtml(domainInfo.domain_role || '-')}</td></tr>` : ''}
+                ${osi.user_accounts && osi.user_accounts.length > 0 ? `<tr><td class="text-secondary">User Accounts</td><td>${osi.user_accounts.map(u => '<span class="badge bg-dark me-1 mb-1" style="font-size:0.7rem;">' + escapeHtml(u) + '</span>').join(' ')}</td></tr>` : ''}
             </table>
+        </div></div></div>`;
+    }
+
+    // ── System Accounts ──
+    const accounts = getAccounts(sd);
+    if (accounts.length > 0) {
+        const enabledCount = accounts.filter(a => !a.disabled).length;
+        const disabledCount = accounts.filter(a => a.disabled).length;
+        html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
+            <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-people me-1"></i>System Accounts (${accounts.length} total, ${enabledCount} enabled, ${disabledCount} disabled)</h6>
+            <div style="max-height:280px;overflow-y:auto;">
+            ${accounts.map(a => `<div class="py-1 border-bottom border-secondary" style="font-size:0.8rem;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-person${a.disabled ? '-lock' : ''} me-1 text-secondary"></i><strong>${escapeHtml(a.name || '-')}</strong></span>
+                    <span class="badge ${a.disabled ? 'bg-secondary' : 'bg-success'}" style="font-size:0.6rem;">${a.disabled ? 'Disabled' : 'Enabled'}</span>
+                </div>
+                ${a.description ? '<div class="text-secondary" style="font-size:0.7rem;margin-left:1.2rem;">' + escapeHtml(a.description) + '</div>' : ''}
+                ${a.sid ? '<div style="font-size:0.65rem;margin-left:1.2rem;"><code class="text-secondary">' + escapeHtml(a.sid) + '</code></div>' : ''}
+            </div>`).join('')}
+            </div>
+        </div></div></div>`;
+    }
+
+    // ── Installed Updates ──
+    const updates = getUpdates(sd);
+    if (updates.length > 0) {
+        html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
+            <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-download me-1"></i>Installed Updates (${updates.length})</h6>
+            <div style="max-height:200px;overflow-y:auto;">
+            ${updates.map(u => `<div class="d-flex justify-content-between py-1 border-bottom border-secondary" style="font-size:0.8rem;">
+                <span><code class="text-info">${escapeHtml(u.kb || '-')}</code> <span class="text-secondary">${escapeHtml(u.description || '')}</span></span>
+            </div>`).join('')}
+            </div>
+        </div></div></div>`;
+    }
+
+    // ── Admin Group Members ──
+    const adminGroup = getAdminGroup(sd);
+    if (adminGroup) {
+        const members = adminGroup.split('\n').filter(l => l.trim() && !l.includes('---') && !l.includes('Alias') && !l.includes('Comment') && !l.includes('Members') && !l.includes('command completed'));
+        html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
+            <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-shield-lock me-1"></i>Admin Group Members</h6>
+            <div style="max-height:200px;overflow-y:auto;">
+            ${members.map(m => `<div class="py-1 border-bottom border-secondary" style="font-size:0.82rem;"><i class="bi bi-person-shield me-1 text-warning"></i>${escapeHtml(m.trim())}</div>`).join('')}
+            </div>
         </div></div></div>`;
     }
 
