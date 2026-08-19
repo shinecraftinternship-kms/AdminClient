@@ -457,8 +457,8 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                     backoff = 5
                 else:
                     P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovery failed, will keep retrying")
-        time.sleep(min(backoff, 30))
-        backoff = min(backoff * 2, 30)
+        time.sleep(5)
+        backoff = 5
 
 
 class HeartbeatWatchdog:
@@ -1194,8 +1194,11 @@ def main():
             pass
         if _spawn_background():
             P("  Connected to admin server. Moving to background...")
-            P()
             _log_crash("OK: spawned background agent; closing terminal")
+            try:
+                comm.ping(key, hostname, VERSION, fingerprint)
+            except Exception:
+                pass
             return
         _silent_output()
         _detach_console()

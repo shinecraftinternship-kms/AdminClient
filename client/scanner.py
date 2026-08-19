@@ -135,7 +135,7 @@ def _get_ram():
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
-                "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,SerialNumber,DeviceLocator | ConvertTo-Json"
+                "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,SerialNumber,DeviceLocator,PartNumber | ConvertTo-Json"
             )
             if stdout and stdout not in ("", "null"):
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
@@ -146,9 +146,26 @@ def _get_ram():
                     if cap:
                         cap_gb = cap / (1024**3) if isinstance(cap, (int, float)) and cap > 1000 else float(cap)
                         r["capacity_gb"] = f"{cap_gb:.2f} GB"
-                    r["serial"] = item.get("SerialNumber") or ""
+                    serial = item.get("SerialNumber") or ""
+                    if serial and serial not in ("00000000", "To Be Filled By O.E.M.", "0000000000"):
+                        r["serial"] = serial.strip()
                     r["frequency_mhz"] = item.get("Speed") or 0
                     r["slot"] = item.get("DeviceLocator") or ""
+            # Fallback: try wmic if serial is still empty or "0000"
+            if not r["serial"] or r["serial"] in ("", "00000000", "0000"):
+                try:
+                    stdout2, _, _ = run_command(
+                        ["wmic", "memorychip", "get", "SerialNumber", "/value"],
+                        timeout=10,
+                    )
+                    for line in stdout2.splitlines():
+                        if "SerialNumber=" in line:
+                            val = line.split("=", 1)[1].strip()
+                            if val and val not in ("00000000", "To Be Filled By O.E.M.", ""):
+                                r["serial"] = val
+                                break
+                except Exception:
+                    pass
         elif sys.platform == "linux":
             meminfo = read_file("/proc/meminfo")
             for line in meminfo.splitlines():
@@ -528,7 +545,7 @@ def _get_updates():
 
 
 def _get_peripherals():
-    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": [], "storage": [], "other_usb": []}
+    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": [], "storage": [], "other_usb": [], "monitors": []}
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
@@ -563,6 +580,58 @@ def _get_peripherals():
                         per["printers"].append(entry)
                     elif is_usb and pnp not in ("usb", "system", "computer", "hdc", "diskdrive"):
                         per["other_usb"].append(entry)
+            # Scan for monitors/displays
+            try:
+                stdout_mon, _, _ = run_powershell(
+                    "Get-CimInstance Win32_DesktopMonitor | Select-Object Name,Manufacturer,ScreenWidth,ScreenHeight,PNPDeviceID | ConvertTo-Json"
+                )
+                if stdout_mon and stdout_mon not in ("", "null", "[]"):
+                    mon_items = json.loads(stdout_mon) if stdout_mon.startswith("[") else [json.loads(stdout_mon)]
+                    if not isinstance(mon_items, list):
+                        mon_items = [mon_items]
+                    for mon in mon_items:
+                        name = (mon.get("Name") or "Monitor").strip()
+                        mfr = (mon.get("Manufacturer") or "").strip()
+                        width = mon.get("ScreenWidth") or ""
+                        height = mon.get("ScreenHeight") or ""
+                        resolution = f"{width}x{height}" if width and height else ""
+                        per["monitors"].append({
+                            "name": name, "manufacturer": mfr, "model": name,
+                            "resolution": resolution, "status": "OK", "usb": False
+                        })
+                # Also try WmiMonitorID for more detailed info
+                stdout_mon2, _, _ = run_powershell(
+                    "Get-CimInstance -Namespace root\\wmi WmiMonitorID 2>$null | Select-Object ManufacturerName,ProductCodeID,SerialNumberID,UserFriendlyName | ConvertTo-Json"
+                )
+                if stdout_mon2 and stdout_mon2 not in ("", "null", "[]"):
+                    mon_items2 = json.loads(stdout_mon2) if stdout_mon2.startswith("[") else [json.loads(stdout_mon2)]
+                    if not isinstance(mon_items2, list):
+                        mon_items2 = [mon_items2]
+                    for i, mon in enumerate(mon_items2):
+                        def _decode_wmi_str(arr):
+                            if isinstance(arr, list):
+                                return "".join(chr(c) for c in arr if c != 0).strip()
+                            return ""
+                        mfr = _decode_wmi_str(mon.get("ManufacturerName") or [])
+                        model = _decode_wmi_str(mon.get("UserFriendlyName") or [])
+                        serial_arr = mon.get("SerialNumberID") or []
+                        serial = _decode_wmi_str(serial_arr) if isinstance(serial_arr, list) else str(serial_arr)
+                        if i < len(per["monitors"]):
+                            if mfr:
+                                per["monitors"][i]["manufacturer"] = mfr
+                            if model:
+                                per["monitors"][i]["name"] = model
+                                per["monitors"][i]["model"] = model
+                            if serial:
+                                per["monitors"][i]["serial"] = serial
+                        else:
+                            per["monitors"].append({
+                                "name": model or "Monitor", "manufacturer": mfr,
+                                "model": model or "Monitor", "serial": serial,
+                                "status": "OK", "usb": False
+                            })
+            except Exception:
+                pass
             stdout, _, _ = run_powershell(
                 "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select-Object Model,Manufacturer,SerialNumber,Size | ConvertTo-Json -Depth 3"
             )
@@ -594,6 +663,12 @@ def _get_peripherals():
                 parts = line.split()
                 if len(parts) >= 4:
                     per["storage"].append({"name": parts[1] if len(parts) > 1 else "USB Drive", "manufacturer": "", "serial": parts[2] if len(parts) > 2 else "", "size_gb": _parse_size(parts[3] if len(parts) > 3 else "0"), "usb": True, "status": "OK"})
+            stdout_mon, _, _ = run_command("xrandr --listmonitors 2>/dev/null", shell=True, timeout=5)
+            for line in stdout_mon.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 4 and parts[0].isdigit():
+                    name = " ".join(parts[3:])
+                    per["monitors"].append({"name": name, "manufacturer": "", "model": name, "status": "OK", "usb": False})
         elif sys.platform == "darwin":
             stdout, _, _ = run_command(["system_profiler", "SPUSBDataType"], timeout=30)
             for line in stdout.splitlines():

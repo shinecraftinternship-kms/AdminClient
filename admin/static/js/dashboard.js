@@ -169,6 +169,11 @@ function renderClients() {
         const groupBadge = c.group_name ? `<span class="badge bg-info ms-1" style="font-size:0.65rem;">${escapeHtml(c.group_name)}</span>` : '';
         const deletedBadge = c.deleted ? `<span class="badge bg-danger ms-1" style="font-size:0.65rem;">Deleted</span>` : '';
         const dotClass = c.deleted ? 'offline' : (c.is_online ? 'online' : c.status === 'pending' ? 'pending' : 'offline');
+        const ramInfo = c.ram_gb ? `<span class="me-2"><i class="bi bi-memory me-1"></i>${c.ram_gb}</span>` : '';
+        const storageInfo = c.storage_gb ? `<span><i class="bi bi-device-hdd me-1"></i>${c.storage_gb}</span>` : '';
+        const gpuInfo = c.gpu_name ? `<div class="mt-1"><i class="bi bi-display me-1"></i>${escapeHtml(c.gpu_name)}</div>` : '';
+        const softwareCount = c.software_count ? `<span class="me-2"><i class="bi bi-box-seam me-1"></i>${c.software_count} apps</span>` : '';
+        const monitorInfo = c.monitors ? `<span><i class="bi bi-display me-1"></i>${c.monitors}</span>` : '';
 
         return `<div class="col-xl-3 col-lg-4 col-md-6 mb-3 client-card-wrapper">
             <div class="client-card p-3 ${isAdmin ? 'border-primary' : ''} ${isSelected ? 'border-success' : ''} ${c.deleted ? 'opacity-50' : ''}" style="cursor:pointer;">
@@ -192,7 +197,9 @@ function renderClients() {
                 </div>
                 <div class="small text-secondary">
                     <div>${c.platform || 'Unknown'}${c.cpu_model ? ' | ' + escapeHtml(c.cpu_model) : ''}</div>
-                    ${c.last_ip ? '<div><i class="bi bi-globe me-1"></i>' + escapeHtml(c.last_ip) + '</div>' : ''}
+                    <div class="d-flex flex-wrap gap-2 mt-1">${ramInfo}${storageInfo}${softwareCount}${monitorInfo}</div>
+                    ${gpuInfo}
+                    ${c.last_ip ? '<div class="mt-1"><i class="bi bi-globe me-1"></i>' + escapeHtml(c.last_ip) + '</div>' : ''}
                     <div>Last seen: ${timeAgo(c.last_seen)}${c.is_stale && !c.deleted ? ' (stale)' : ''}</div>
                     ${c.purchase_cost ? '<div>Cost: $' + parseFloat(c.purchase_cost).toFixed(2) + '</div>' : ''}
                 </div>

@@ -65,6 +65,7 @@ class ClientListSerializer(serializers.ModelSerializer):
             "purchase_cost", "vendor_name", "notes", "created_at",
             "owner", "owner_username", "scan_requested",
             "is_online",
+            "ram_gb", "storage_gb", "gpu_name", "software_count", "monitors",
         ]
 
     def get_is_online(self, obj):
@@ -81,11 +82,60 @@ class ClientListSerializer(serializers.ModelSerializer):
         if not obj.last_seen:
             return False
         try:
-            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+            timeout = int(Setting.get("stale_threshold_seconds", "300"))
         except (TypeError, ValueError):
-            timeout = 120
+            timeout = 300
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
+
+    def get_ram_gb(self, obj):
+        scan = obj.scans.order_by("-created_at").first()
+        if scan and scan.scan_data:
+            ram = scan.scan_data.get("ram", {})
+            return ram.get("capacity_gb", "")
+        return ""
+
+    def get_storage_gb(self, obj):
+        scan = obj.scans.order_by("-created_at").first()
+        if scan and scan.scan_data:
+            storage = scan.scan_data.get("storage", {})
+            disks = storage.get("disks", [])
+            if disks:
+                total = sum(d.get("size_gb", 0) for d in disks if isinstance(d.get("size_gb"), (int, float)))
+                return f"{total:.0f} GB" if total else ""
+            hdd = scan.scan_data.get("Hard Disk Details", [])
+            if hdd:
+                total = sum(d.get("Size GB", 0) for d in hdd if isinstance(d.get("Size GB"), (int, float)))
+                return f"{total:.0f} GB" if total else ""
+        return ""
+
+    def get_gpu_name(self, obj):
+        scan = obj.scans.order_by("-created_at").first()
+        if scan and scan.scan_data:
+            gpu = scan.scan_data.get("gpu", [])
+            if gpu and len(gpu) > 0:
+                return gpu[0].get("name", "")
+            components = scan.scan_data.get("components", {})
+            gpu_list = components.get("gpu", [])
+            if gpu_list and len(gpu_list) > 0:
+                return gpu_list[0].get("name", "")
+        return ""
+
+    def get_software_count(self, obj):
+        scan = obj.scans.order_by("-created_at").first()
+        if scan and scan.scan_data:
+            sw = scan.scan_data.get("software", [])
+            if sw:
+                return len(sw)
+        return 0
+
+    def get_monitors(self, obj):
+        scan = obj.scans.order_by("-created_at").first()
+        if scan and scan.scan_data:
+            per = scan.scan_data.get("peripherals", {})
+            mons = per.get("monitors", [])
+            return len(mons)
+        return 0
 
 
 class ClientDetailSerializer(serializers.ModelSerializer):
@@ -109,9 +159,9 @@ class ClientDetailSerializer(serializers.ModelSerializer):
         if not obj.last_seen:
             return False
         try:
-            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+            timeout = int(Setting.get("stale_threshold_seconds", "300"))
         except (TypeError, ValueError):
-            timeout = 120
+            timeout = 300
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_seen >= cutoff
 

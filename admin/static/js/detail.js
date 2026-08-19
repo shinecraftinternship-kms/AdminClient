@@ -579,6 +579,7 @@ function renderPeripherals() {
     }
 
     const categories = [
+        {key: 'monitors', icon: 'bi-display', label: 'Monitors'},
         {key: 'keyboard', icon: 'bi-keyboard', label: 'Keyboards'},
         {key: 'mouse', icon: 'bi-mouse', label: 'Mice'},
         {key: 'printers', icon: 'bi-printer', label: 'Printers'},

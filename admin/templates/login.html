@@ -138,7 +138,7 @@
                             <input class="form-check-input" type="checkbox" name="remember_me" id="rememberMe">
                             <label class="form-check-label small" for="rememberMe">Remember Me</label>
                         </div>
-                        <a href="#" class="text-primary small text-decoration-none" onclick="showForgotInfo(); return false;">Forgot Password?</a>
+                        <a href="#" class="text-primary small text-decoration-none" onclick="showForgotForm(); return false;">Forgot Password?</a>
                     </div>
                     <input type="hidden" name="next" value="{{ request.GET.next }}">
                     <button type="submit" class="btn btn-primary w-100" id="loginBtn">
@@ -146,11 +146,29 @@
                     </button>
                 </form>
 
-                <div id="forgotInfo" class="mt-3 d-none">
-                    <div class="alert alert-info py-2 small mb-0">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Contact your system administrator to reset your password.
+                <div id="forgotForm" class="mt-3 d-none">
+                    <hr class="border-secondary">
+                    <p class="text-secondary small mb-2"><i class="bi bi-key me-1"></i> Reset your password</p>
+                    <div id="forgotStep1">
+                        <div class="mb-2">
+                            <input type="email" class="form-control form-control-sm" id="forgotEmail" placeholder="Enter your email address">
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="requestPasswordReset()">
+                            <i class="bi bi-send me-1"></i> Send Reset Instructions
+                        </button>
                     </div>
+                    <div id="forgotStep2" class="d-none">
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" id="resetToken" placeholder="Paste reset token from email">
+                        </div>
+                        <div class="mb-2">
+                            <input type="password" class="form-control form-control-sm" id="newPassword" placeholder="New password">
+                        </div>
+                        <button type="button" class="btn btn-outline-success btn-sm w-100" onclick="resetPassword()">
+                            <i class="bi bi-check-lg me-1"></i> Reset Password
+                        </button>
+                    </div>
+                    <div id="forgotMsg" class="mt-2 d-none"></div>
                 </div>
 
                 <div class="text-center mt-3">
@@ -174,8 +192,45 @@
             }
         }
 
-        function showForgotInfo() {
-            document.getElementById('forgotInfo').classList.toggle('d-none');
+        function showForgotForm() {
+            document.getElementById('forgotForm').classList.toggle('d-none');
+        }
+
+        function requestPasswordReset() {
+            const email = document.getElementById('forgotEmail').value.trim();
+            if (!email) { document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">Enter your email</div>'; return; }
+            document.getElementById('forgotMsg').innerHTML = '<div class="text-info small"><i class="bi bi-hourglass-split me-1"></i>Sending...</div>';
+            document.getElementById('forgotMsg').classList.remove('d-none');
+            fetch('/api/admin/forgot-password', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({email: email})
+            }).then(r => r.json()).then(data => {
+                document.getElementById('forgotMsg').innerHTML = '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>' + (data.message || 'Check your email for reset instructions') + '</div>';
+                document.getElementById('forgotStep1').classList.add('d-none');
+                document.getElementById('forgotStep2').classList.remove('d-none');
+            }).catch(err => {
+                document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">Error: ' + err.message + '</div>';
+            });
+        }
+
+        function resetPassword() {
+            const token = document.getElementById('resetToken').value.trim();
+            const newPass = document.getElementById('newPassword').value;
+            if (!token || !newPass) { document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">All fields required</div>'; return; }
+            if (newPass.length < 8) { document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">Password must be at least 8 characters</div>'; return; }
+            fetch('/api/admin/reset-password', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: token, new_password: newPass})
+            }).then(r => r.json()).then(data => {
+                if (data.status === 'ok') {
+                    document.getElementById('forgotMsg').innerHTML = '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>Password reset! You can now log in.</div>';
+                    document.getElementById('forgotStep2').classList.add('d-none');
+                } else {
+                    document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">' + (data.message || 'Reset failed') + '</div>';
+                }
+            }).catch(err => {
+                document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">Error: ' + err.message + '</div>';
+            });
         }
 
         document.getElementById('loginForm').addEventListener('submit', function(e) {

@@ -39,6 +39,8 @@ urlpatterns = [
     path("admin/stats", views.AdminStatsView.as_view(), name="api-admin-stats"),
     path("admin/scan-changes", views.ScanChangesView.as_view(), name="api-admin-scan-changes"),
     path("admin/change-password", views.ChangePasswordView.as_view(), name="api-change-password"),
+    path("admin/forgot-password", views.ForgotPasswordRequestView.as_view(), name="api-forgot-password"),
+    path("admin/reset-password", views.ForgotPasswordResetView.as_view(), name="api-reset-password"),
 
     # ── JWT Auth ───────────────────────────────────────────
     path("auth/login", views.AuthLoginView.as_view(), name="api-auth-login"),

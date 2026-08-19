@@ -1157,6 +1157,68 @@ class ChangePasswordView(APIView):
         return Response({"status": "ok"})
 
 
+@method_decorator(csrf_exempt, name="dispatch")
+class ForgotPasswordRequestView(APIView):
+    def post(self, request):
+        from django.contrib.auth.models import User
+        from django.core.signing import TimestampSigner, BadSignature
+
+        email = request.data.get("email", "").strip()
+        if not email:
+            return Response({"status": "error", "message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"status": "ok", "message": "Password reset instructions sent to your email"})
+
+        signer = TimestampSigner(salt="scanner-password-reset")
+        token = signer.sign(str(user.id))
+        Setting.set(f"password_reset_token_{user.id}", token)
+
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="update", company=company, details=f"Password reset requested for user {user.username}")
+
+        return Response({"status": "ok", "message": "Password reset instructions sent to your email"})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ForgotPasswordResetView(APIView):
+    def post(self, request):
+        from django.contrib.auth.models import User
+        from django.core.signing import TimestampSigner, BadSignature
+
+        token = request.data.get("token", "")
+        new_password = request.data.get("new_password", "")
+        if not token or not new_password:
+            return Response({"status": "error", "message": "All fields required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        signer = TimestampSigner(salt="scanner-password-reset")
+        try:
+            unsigned = signer.unsign(token, max_age=3600)
+        except (BadSignature, ValueError):
+            return Response({"status": "error", "message": "Invalid or expired reset token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_id = int(unsigned)
+        stored_token = Setting.get(f"password_reset_token_{user_id}", "")
+        if stored_token != token:
+            return Response({"status": "error", "message": "Invalid or expired reset token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"status": "error", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        user.set_password(new_password)
+        user.save()
+        Setting.set(f"password_reset_token_{user_id}", "")
+
+        company = get_user_company(request)
+        ActivityLog.objects.create(action="update", company=company, details=f"Password reset completed for user {user.username}")
+
+        return Response({"status": "ok", "message": "Password reset successful"})
+
+
 def get_admin_client_key():
     """Return the admin's own client key, persisting it on first use.
 

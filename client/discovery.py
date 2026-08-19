@@ -4,12 +4,12 @@ import time
 import urllib.request
 import urllib.error
 
-DISCOVERY_SUPABASE_URL = "https://eekerbqgmektmrzjiyyv.supabase.co"
+DISCOVERY_SUPABASE_URL = "https://zimknnadiqfapzbmfhyj.supabase.co"
 DISCOVERY_SUPABASE_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVla2VyYnFnbWVrdG1yemppeXl2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIs"
-    "ImlhdCI6MTc3ODc2NjUxNywiZXhwIjoyMDk0MzQyNTE3fQ."
-    "-dRCu16Cr-235XkQgX3vwC9HAzi5M4RtoKXxwj2ma6E"
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InppbWtubmFkaXFmYXB6Ym1maHlqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIs"
+    "ImlhdCI6MTc4NzE0NDgzOCwiZXhwIjoyMTAyNzIwODM4fQ."
+    "E-LnoNZvSoCrYQglYihhW4RIue-i7vepj8N-rbQDPgI"
 )
 DISCOVERY_TABLE = "server_registry"
 DISCOVERY_TIMEOUT = 5
