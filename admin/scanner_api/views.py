@@ -100,6 +100,23 @@ def get_admin_owned_clients(request):
     return qs.filter(models.Q(owner=request.user) | unowned_clients | same_company_clients)
 
 
+def get_client_visibility_q(request):
+    """Return a Q filter matching clients the current user may see.
+
+    Consistent with get_admin_owned_clients() but usable as a Q object
+    so other querysets can chain additional filters.
+    """
+    if not request.user or not request.user.is_authenticated:
+        return models.Q(pk__in=[])
+    if request.user.is_superuser:
+        return models.Q()
+    unowned = models.Q(owner__isnull=True)
+    owned = models.Q(owner=request.user)
+    company = get_user_company(request)
+    same_company = models.Q(company=company) if company else models.Q()
+    return unowned | owned | same_company
+
+
 def client_is_visible(request, client):
     """Return True if the current admin may view/modify the given client.
 
@@ -397,9 +414,7 @@ class ApproveMultipleView(APIView):
 
         clients = Client.objects.filter(registration_key__in=keys)
         if not request.user.is_superuser:
-            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
-        elif company:
-            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True))
+            clients = clients.filter(get_client_visibility_q(request))
         count = 0
         for client in clients:
             client.approved = True
@@ -591,9 +606,7 @@ class DeleteMultipleView(APIView):
         company = get_user_company(request)
         clients = Client.objects.filter(registration_key__in=keys)
         if not request.user.is_superuser:
-            clients = clients.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
-        elif company:
-            clients = clients.filter(models.Q(company=company) | models.Q(owner__isnull=True))
+            clients = clients.filter(get_client_visibility_q(request))
         count = clients.count()
         for client in clients:
             client.deleted = True
@@ -719,9 +732,7 @@ class ScanAllView(APIView):
         company = get_user_company(request)
         qs = Client.objects.filter(approved=True, deleted=False)
         if not request.user.is_superuser:
-            qs = qs.filter(models.Q(owner=request.user) | models.Q(owner__isnull=True))
-        elif company:
-            qs = qs.filter(models.Q(company=company) | models.Q(owner__isnull=True))
+            qs = qs.filter(get_client_visibility_q(request))
         count = qs.update(scan_requested=True)
         ActivityLog.objects.create(action="scan_request", company=company, details=f"Scan requested for {count} clients by {request.user.username}")
         return Response({"status": "ok", "message": f"Scan queued for {count} client(s)"})
@@ -803,7 +814,12 @@ class ActivityLogView(APIView):
         company = get_user_company(request)
         logs = ActivityLog.objects.select_related("client")
         if not request.user.is_superuser:
-            logs = logs.filter(client__owner=request.user)
+            vis_q = get_client_visibility_q(request)
+            logs = logs.filter(client__isnull=False, client__deleted=False).filter(
+                models.Q(client__owner=request.user) |
+                models.Q(client__owner__isnull=True) |
+                (models.Q(client__company=company) if company else models.Q())
+            )
         elif company:
             logs = logs.filter(company=company)
         logs = logs[:limit]
@@ -1011,19 +1027,18 @@ class AdminStatsView(APIView):
         from django.contrib.auth.models import User
         from .models import Client, ScanResult, ActivityLog
         company = get_user_company(request)
-        base = Client.objects.all().exclude(_admin_self_client_q())
-        if not request.user.is_superuser:
-            base = base.filter(owner=request.user)
+        base = get_admin_owned_clients(request)
         total = base.count()
         online = base.filter(deleted=False, approved=True, status__in=["online", "pending"]).count()
         pending = base.filter(deleted=False, approved=False).count()
-        deleted = base.filter(deleted=True).count()
+        deleted_count = base.filter(deleted=True).count()
         offline = total - online - pending
         scan_base = ScanResult.objects.all()
         log_base = ActivityLog.objects.all()
         if not request.user.is_superuser:
-            scan_base = scan_base.filter(client__owner=request.user)
-            log_base = log_base.filter(client__owner=request.user)
+            vis_q = models.Q(client__owner=request.user) | models.Q(client__owner__isnull=True) | (models.Q(client__company=company) if company else models.Q())
+            scan_base = scan_base.filter(vis_q)
+            log_base = log_base.filter(vis_q)
         return Response({
             "total_admins": User.objects.filter(is_superuser=True).count(),
             "total_clients": total,
@@ -1032,7 +1047,7 @@ class AdminStatsView(APIView):
             "clients_online": online,
             "clients_pending": pending,
             "clients_offline": offline,
-            "clients_deleted": deleted,
+            "clients_deleted": deleted_count,
         })
 
 
@@ -1044,9 +1059,7 @@ class ScanChangesView(APIView):
         changes = []
         clients = Client.objects.filter(approved=True, deleted=False, scans__isnull=False).distinct().exclude(_admin_self_client_q())
         if not request.user.is_superuser:
-            clients = clients.filter(owner=request.user)
-        elif company:
-            clients = clients.filter(company=company)
+            clients = clients.filter(get_client_visibility_q(request))
 
         for client in clients:
             scans = ScanResult.objects.filter(client=client).order_by("-created_at")[:2]
@@ -1085,9 +1098,12 @@ class ScanHistoryView(APIView):
         company = get_user_company(request)
         scans = ScanResult.objects.select_related("client").all().order_by("-created_at")
         if not request.user.is_superuser:
-            scans = scans.filter(client__owner=request.user)
-        elif company:
-            scans = scans.filter(client__company=company)
+            vis_q = get_client_visibility_q(request)
+            scans = scans.filter(client__isnull=False).filter(
+                models.Q(client__owner=request.user) |
+                models.Q(client__owner__isnull=True) |
+                (models.Q(client__company=company) if company else models.Q())
+            )
 
         if query:
             scans = scans.filter(
