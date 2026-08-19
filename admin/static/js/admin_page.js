@@ -108,6 +108,7 @@ function createAdminUser() {
             document.getElementById('newUsername').value = '';
             document.getElementById('newEmail').value = '';
             document.getElementById('newPassword').value = '';
+            document.getElementById('newIsSuperuser').checked = false;
             const modal = bootstrap.Modal.getInstance(document.getElementById('createUserModal'));
             modal.hide();
             loadAdminData();

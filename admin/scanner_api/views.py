@@ -467,11 +467,11 @@ class PingClientView(APIView):
             client.auto_approved = False
             client.status = "pending"
             resurrected_pending = True
-        elif not _auto_approve_enabled() and client.approved and not _has_real_admin_approval(client):
+        elif not _auto_approve_enabled() and client.approved and not _has_real_admin_approval(client) and not getattr(client, "auto_approved", False):
             # Auto-approve is off and this client's approval never came from an
-            # explicit admin action (auto-approved or legacy). Demote it so it
-            # shows up as PENDING on the panel and the client stops claiming it
-            # was approved when no admin ever approved it.
+            # explicit admin action (not auto-approved, no approve log). Demote
+            # it so it shows up as PENDING on the panel. Auto-approved clients
+            # stay approved until an admin explicitly revokes them.
             client.approved = False
             client.status = "pending"
             resurrected_pending = True
@@ -998,7 +998,8 @@ class AdminUsersView(APIView):
 
         user = User.objects.create_user(username=username, email=email, password=password)
         user.is_superuser = is_superuser
-        user.save()
+        user.is_staff = True
+        user.save(update_fields=["is_superuser", "is_staff"])
         company = get_user_company(request)
         if AdministratorProfile.objects.filter(user=user, company=company).exists():
             return Response({"status": "error", "message": "This admin is already registered with this company"}, status=status.HTTP_400_BAD_REQUEST)

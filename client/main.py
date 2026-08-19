@@ -485,8 +485,9 @@ class HeartbeatWatchdog:
                 self._restart_count += 1
                 now = datetime.now().strftime('%H:%M:%S')
                 if self._restart_count > 5:
-                    P(f"  [{now}] [WATCHDOG] Too many restarts ({self._restart_count}). Giving up.")
-                    break
+                    P(f"  [{now}] [WATCHDOG] Too many restarts ({self._restart_count}). Waiting 60s before retry...")
+                    self._stop.wait(60)
+                    continue
                 P(f"  [{now}] [WATCHDOG] Heartbeat thread died. Restarting (attempt {self._restart_count})...")
                 self.hb_thread = threading.Thread(
                     target=heartbeat_loop,
@@ -800,7 +801,7 @@ def main():
         sys.argv = [a for a in sys.argv if a != RESCUE_FLAG]
         # The process that spawned us is dying (console closed); wait for it
         # to release the single-instance mutex before we take over.
-        time.sleep(8)
+        time.sleep(3)
 
     silent = SILENT_FLAG in sys.argv
     if silent:
