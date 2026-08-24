@@ -53,6 +53,12 @@ def _bootstrap():
         err_detail = traceback.format_exc()
         _init_log.append(f"[ERROR] migrate failed: {e}")
         _init_log.append(f"[ERROR] Detail: {err_detail[:500]}")
+        if "already exists" in str(e) or "DuplicateTable" in err_detail:
+            _init_log.append(
+                "[HINT] A table created outside Django (e.g. by a manual SQL "
+                "script) is conflicting with migrations. Drop the conflicting "
+                "hand-made tables so `migrate` can own the schema."
+            )
         from django.core.wsgi import get_wsgi_application
         _handler = get_wsgi_application()
         _init_log.append("[WARN] App started without DB (pages will show errors until DB is fixed)")
