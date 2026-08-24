@@ -299,8 +299,14 @@ exe = EXE(
     else:
         os_tag = "macos" if IS_MACOS else "linux"
         zip_dest = package_unix(binary_path, os_tag)
-        artifacts.append((binary_path, "BIN"))
-        artifacts.append((zip_dest, "ZIP"))
+        # Copy into admin/data so the /download-client/ endpoint can serve
+        # this platform the same way it serves the Windows build.
+        bin_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
+        shutil.copy2(binary_path, bin_dest)
+        data_zip = os.path.join(DATA_DIR, f"client_scanner-{os_tag}.zip")
+        shutil.copy2(zip_dest, data_zip)
+        artifacts.append((bin_dest, "BIN"))
+        artifacts.append((data_zip, "ZIP"))
 
     print()
     print("=" * 55)

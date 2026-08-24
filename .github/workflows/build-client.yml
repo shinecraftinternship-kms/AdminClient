@@ -9,6 +9,9 @@ on:
       - "build_client.py"
       - ".github/workflows/build-client.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build (${{ matrix.os }})
@@ -40,10 +43,28 @@ jobs:
       - name: Build binary
         run: python build_client.py
 
+      # Commit each platform's binary into admin/data so the admin panel's
+      # /download-client/ endpoint serves every OS automatically (the Vercel
+      # deployment ships files straight from the repo).
+      - name: Commit binaries for download endpoint
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add admin/data/
+          if git diff --cached --quiet; then
+            echo "No binary changes to commit"
+          else
+            git commit -m "build: refresh ${{ matrix.platform }} client binary [skip ci]"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: client_scanner-${{ matrix.platform }}
           path: |
             dist/client_scanner*
+            admin/data/client_scanner*
           if-no-files-found: error

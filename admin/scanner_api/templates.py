@@ -382,38 +382,70 @@ def signup_view(request):
     return render(request, "signup.html")
 
 
+def _detect_client_os(request):
+    """Map the browser User-Agent to a client binary: windows/linux/macos."""
+    ua = (request.META.get("HTTP_USER_AGENT") or "").lower()
+    requested = request.GET.get("os", "").lower()
+    if requested in ("windows", "linux", "macos", "mac"):
+        return "macos" if requested == "mac" else requested
+    if "windows" in ua or "nt 10" in ua or "nt 6" in ua:
+        return "windows"
+    if "mac os" in ua or "macintosh" in ua or "darwin" in ua:
+        return "macos"
+    if "linux" in ua or "x11" in ua or "android" in ua:
+        return "linux"
+    return "windows"
+
+
 def download_client_view(request):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.path.join(base_dir, "data")
 
-    exe_path = os.path.join(data_dir, "client_scanner.exe")
-    zip_path = os.path.join(data_dir, "client_scanner.zip")
+    # Same layout locally and on CI: every platform's binary + zip live in
+    # admin/data (or <cwd>/admin/data), produced by build_client.py.
+    candidates = [data_dir, os.path.join(os.getcwd(), "admin", "data")]
 
-    if not os.path.exists(exe_path) and not os.path.exists(zip_path):
-        cwd = os.getcwd()
-        alt_exe = os.path.join(cwd, "admin", "data", "client_scanner.exe")
-        alt_zip = os.path.join(cwd, "admin", "data", "client_scanner.zip")
-        if os.path.exists(alt_exe):
-            exe_path = alt_exe
-        if os.path.exists(alt_zip):
-            zip_path = alt_zip
+    def find_file(name):
+        for d in candidates:
+            p = os.path.join(d, name)
+            if os.path.exists(p):
+                return p
+        return None
 
-    fmt = request.GET.get("format", "exe").lower()
+    target_os = _detect_client_os(request)
+    fmt = request.GET.get("format", "").lower()
 
-    if fmt == "exe" and os.path.exists(exe_path):
-        file_path = exe_path
-        filename = "client_scanner.exe"
-        content_type = "application/vnd.microsoft.portable-executable"
-    elif os.path.exists(zip_path):
-        file_path = zip_path
-        filename = "client_scanner.zip"
-        content_type = "application/zip"
-    elif os.path.exists(exe_path):
-        file_path = exe_path
-        filename = "client_scanner.exe"
-        content_type = "application/vnd.microsoft.portable-executable"
+    if target_os == "windows":
+        primary = (
+            ("client_scanner.exe", "client_scanner.exe", "application/vnd.microsoft.portable-executable")
+            if fmt != "zip"
+            else ("client_scanner.zip", "client_scanner.zip", "application/zip")
+        )
+        fallbacks = [
+            ("client_scanner.zip", "client_scanner.zip", "application/zip"),
+            ("client_scanner.exe", "client_scanner.exe", "application/vnd.microsoft.portable-executable"),
+        ]
+    elif target_os == "macos":
+        primary = ("client_scanner-macos.zip", "client_scanner-macos.zip", "application/zip")
+        fallbacks = [("client_scanner-macos", "client_scanner-macos", "application/octet-stream")]
     else:
-        raise Http404("Client installer not found on the server. Run build_client.py first.")
+        primary = ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip")
+        fallbacks = [("client_scanner-linux", "client_scanner-linux", "application/octet-stream")]
+
+    chosen = None
+    for name, out_name, ctype in (primary,) + tuple(fallbacks):
+        path = find_file(name)
+        if path:
+            chosen = (path, out_name, ctype)
+            break
+
+    if not chosen:
+        raise Http404(
+            "Client installer not found on the server for this platform. "
+            "Run build_client.py (or the Build Client Binaries workflow) first."
+        )
+
+    file_path, filename, content_type = chosen
 
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
