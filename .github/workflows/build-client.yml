@@ -1,0 +1,49 @@
+name: Build Client Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "build_client.py"
+      - ".github/workflows/build-client.yml"
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller psutil requests websockets watchdog netifaces wmi; if ($env:RUNNER_OS -ne 'Windows') { pip uninstall -y wmi }
+
+      - name: Build binary
+        run: python build_client.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client_scanner-${{ matrix.platform }}
+          path: |
+            dist/client_scanner*
+          if-no-files-found: error

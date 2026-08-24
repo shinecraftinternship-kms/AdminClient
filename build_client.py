@@ -4,34 +4,40 @@ import shutil
 import subprocess
 import hashlib
 import zipfile
+import tarfile
+import platform
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.join(ROOT_DIR, "client")
 ENTRY = os.path.join(CLIENT_DIR, "main.py")
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 BUILD_DIR = os.path.join(ROOT_DIR, "build")
-OUTPUT_NAME = "client_scanner.exe"
 DATA_DIR = os.path.join(ROOT_DIR, "admin", "data")
 VERSION_FILE = os.path.join(CLIENT_DIR, "version-info.txt")
 MANIFEST_FILE = os.path.join(CLIENT_DIR, "client_scanner.exe.manifest")
-ZIP_NAME = "client_scanner.zip"
+
+IS_WINDOWS = sys.platform == "win32"
+IS_MACOS = sys.platform == "darwin"
+
+# Per-OS output names: a single binary format cannot run on every OS, so each
+# platform gets its own PyInstaller onefile build:
+#   Windows -> client_scanner.exe
+#   Linux   -> client_scanner-linux
+#   macOS   -> client_scanner-macos
+if IS_WINDOWS:
+    OUTPUT_NAME = "client_scanner.exe"
+elif IS_MACOS:
+    OUTPUT_NAME = "client_scanner-macos"
+else:
+    OUTPUT_NAME = "client_scanner-linux"
 
 
 def check_pyinstaller():
     try:
-        import PyInstaller
+        import PyInstaller  # noqa: F401
         return True
     except ImportError:
         return False
-
-
-def ensure_adminclient_init():
-    init_path = os.path.join(ROOT_DIR, "__init__.py")
-    created = False
-    if not os.path.exists(init_path):
-        open(init_path, "w").close()
-        created = True
-    return init_path, created
 
 
 def ensure_client_init():
@@ -44,9 +50,12 @@ def ensure_client_init():
 
 
 def collect_datas():
+    """Bundle the client's config/JSON files next to their source dirs."""
     exclude_files = {"version-info.txt", "client_scanner.exe.manifest"}
     datas = []
     for dirpath, dirnames, filenames in os.walk(CLIENT_DIR):
+        # never bundle local runtime state (keys, scans) into the binary
+        dirnames[:] = [d for d in dirnames if d not in ("scans", "__pycache__")]
         for f in filenames:
             if f.endswith((".json", ".txt")) and f not in exclude_files:
                 src = os.path.join(dirpath, f)
@@ -56,7 +65,9 @@ def collect_datas():
 
 
 def sign_exe(exe_path):
-    """Sign the executable with a code signing certificate."""
+    """Sign the executable with a code signing certificate (Windows only)."""
+    if not IS_WINDOWS:
+        return False
     pfx_path = os.environ.get("CODE_SIGN_PFX", "")
     pfx_password = os.environ.get("CODE_SIGN_PASSWORD", "")
     timestamp_url = os.environ.get("CODE_SIGN_TIMESTAMP", "http://timestamp.digicert.com")
@@ -106,20 +117,64 @@ def verify_binary(file_path):
     return file_hash
 
 
-def create_zip(folder_path, zip_path):
-    """Create a ZIP archive from a folder."""
-    print(f"[INFO] Creating ZIP: {zip_path}")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(folder_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, os.path.dirname(folder_path))
-                zf.write(file_path, arcname)
+def package_windows(binary_path):
+    """Windows ZIP with the .dat rename trick to dodge naive AV heuristics."""
+    exe_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
+    shutil.copy2(binary_path, exe_dest)
+
+    zip_dest = os.path.join(DATA_DIR, "client_scanner.zip")
+    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(exe_dest, "client_scanner.dat")
+        bat_content = (
+            "@echo off\r\n"
+            "ren client_scanner.dat client_scanner.exe >nul 2>&1\r\n"
+            "start client_scanner.exe\r\n"
+        )
+        zf.writestr("run.bat", bat_content)
+        readme = (
+            "System Scanner Pro Client\r\n"
+            "=========================\r\n\r\n"
+            "1. Extract all files from this zip to a folder\r\n"
+            "2. Double-click run.bat to launch the scanner\r\n"
+            "   (or rename client_scanner.dat to .exe and run it directly)\r\n"
+        )
+        zf.writestr("README.txt", readme)
+    return exe_dest, zip_dest
+
+
+def package_unix(binary_path, os_tag):
+    """Linux/macOS ZIP containing the native binary + launch instructions."""
+    name = os.path.basename(binary_path)
+    zip_dest = os.path.join(DIST_DIR, f"client_scanner-{os_tag}.zip")
+
+    launcher_ext = ".command" if IS_MACOS else ".sh"
+    launcher = (
+        "#!/bin/sh\n"
+        f'chmod +x "$(dirname "$0")/{name}"\n'
+        f'"$(dirname "$0")/{name}"\n'
+    )
+
+    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        info = zipfile.ZipInfo(name)
+        info.external_attr = 0o755 << 16  # rwxr-xr-x so it is runnable after unzip
+        with open(binary_path, "rb") as fh:
+            zf.writestr(info, fh.read(), compress_type=zipfile.ZIP_DEFLATED)
+        zf.writestr(f"start_scanner{launcher_ext}", launcher)
+        zf.writestr(
+            "README.txt",
+            "System Scanner Pro Client ({})\n"
+            "=============================\n\n"
+            "1. Extract all files from this zip\n"
+            "2. Run:  chmod +x {} && ./{}\n"
+            "   or run ./start_scanner{}\n".format(os_tag, name, name, launcher_ext),
+        )
+    return zip_dest
 
 
 def build():
     print("=" * 55)
     print("  System Scanner Pro - Client Builder")
+    print(f"  Target OS : {platform.system()} ({sys.platform})")
     print("=" * 55)
     print()
 
@@ -148,7 +203,6 @@ def build():
         "client.discovery",
         "client.metrics",
         "client.fingerprint",
-        "client.events",
         "client.events.dispatcher",
         "client.events.usb_monitor",
         "client.events.file_monitor",
@@ -156,9 +210,6 @@ def build():
         "client.events.software_monitor",
     ]
 
-    # Use a spec file instead of a giant command line: 300+ --add-data
-    # entries with long absolute paths blow past the Windows 32k cmdline
-    # limit (WinError 206). The spec has no such limit.
     spec_content = f"""\
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -214,8 +265,8 @@ exe = EXE(
 
     print(f"[INFO] Entry point : {ENTRY}")
     print(f"[INFO] Output dir  : {DIST_DIR}")
-    print(f"[INFO] Mode        : onefile (single self-contained exe)")
-    print(f"[INFO] Building with PyInstaller (spec file)...")
+    print(f"[INFO] Binary      : {OUTPUT_NAME} (single self-contained file)")
+    print("[INFO] Building with PyInstaller (spec file)...")
     print()
 
     try:
@@ -229,43 +280,35 @@ exe = EXE(
         print(f"[ERROR] Build failed: {e}")
         sys.exit(1)
 
-    exe_path = os.path.join(DIST_DIR, OUTPUT_NAME)
+    binary_path = os.path.join(DIST_DIR, OUTPUT_NAME)
 
-    if not os.path.exists(exe_path):
-        print(f"[ERROR] Output exe not found at {exe_path}")
+    if not os.path.exists(binary_path):
+        print(f"[ERROR] Output binary not found at {binary_path}")
         sys.exit(1)
 
-    sign_exe(exe_path)
+    sign_exe(binary_path)
 
     os.makedirs(DATA_DIR, exist_ok=True)
 
-    exe_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
-    shutil.copy2(exe_path, exe_dest)
-    print(f"[INFO] Copied exe to: {exe_dest}")
+    artifacts = []
 
-    zip_dest = os.path.join(DATA_DIR, ZIP_NAME)
-    print(f"[INFO] Creating ZIP: {zip_dest}")
-    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(exe_dest, "client_scanner.dat")
-        bat_content = '@echo off\r\nren client_scanner.dat client_scanner.exe >nul 2>&1\r\nstart client_scanner.exe\r\n'
-        zf.writestr("run.bat", bat_content)
-        readme = (
-            "System Scanner Pro Client\r\n"
-            "=========================\r\n\r\n"
-            "1. Extract all files from this zip to a folder\r\n"
-            "2. Double-click run.bat to launch the scanner\r\n"
-            "   (or rename client_scanner.dat to .exe and run it directly)\r\n"
-        )
-        zf.writestr("README.txt", readme)
+    if IS_WINDOWS:
+        exe_dest, zip_dest = package_windows(binary_path)
+        artifacts.append((exe_dest, "EXE"))
+        artifacts.append((zip_dest, "ZIP"))
+    else:
+        os_tag = "macos" if IS_MACOS else "linux"
+        zip_dest = package_unix(binary_path, os_tag)
+        artifacts.append((binary_path, "BIN"))
+        artifacts.append((zip_dest, "ZIP"))
 
-    exe_size_mb = os.path.getsize(exe_dest) / (1024 * 1024)
-    zip_size_mb = os.path.getsize(zip_dest) / (1024 * 1024)
     print()
     print("=" * 55)
-    print(f"  Build successful!")
-    print(f"  EXE    : {exe_dest} ({exe_size_mb:.1f} MB)")
-    print(f"  ZIP    : {zip_dest} ({zip_size_mb:.1f} MB)")
-    verify_binary(exe_dest)
+    print("  Build successful!")
+    for path, kind in artifacts:
+        size_mb = os.path.getsize(path) / (1024 * 1024)
+        print(f"  {kind:<5}: {path} ({size_mb:.1f} MB)")
+    verify_binary(binary_path)
     print("=" * 55)
 
     if client_created and os.path.exists(client_init):
@@ -274,12 +317,13 @@ exe = EXE(
         except OSError:
             pass
 
-    spec_file = os.path.join(ROOT_DIR, "client_scanner.spec")
-    if os.path.exists(spec_file):
+    if os.path.exists(spec_path):
         try:
-            os.remove(spec_file)
+            os.remove(spec_path)
         except OSError:
             pass
+
+    return binary_path
 
 
 if __name__ == "__main__":
