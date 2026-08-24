@@ -55,6 +55,11 @@ class ClientListSerializer(serializers.ModelSerializer):
     tags_list = serializers.ListField(child=serializers.CharField(), source="tag_list", read_only=True)
     is_stale = serializers.BooleanField(read_only=True)
     is_online = serializers.SerializerMethodField()
+    ram_gb = serializers.SerializerMethodField()
+    storage_gb = serializers.SerializerMethodField()
+    gpu_name = serializers.SerializerMethodField()
+    software_count = serializers.SerializerMethodField()
+    monitors = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
