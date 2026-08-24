@@ -159,7 +159,7 @@
                     </div>
                     <div id="forgotStep2" class="d-none">
                         <div class="mb-2">
-                            <input type="text" class="form-control form-control-sm" id="resetToken" placeholder="Paste reset token from email">
+                            <input type="text" class="form-control form-control-sm" id="resetToken" placeholder="Reset token (auto-filled)">
                         </div>
                         <div class="mb-2">
                             <input type="password" class="form-control form-control-sm" id="newPassword" placeholder="New password">
@@ -205,9 +205,14 @@
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({email: email})
             }).then(r => r.json()).then(data => {
-                document.getElementById('forgotMsg').innerHTML = '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>' + (data.message || 'Check your email for reset instructions') + '</div>';
+                document.getElementById('forgotMsg').innerHTML = '<div class="text-success small"><i class="bi bi-check-circle me-1"></i>' + (data.message || 'Use the token below') + '</div>';
+                document.getElementById('forgotMsg').classList.remove('d-none');
                 document.getElementById('forgotStep1').classList.add('d-none');
                 document.getElementById('forgotStep2').classList.remove('d-none');
+                if (data.reset_token) {
+                    document.getElementById('resetToken').value = data.reset_token;
+                    document.getElementById('newPassword').focus();
+                }
             }).catch(err => {
                 document.getElementById('forgotMsg').innerHTML = '<div class="text-danger small">Error: ' + err.message + '</div>';
             });

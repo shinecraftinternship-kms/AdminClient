@@ -126,8 +126,9 @@ story.append(Paragraph(
     "required on the target machine. Each operating system gets its own build:", BODY))
 story.append(steps_table([
     ("Windows", "<b>client_scanner.exe</b> — served automatically when you open the download link on Windows."),
-    ("Linux", "<b>client_scanner-linux.zip</b> — contains the ELF binary plus a start script."),
-    ("macOS", "<b>client_scanner-macos.zip</b> — contains the Mach-O binary plus a double-click launcher."),
+    ("Linux", "<b>system-scanner_1.7.0_amd64.deb</b> — native Debian/Ubuntu package, installs with one command. "
+              "Other distros can grab <b>client_scanner-linux.zip</b>."),
+    ("macOS", "<b>client_scanner-macos.zip</b> — contains a proper <b>System Scanner.app</b> bundle."),
 ]))
 story.append(note("How downloads work:",
                   "Open your admin panel and click <b>Download Client</b>. The panel detects your "
@@ -142,22 +143,24 @@ story.append(steps_table([
     ("Step 1", "<b>Download.</b> In your browser, go to your admin panel URL and click "
                "<b>Download Client</b>. Safari/Chrome on a Mac receives <b>client_scanner-macos.zip</b> "
                "automatically."),
-    ("Step 2", "<b>Unzip it.</b> Double-click the ZIP in Finder, or run:"),
+    ("Step 2", "<b>Unzip it.</b> Double-click the ZIP in Finder — a <b>System Scanner.app</b> appears — "
+               "or run:"),
 ]))
-story.append(cmd("cd ~/Downloads\nunzip client_scanner-macos.zip -d system-scanner\ncd system-scanner"))
+story.append(cmd("cd ~/Downloads\nunzip client_scanner-macos.zip\ncd system-scanner-macos"))
 story.append(steps_table([
-    ("Step 3", "<b>Allow the app to run (Gatekeeper).</b> Because the binary is not notarised with an "
+    ("Step 3", "<b>Allow the app to run (Gatekeeper).</b> Because the app is not notarised with an "
                "Apple Developer certificate, macOS may block first launch. Remove the quarantine flag:"),
 ]))
-story.append(cmd("xattr -d com.apple.quarantine client_scanner-macos\nchmod +x client_scanner-macos"))
+story.append(cmd('xattr -dr com.apple.quarantine "System Scanner.app"'))
 story.append(note("If System Settings blocked it anyway:",
                   "Go to <b>System Settings → Privacy &amp; Security</b>, scroll to the Security section "
                   "and click <b>Allow Anyway</b> next to the blocked app message, then relaunch."))
 story.append(steps_table([
-    ("Step 4", "<b>Start the client.</b> Either double-click <b>start_scanner.command</b> in Finder, "
-               "or launch from Terminal:"),
+    ("Step 4", "<b>Start the client (first run from Terminal).</b> The console prints your Registration "
+               "Key, so start it once via Terminal to see it. Double-clicking the .app also works "
+               "(it runs in the background; output goes to the system log):"),
 ]))
-story.append(cmd("./client_scanner-macos"))
+story.append(cmd('"System Scanner.app/Contents/MacOS/client_scanner-macos"\n# after approval you can simply:\nopen "System Scanner.app"'))
 story.append(steps_table([
     ("Step 5", "<b>Register and wait for approval.</b> The console prints a Registration Key "
                "(e.g. <b>A1B2C3D4</b>) and shows “Waiting for admin approval…”. Open the admin dashboard, "
@@ -174,7 +177,7 @@ story.append(cmd("mkdir -p ~/Library/LaunchAgents\ncat > ~/Library/LaunchAgents/
                  "<plist version=\"1.0\"><dict>\n"
                  "  <key>Label</key><string>com.systemscanner.client</string>\n"
                  "  <key>ProgramArguments</key>\n"
-                 "  <array><string>/Users/YOU/system-scanner/client_scanner-macos</string></array>\n"
+                 "  <array><string>/Users/YOU/system-scanner-macos/System Scanner.app/Contents/MacOS/client_scanner-macos</string></array>\n"
                  "  <key>RunAtLoad</key><true/>\n"
                  "  <key>KeepAlive</key><true/>\n"
                  "</dict></plist>\nEOF\n"
@@ -185,18 +188,23 @@ story.append(PageBreak())
 # ── Part B: Linux ────────────────────────────────────────────────────────
 story.append(Paragraph("Part B — Linux Installation (step by step)", H1))
 story.append(steps_table([
-    ("Step 1", "<b>Download.</b> From the admin panel click <b>Download Client</b> (Linux browsers get "
-               "<b>client_scanner-linux.zip</b>), or fetch it directly with wget:"),
+    ("Step 1", "<b>Download.</b> From the admin panel click <b>Download Client</b> — Linux browsers get "
+               "the <b>system-scanner_1.7.0_amd64.deb</b> package (Debian/Ubuntu). Fetch it directly with wget:"),
 ]))
-story.append(cmd("# replace YOUR-PANEL with your admin server URL\nwget https://YOUR-PANEL/download-client/?os=linux -O client_scanner-linux.zip"))
+story.append(cmd("# replace YOUR-PANEL with your admin server URL\n"
+                 "wget 'https://YOUR-PANEL/download-client/?os=linux' -O system-scanner_1.7.0_amd64.deb"))
 story.append(steps_table([
-    ("Step 2", "<b>Unpack and make it executable:</b>"),
+    ("Step 2", "<b>Install the package.</b> This installs the binary to <b>/usr/local/bin/system-scanner</b>:"),
 ]))
-story.append(cmd("unzip client_scanner-linux.zip -d system-scanner\ncd system-scanner\nchmod +x client_scanner-linux"))
+story.append(cmd("sudo dpkg -i ./system-scanner_1.7.0_amd64.deb\n# if a dependency error appears:\nsudo apt -f install"))
+story.append(note("Not on Debian/Ubuntu?",
+                  "Fedora, Arch, etc. can download the portable zip instead: "
+                  "<font face='Courier'>https://YOUR-PANEL/download-client/?os=linux&amp;format=zip</font>, "
+                  "then unzip and run <font face='Courier'>chmod +x client_scanner-linux &amp;&amp; ./client_scanner-linux</font>."))
 story.append(steps_table([
     ("Step 3", "<b>Run it:</b>"),
 ]))
-story.append(cmd("./client_scanner-linux\n# or use the bundled launcher:\n./start_scanner.sh"))
+story.append(cmd("sudo system-scanner"))
 story.append(steps_table([
     ("Step 4", "<b>Get approved.</b> Note the Registration Key printed in the terminal. On the admin "
                "dashboard your machine appears with a yellow <b>Pending</b> dot — click <b>Approve</b>. "
@@ -208,9 +216,9 @@ story.append(cmd("curl -I https://YOUR-PANEL/api/health   # expect HTTP 200"))
 
 story.append(Paragraph("Optional — run as a background service (Linux)", H2))
 story.append(Paragraph("Install as a systemd service so it survives reboots and runs headless:", BODY))
-story.append(cmd("sudo mv system-scanner /opt/system-scanner\nsudo tee /etc/systemd/system/system-scanner.service > /dev/null << 'EOF'\n"
+story.append(cmd("sudo tee /etc/systemd/system/system-scanner.service > /dev/null << 'EOF'\n"
                  "[Unit]\nDescription=System Scanner Pro Client\nAfter=network-online.target\nWants=network-online.target\n\n"
-                 "[Service]\nExecStart=/opt/system-scanner/client_scanner-linux\nRestart=always\nRestartSec=10\nUser=YOURUSER\n\n"
+                 "[Service]\nExecStart=/usr/local/bin/system-scanner\nRestart=always\nRestartSec=10\nUser=root\n\n"
                  "[Install]\nWantedBy=multi-user.target\nEOF\n"
                  "sudo systemctl daemon-reload\nsudo systemctl enable --now system-scanner\njournalctl -u system-scanner -f"))
 
@@ -221,8 +229,11 @@ tbl = Table([
     [Paragraph("“Permission denied” on Linux/macOS", BODY),
      Paragraph("Binary not executable — run <font face='Courier'>chmod +x client_scanner-*</font>.", BODY)],
     [Paragraph("“App can’t be opened” on macOS", BODY),
-     Paragraph("Gatekeeper quarantine — run <font face='Courier'>xattr -d com.apple.quarantine client_scanner-macos</font>, "
+     Paragraph("Gatekeeper quarantine — run <font face='Courier'>xattr -dr com.apple.quarantine \"System Scanner.app\"</font>, "
                "or use System Settings → Privacy &amp; Security → Allow Anyway.", BODY)],
+    [Paragraph("dpkg reports missing dependencies", BODY),
+     Paragraph("Run <font face='Courier'>sudo apt -f install</font> to fix up, then retry. Or use the "
+               "portable zip: <font face='Courier'>/download-client/?os=linux&amp;format=zip</font>.", BODY)],
     [Paragraph("Client stuck at “Pending”", BODY),
      Paragraph("An admin must approve it from the dashboard, or the device re-registers each poll. "
                "Approve once — approval persists by registration key.", BODY)],

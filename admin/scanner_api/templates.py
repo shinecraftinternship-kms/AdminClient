@@ -294,7 +294,9 @@ def login_view(request):
         if next_url and next_url != "/":
             response = redirect(normalize_next_url(next_url, ""))
         else:
-            response = redirect(connect_url)
+            # Land directly on the dashboard after sign-in; the personal
+            # connect URL stays available from the sidebar.
+            response = redirect("/dashboard/")
         response.set_cookie(
             "scanner_auth",
             payload,
@@ -426,11 +428,25 @@ def download_client_view(request):
             ("client_scanner.exe", "client_scanner.exe", "application/vnd.microsoft.portable-executable"),
         ]
     elif target_os == "macos":
+        # .zip containing "System Scanner.app" bundle
         primary = ("client_scanner-macos.zip", "client_scanner-macos.zip", "application/zip")
         fallbacks = [("client_scanner-macos", "client_scanner-macos", "application/octet-stream")]
     else:
-        primary = ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip")
-        fallbacks = [("client_scanner-linux", "client_scanner-linux", "application/octet-stream")]
+        if fmt == "zip":
+            primary = ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip")
+        else:
+            # Debian/Ubuntu: install with `sudo dpkg -i` or double-click in
+            # Ubuntu Software. Falls back to the zip for other distros.
+            primary = (
+                "system-scanner_1.7.0_amd64.deb",
+                "system-scanner_1.7.0_amd64.deb",
+                "application/vnd.debian.binary-package",
+            )
+        fallbacks = [
+            ("system-scanner_1.7.0_amd64.deb", "system-scanner_1.7.0_amd64.deb", "application/vnd.debian.binary-package"),
+            ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip"),
+            ("client_scanner-linux", "client_scanner-linux", "application/octet-stream"),
+        ]
 
     chosen = None
     for name, out_name, ctype in (primary,) + tuple(fallbacks):

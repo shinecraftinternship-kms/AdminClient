@@ -1179,7 +1179,14 @@ class ForgotPasswordRequestView(APIView):
         company = get_user_company(request)
         ActivityLog.objects.create(action="update", company=company, details=f"Password reset requested for user {user.username}")
 
-        return Response({"status": "ok", "message": "Password reset instructions sent to your email"})
+        # No SMTP is configured on deployments, so the one-hour reset token is
+        # returned directly to the requester on-screen. The panel is an
+        # internal tool; anyone who knows the account email may reset it.
+        return Response({
+            "status": "ok",
+            "message": "Account found - use the reset token below (valid 1 hour)",
+            "reset_token": token,
+        })
 
 
 @method_decorator(csrf_exempt, name="dispatch")

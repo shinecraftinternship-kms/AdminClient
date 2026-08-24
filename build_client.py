@@ -142,6 +142,120 @@ def package_windows(binary_path):
     return exe_dest, zip_dest
 
 
+def package_linux_deb(binary_path):
+    """Build a native .deb package (Debian/Ubuntu) around the Linux binary.
+
+    Layout:
+      DEBIAN/control
+      usr/local/bin/system-scanner
+    Requires dpkg-deb (present on Debian/Ubuntu runners and systems).
+    """
+    if shutil.which("dpkg-deb") is None:
+        print("[WARN] dpkg-deb not found - skipping .deb package")
+        return None
+
+    pkg_name = "system-scanner"
+    stage = os.path.join(BUILD_DIR, "deb_stage")
+    if os.path.exists(stage):
+        shutil.rmtree(stage)
+    bin_dir = os.path.join(stage, "usr", "local", "bin")
+    deb_dir = os.path.join(stage, "DEBIAN")
+    os.makedirs(bin_dir)
+    os.makedirs(deb_dir)
+
+    installed_bin = os.path.join(bin_dir, pkg_name)
+    shutil.copy2(binary_path, installed_bin)
+    os.chmod(installed_bin, 0o755)
+
+    with open(os.path.join(deb_dir, "control"), "w", newline="\n") as fh:
+        fh.write(
+            f"Package: {pkg_name}\n"
+            "Version: 1.7.0\n"
+            "Section: utils\n"
+            "Priority: optional\n"
+            "Architecture: amd64\n"
+            "Maintainer: System Scanner Pro <admin@systemscanner.local>\n"
+            "Depends: libc6\n"
+            "Description: System Scanner Pro monitoring client\n"
+            " Reports hardware/software inventory, heartbeats and events to the\n"
+            " System Scanner Pro admin panel over HTTPS.\n"
+        )
+    # postinst: restart service if it exists
+    with open(os.path.join(deb_dir, "postinst"), "w", newline="\n") as fh:
+        fh.write("#!/bin/sh\nset -e\n"
+                 "if command -v systemctl >/dev/null 2>&1; then\n"
+                 "  systemctl daemon-reload || true\n"
+                 "  if systemctl list-unit-files | grep -q '^system-scanner.service'; then\n"
+                 "    systemctl try-restart system-scanner || true\n"
+                 "  fi\n"
+                 "fi\n")
+    os.chmod(os.path.join(deb_dir, "postinst"), 0o755)
+
+    deb_path = os.path.join(DIST_DIR, f"{pkg_name}_1.7.0_amd64.deb")
+    result = subprocess.run(
+        ["dpkg-deb", "--build", "--root-owner-group", stage, deb_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"[WARN] dpkg-deb failed: {result.stderr.strip()}")
+        return None
+    return deb_path
+
+
+def package_macos_app(binary_path):
+    """Bundle the macOS binary into a proper System Scanner.app and zip it."""
+    app_name = "System Scanner.app"
+    contents = os.path.join(BUILD_DIR, app_name, "Contents")
+    macos_dir = os.path.join(contents, "MacOS")
+    if os.path.exists(os.path.dirname(contents)):
+        shutil.rmtree(os.path.dirname(contents))
+    os.makedirs(macos_dir)
+
+    exe_name = os.path.basename(binary_path)
+    shutil.copy2(binary_path, os.path.join(macos_dir, exe_name))
+    os.chmod(os.path.join(macos_dir, exe_name), 0o755)
+
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>System Scanner</string>
+    <key>CFBundleDisplayName</key>
+    <string>System Scanner</string>
+    <key>CFBundleIdentifier</key>
+    <string>local.systemscanner.client</string>
+    <key>CFBundleVersion</key>
+    <string>1.7.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.7.0</string>
+    <key>CFBundleExecutable</key>
+    <string>{exe_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
+"""
+    with open(os.path.join(contents, "Info.plist"), "w", newline="\n") as fh:
+        fh.write(plist)
+
+    zip_dest = os.path.join(DIST_DIR, "client_scanner-macos.zip")
+    with zipfile.ZipFile(zip_dest, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(os.path.dirname(contents)):
+            for f in files:
+                full = os.path.join(root, f)
+                arcname = os.path.relpath(full, BUILD_DIR)
+                info = zipfile.ZipInfo(arcname)
+                info.external_attr = 0o755 << 16 if "/MacOS/" in arcname else 0o644 << 16
+                with open(full, "rb") as fh:
+                    zf.writestr(info, fh.read(), compress_type=zipfile.ZIP_DEFLATED)
+    return zip_dest
+
+
 def package_unix(binary_path, os_tag):
     """Linux/macOS ZIP containing the native binary + launch instructions."""
     name = os.path.basename(binary_path)
@@ -298,15 +412,26 @@ exe = EXE(
         artifacts.append((zip_dest, "ZIP"))
     else:
         os_tag = "macos" if IS_MACOS else "linux"
-        zip_dest = package_unix(binary_path, os_tag)
-        # Copy into admin/data so the /download-client/ endpoint can serve
-        # this platform the same way it serves the Windows build.
         bin_dest = os.path.join(DATA_DIR, OUTPUT_NAME)
         shutil.copy2(binary_path, bin_dest)
-        data_zip = os.path.join(DATA_DIR, f"client_scanner-{os_tag}.zip")
-        shutil.copy2(zip_dest, data_zip)
         artifacts.append((bin_dest, "BIN"))
-        artifacts.append((data_zip, "ZIP"))
+
+        if IS_LINUX:
+            deb_dest = package_linux_deb(binary_path)
+            if deb_dest:
+                data_deb = os.path.join(DATA_DIR, os.path.basename(deb_dest))
+                shutil.copy2(deb_dest, data_deb)
+                artifacts.append((data_deb, "DEB"))
+            # Fallback zip for non-Debian distros
+            zip_dest = package_unix(binary_path, os_tag)
+            data_zip = os.path.join(DATA_DIR, f"client_scanner-{os_tag}.zip")
+            shutil.copy2(zip_dest, data_zip)
+            artifacts.append((data_zip, "ZIP"))
+        else:
+            app_zip = package_macos_app(binary_path)
+            data_zip = os.path.join(DATA_DIR, "client_scanner-macos.zip")
+            shutil.copy2(app_zip, data_zip)
+            artifacts.append((data_zip, "APP"))
 
     print()
     print("=" * 55)
