@@ -653,58 +653,54 @@ def _get_peripherals():
                         per["printers"].append(entry)
                     elif is_usb and pnp not in ("usb", "system", "computer", "hdc", "diskdrive"):
                         per["other_usb"].append(entry)
-            # Scan for monitors/displays using multiple methods
+            # Scan for monitors/displays using multiple methods and merge results
             try:
-                # Method 1: WmiMonitorID (most reliable for all monitors)
-                stdout_mon2, _, _ = run_powershell(
-                    "Get-CimInstance -Namespace root\\wmi WmiMonitorID 2>$null | Select-Object ManufacturerName,ProductCodeID,SerialNumberID,UserFriendlyName,VideoInputType | ConvertTo-Json"
-                )
-                if stdout_mon2 and stdout_mon2 not in ("", "null", "[]"):
-                    mon_items2 = json.loads(stdout_mon2) if stdout_mon2.startswith("[") else [json.loads(stdout_mon2)]
-                    if not isinstance(mon_items2, list):
-                        mon_items2 = [mon_items2]
-                    for mon in mon_items2:
-                        def _decode_wmi_str(arr):
-                            if isinstance(arr, list):
-                                return "".join(chr(c) for c in arr if c != 0).strip()
-                            return ""
-                        mfr = _decode_wmi_str(mon.get("ManufacturerName") or [])
-                        model = _decode_wmi_str(mon.get("UserFriendlyName") or [])
-                        serial_arr = mon.get("SerialNumberID") or []
-                        serial = _decode_wmi_str(serial_arr) if isinstance(serial_arr, list) else str(serial_arr)
-                        per["monitors"].append({
-                            "name": model or "Monitor", "manufacturer": mfr,
-                            "model": model or "Monitor", "serial": serial,
-                            "status": "OK", "usb": False
-                        })
-                # Method 2: Win32_DesktopMonitor for resolution info
-                stdout_mon, _, _ = run_powershell(
-                    "Get-CimInstance Win32_DesktopMonitor | Select-Object Name,Manufacturer,ScreenWidth,ScreenHeight,PNPDeviceID | ConvertTo-Json"
-                )
-                if stdout_mon and stdout_mon not in ("", "null", "[]"):
-                    mon_items = json.loads(stdout_mon) if stdout_mon.startswith("[") else [json.loads(stdout_mon)]
-                    if not isinstance(mon_items, list):
-                        mon_items = [mon_items]
-                    for idx, mon in enumerate(mon_items):
-                        name = (mon.get("Name") or "Monitor").strip()
-                        mfr = (mon.get("Manufacturer") or "").strip()
-                        width = mon.get("ScreenWidth") or ""
-                        height = mon.get("ScreenHeight") or ""
-                        resolution = f"{width}x{height}" if width and height else ""
-                        if idx < len(per["monitors"]):
-                            if resolution:
-                                per["monitors"][idx]["resolution"] = resolution
-                            if not per["monitors"][idx].get("manufacturer") and mfr:
-                                per["monitors"][idx]["manufacturer"] = mfr
-                        else:
-                            per["monitors"].append({
-                                "name": name, "manufacturer": mfr, "model": name,
-                                "resolution": resolution, "status": "OK", "usb": False
-                            })
-                # Method 3: Win32_PnPEntity display class for any remaining monitors
-                if not per["monitors"]:
+                def _decode_wmi_str(arr):
+                    if isinstance(arr, list):
+                        return "".join(chr(c) for c in arr if c != 0).strip()
+                    return ""
+
+                def _monitor_key(name, serial=""):
+                    """Dedup key: prefer serial, fallback to normalised name."""
+                    if serial and serial.lower() not in ("", "none"):
+                        return f"sn:{serial.lower()}"
+                    return f"name:{(name or '').lower().strip()}"
+
+                seen_monitors = {}
+
+                # Method 1: WmiMonitorID (most reliable, needs admin on some systems)
+                try:
+                    stdout_mon2, _, _ = run_powershell(
+                        "Get-CimInstance -Namespace root\\wmi WmiMonitorID 2>$null | "
+                        "Select-Object ManufacturerName,ProductCodeID,SerialNumberID,"
+                        "UserFriendlyName,VideoInputType | ConvertTo-Json"
+                    )
+                    if stdout_mon2 and stdout_mon2 not in ("", "null", "[]"):
+                        mon_items2 = json.loads(stdout_mon2) if stdout_mon2.startswith("[") else [json.loads(stdout_mon2)]
+                        if not isinstance(mon_items2, list):
+                            mon_items2 = [mon_items2]
+                        for mon in mon_items2:
+                            mfr = _decode_wmi_str(mon.get("ManufacturerName") or [])
+                            model = _decode_wmi_str(mon.get("UserFriendlyName") or [])
+                            serial_arr = mon.get("SerialNumberID") or []
+                            serial = _decode_wmi_str(serial_arr) if isinstance(serial_arr, list) else str(serial_arr)
+                            key = _monitor_key(model, serial)
+                            if key not in seen_monitors:
+                                seen_monitors[key] = {
+                                    "name": model or "Monitor", "manufacturer": mfr,
+                                    "model": model or "Monitor", "serial": serial,
+                                    "status": "OK", "usb": False
+                                }
+                except Exception:
+                    pass
+
+                # Method 2: Win32_PnPEntity display class (works without admin)
+                try:
                     stdout_pnp, _, _ = run_powershell(
-                        "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Monitor' -or $_.ClassGuid -eq '{4d36e96e-e325-11ce-bfc1-08002be10318}' } | Select-Object Name,Manufacturer,DeviceID | ConvertTo-Json"
+                        "Get-CimInstance Win32_PnPEntity | Where-Object { "
+                        "$_.PNPClass -eq 'Monitor' -or "
+                        "$_.ClassGuid -eq '{4d36e96e-e325-11ce-bfc1-08002be10318}' } | "
+                        "Select-Object Name,Manufacturer,DeviceID | ConvertTo-Json"
                     )
                     if stdout_pnp and stdout_pnp not in ("", "null", "[]"):
                         pnp_items = json.loads(stdout_pnp) if stdout_pnp.startswith("[") else [json.loads(stdout_pnp)]
@@ -713,10 +709,61 @@ def _get_peripherals():
                         for mon in pnp_items:
                             name = (mon.get("Name") or "Monitor").strip()
                             mfr = (mon.get("Manufacturer") or "").strip()
-                            per["monitors"].append({
-                                "name": name, "manufacturer": mfr, "model": name,
-                                "status": "OK", "usb": False
-                            })
+                            dev_id = mon.get("DeviceID") or ""
+                            # Extract serial from DeviceID if available
+                            serial_from_id = ""
+                            if dev_id and "\\\\" in dev_id:
+                                parts = dev_id.split("\\")
+                                serial_from_id = parts[-1] if parts else ""
+                            key = _monitor_key(name, serial_from_id)
+                            if key not in seen_monitors:
+                                seen_monitors[key] = {
+                                    "name": name, "manufacturer": mfr, "model": name,
+                                    "serial": serial_from_id, "status": "OK", "usb": False
+                                }
+                            elif not seen_monitors[key].get("manufacturer") and mfr:
+                                seen_monitors[key]["manufacturer"] = mfr
+                except Exception:
+                    pass
+
+                # Method 3: Win32_DesktopMonitor for resolution info
+                try:
+                    stdout_mon, _, _ = run_powershell(
+                        "Get-CimInstance Win32_DesktopMonitor | "
+                        "Select-Object Name,Manufacturer,ScreenWidth,ScreenHeight,PNPDeviceID | ConvertTo-Json"
+                    )
+                    if stdout_mon and stdout_mon not in ("", "null", "[]"):
+                        mon_items = json.loads(stdout_mon) if stdout_mon.startswith("[") else [json.loads(stdout_mon)]
+                        if not isinstance(mon_items, list):
+                            mon_items = [mon_items]
+                        for mon in mon_items:
+                            name = (mon.get("Name") or "Monitor").strip()
+                            mfr = (mon.get("Manufacturer") or "").strip()
+                            width = mon.get("ScreenWidth") or ""
+                            height = mon.get("ScreenHeight") or ""
+                            resolution = f"{width}x{height}" if width and height else ""
+                            pnp_id = mon.get("PNPDeviceID") or ""
+                            serial_from_pnp = ""
+                            if pnp_id and "\\\\" in pnp_id:
+                                parts = pnp_id.split("\\")
+                                serial_from_pnp = parts[-1] if parts else ""
+                            key = _monitor_key(name, serial_from_pnp)
+                            if key in seen_monitors:
+                                if resolution:
+                                    seen_monitors[key]["resolution"] = resolution
+                                if not seen_monitors[key].get("manufacturer") and mfr:
+                                    seen_monitors[key]["manufacturer"] = mfr
+                            elif resolution:
+                                seen_monitors[key] = {
+                                    "name": name, "manufacturer": mfr, "model": name,
+                                    "serial": serial_from_pnp, "resolution": resolution,
+                                    "status": "OK", "usb": False
+                                }
+                except Exception:
+                    pass
+
+                # Finalise: convert dedup dict to list
+                per["monitors"] = list(seen_monitors.values())
             except Exception:
                 pass
             stdout, _, _ = run_powershell(
