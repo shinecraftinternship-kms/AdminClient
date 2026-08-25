@@ -20,7 +20,7 @@
             <hr>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item">
-                    <a href="{% prefixed_url '/' %}" class="nav-link {% if request.path == '/' %}active{% endif %}">
+                    <a href="{% prefixed_url '/dashboard/' %}" class="nav-link {% if request.path == '/' or request.path == '/dashboard/' %}active{% endif %}">
                         <i class="bi bi-grid me-2"></i>Dashboard
                     </a>
                 </li>

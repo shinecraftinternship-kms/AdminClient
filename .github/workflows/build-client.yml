@@ -38,7 +38,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller psutil requests websockets watchdog netifaces wmi; if ($env:RUNNER_OS -ne 'Windows') { pip uninstall -y wmi }
+          pip install pyinstaller psutil requests websockets watchdog netifaces
 
       - name: Build binary
         run: python build_client.py
@@ -66,5 +66,7 @@ jobs:
           name: client_scanner-${{ matrix.platform }}
           path: |
             dist/client_scanner*
+            dist/system-scanner*.deb
             admin/data/client_scanner*
+            admin/data/system-scanner*.deb
           if-no-files-found: error

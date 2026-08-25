@@ -18,6 +18,7 @@ MANIFEST_FILE = os.path.join(CLIENT_DIR, "client_scanner.exe.manifest")
 
 IS_WINDOWS = sys.platform == "win32"
 IS_MACOS = sys.platform == "darwin"
+IS_LINUX = sys.platform.startswith("linux")
 
 # Per-OS output names: a single binary format cannot run on every OS, so each
 # platform gets its own PyInstaller onefile build:

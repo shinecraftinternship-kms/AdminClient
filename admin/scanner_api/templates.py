@@ -40,12 +40,16 @@ def normalize_next_url(next_url, prefix):
 
 
 def public_root(request):
-    """Default public landing page.
+    """Default landing page.
+
     - If not authenticated: redirect to login
-    - If authenticated: redirect to user's personal connect page
+    - If authenticated: go straight to the dashboard. The personal connect
+      page stays reachable at /connect/<user>/<company>/ (linked from
+      Admin Server page) but is never forced on navigation.
     """
     if not request.user.is_authenticated:
         return redirect("/login/")
+    return redirect("/dashboard/")
 
     from django.contrib.auth.models import User
     from .models import AdministratorProfile, Company
@@ -284,18 +288,12 @@ def login_view(request):
 
         request.session.pop("url_prefix", None)
 
-        # Redirect to user's personal connect page after login so they can see their unique connection URL
-        from django.utils.text import slugify as _slugify
-        user_company = _profile.company
-        company_slug = user_company.slug if user_company else (_slugify(user.username) or user.username.lower().replace(" ", "-"))
-        connect_url = f"/connect/{user.username}/{company_slug}/"
-
         next_url = request.POST.get("next") or request.GET.get("next")
         if next_url and next_url != "/":
             response = redirect(normalize_next_url(next_url, ""))
         else:
-            # Land directly on the dashboard after sign-in; the personal
-            # connect URL stays available from the sidebar.
+            # Land directly on the dashboard after sign-in. The personal
+            # connect URL is available from Admin Server page, never forced.
             response = redirect("/dashboard/")
         response.set_cookie(
             "scanner_auth",
