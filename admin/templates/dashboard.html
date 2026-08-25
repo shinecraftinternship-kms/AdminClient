@@ -33,11 +33,19 @@
                 <i class="bi bi-download"></i> Download Client
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="/download-client/?format=exe"><i class="bi bi-file-earmark me-2"></i>Download Client (.exe)</a></li>
-                <li><a class="dropdown-item" href="/download-client/?format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Download Client (.zip)</a></li>
+                <li><h6 class="dropdown-header">Windows</h6></li>
+                <li><a class="dropdown-item" href="/download-client/?os=windows&format=exe"><i class="bi bi-windows me-2"></i>Download Client (.exe)</a></li>
+                <li><a class="dropdown-item" href="/download-client/?os=windows&format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Download Client (.zip)</a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><small class="dropdown-item-text text-secondary px-3"><i class="bi bi-info-circle me-1"></i>Run the .exe to install the client</small></li>
-                <li><small class="dropdown-item-text text-secondary px-3"><i class="bi bi-info-circle me-1"></i>v3.0 - System Scanner Pro Client</small></li>
+                <li><h6 class="dropdown-header">Linux</h6></li>
+                <li><a class="dropdown-item" href="/download-client/?os=linux"><i class="bi bi-linux me-2"></i>Download Client (.deb)</a></li>
+                <li><a class="dropdown-item" href="/download-client/?os=linux&format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Download Client (.zip)</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header">macOS</h6></li>
+                <li><a class="dropdown-item" href="/download-client/?os=macos"><i class="bi bi-apple me-2"></i>Download Client (.app)</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><small class="dropdown-item-text text-secondary px-3"><i class="bi bi-info-circle me-1"></i>.deb installs on Debian/Ubuntu; unzip the .app on macOS</small></li>
+                <li><small class="dropdown-item-text text-secondary px-3"><i class="bi bi-info-circle me-1"></i>v3.1 - System Scanner Pro Client</small></li>
             </ul>
         </div>
         <button class="btn btn-outline-info" onclick="exportCSV()" title="Export CSV">

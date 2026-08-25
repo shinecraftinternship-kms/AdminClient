@@ -66,10 +66,24 @@
     </style>
 </head>
 <body>
-    <a href="/download-client/?format=exe" class="btn btn-outline-success btn-sm download-btn">
-        <i class="bi bi-download me-1"></i> Download Client (.exe)
-    </a>
-    <small class="text-muted position-absolute" style="bottom:0.5rem;right:1rem;font-size:0.65rem;">Run the .exe to install the client</small>
+    <div class="dropdown download-btn">
+        <a href="#" class="btn btn-outline-success btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="bi bi-download me-1"></i> Download Client
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">Windows</h6></li>
+            <li><a class="dropdown-item" href="/download-client/?os=windows&format=exe"><i class="bi bi-windows me-2"></i>Windows (.exe)</a></li>
+            <li><a class="dropdown-item" href="/download-client/?os=windows&format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Windows (.zip)</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Linux</h6></li>
+            <li><a class="dropdown-item" href="/download-client/?os=linux"><i class="bi bi-linux me-2"></i>Linux (.deb)</a></li>
+            <li><a class="dropdown-item" href="/download-client/?os=linux&format=zip"><i class="bi bi-file-earmark-zip me-2"></i>Linux (.zip)</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">macOS</h6></li>
+            <li><a class="dropdown-item" href="/download-client/?os=macos"><i class="bi bi-apple me-2"></i>macOS (.app)</a></li>
+        </ul>
+    </div>
+    <small class="text-muted position-absolute" style="bottom:0.5rem;right:1rem;font-size:0.65rem;">Run the installer to connect this device</small>
     <div class="login-container">
         <div class="login-card">
             <div class="card">
