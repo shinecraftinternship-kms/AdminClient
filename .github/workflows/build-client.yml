@@ -45,7 +45,8 @@ jobs:
 
       # Commit each platform's binary into admin/data so the admin panel's
       # /download-client/ endpoint serves every OS automatically (the Vercel
-      # deployment ships files straight from the repo).
+      # deployment ships files straight from the repo). Three matrix jobs
+      # push concurrently, so retry the rebase/push a few times.
       - name: Commit binaries for download endpoint
         if: github.ref == 'refs/heads/main'
         run: |
@@ -54,11 +55,22 @@ jobs:
           git add admin/data/
           if git diff --cached --quiet; then
             echo "No binary changes to commit"
-          else
-            git commit -m "build: refresh ${{ matrix.platform }} client binary [skip ci]"
-            git pull --rebase origin main
-            git push origin HEAD:main
+            exit 0
           fi
+          git commit -m "build: refresh ${{ matrix.platform }} client binary [skip ci]"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "Pushed on attempt $i"
+              exit 0
+            fi
+            echo "Push conflict (attempt $i), retrying..."
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
+            git cherry-pick main --no-commit 2>/dev/null || true
+            sleep $((i * 5))
+          done
+          exit 1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
