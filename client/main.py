@@ -1,6 +1,8 @@
 import sys
 import os
 import traceback
+import subprocess
+import urllib.request
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _script_dir)
@@ -213,13 +215,20 @@ def display_summary(data):
     P(f"  Platform:      {plat}")
     P(f"  Scanned at:    {ts}")
     P(f"  CPU:           {processor.get('model', 'N/A')}")
-    P(f"  RAM:           {ram.get('capacity_gb', 'N/A')}")
+    ram_info = ram.get('capacity_gb', 'N/A')
+    stick_count = ram.get('stick_count', 0)
+    if stick_count > 1:
+        ram_info += f" ({stick_count} sticks)"
+    P(f"  RAM:           {ram_info}")
     P(f"  OS:            {os_info.get('version', 'N/A')}")
     gpus = gpu if isinstance(gpu, list) else []
     P(f"  GPU(s):        {', '.join(g.get('name', '') for g in gpus) or 'N/A'}")
     disks = storage.get("disks", [])
     for d in disks:
         P(f"  Disk:          {d.get('model', 'N/A')} ({d.get('size_gb', '?')} GB)")
+    monitors = scan_data.get("peripherals", {}).get("monitors", [])
+    if monitors:
+        P(f"  Monitor(s):    {len(monitors)} connected")
 
 
 CLOUD_DISCOVERY_INTERVAL = 300
@@ -348,6 +357,115 @@ _global_event_dispatchers = []
 _global_event_monitors = []
 
 
+def _get_executable_path():
+    """Return the path of the currently running executable."""
+    if getattr(sys, 'frozen', False):
+        return os.path.abspath(sys.executable)
+    return os.path.abspath(__file__)
+
+
+def _perform_self_update(download_url, latest_version, is_mandatory=False):
+    """Download the new binary and restart via a self-replace script.
+
+    On Windows: creates a .bat that replaces the old exe and restarts it.
+    On Linux/macOS: creates a .sh that replaces the old binary and restarts it.
+    """
+    import tempfile
+    import hashlib
+
+    current_path = _get_executable_path()
+    is_windows = sys.platform == "win32"
+
+    now = datetime.now().strftime('%H:%M:%S')
+    P(f"  [{now}] [UPDATE] Downloading v{latest_version}...")
+
+    try:
+        # Determine download platform
+        if is_windows:
+            dl_platform = "windows"
+        elif sys.platform == "darwin":
+            dl_platform = "macos"
+        else:
+            dl_platform = "linux"
+
+        url = f"{download_url}?platform={dl_platform}"
+
+        # Download to temp file
+        tmp_dir = tempfile.gettempdir()
+        tmp_ext = ".exe" if is_windows else ""
+        tmp_file = os.path.join(tmp_dir, f"system_scanner_update{tmp_ext}")
+
+        req = urllib.request.Request(url)
+        req.add_header("User-Agent", "SystemScannerClient/1.0")
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            with open(tmp_file, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+        # Verify downloaded file is not empty
+        if os.path.getsize(tmp_file) < 1024:
+            P(f"  [{now}] [UPDATE] Downloaded file too small - aborting update")
+            return False
+
+        file_hash = hashlib.sha256()
+        with open(tmp_file, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                file_hash.update(chunk)
+        P(f"  [{now}] [UPDATE] Download complete. SHA-256: {file_hash.hexdigest()[:16]}...")
+
+        # Create self-replace script
+        if is_windows:
+            bat_content = f"""@echo off
+timeout /t 2 /nobreak >nul
+move /y "{tmp_file}" "{current_path}" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo Update successful - restarting...
+    start "" "{current_path}"
+) else (
+    echo Update failed - keeping old version
+    del "%~f0"
+)
+del "%~f0"
+"""
+            bat_file = os.path.join(tmp_dir, "system_scanner_update.bat")
+            with open(bat_file, "w") as f:
+                f.write(bat_content)
+            P(f"  [{now}] [UPDATE] Applying update and restarting...")
+            os.startfile(bat_file)
+        else:
+            sh_content = f"""#!/bin/bash
+sleep 2
+cp "{tmp_file}" "{current_path}"
+chmod +x "{current_path}"
+if [ $? -eq 0 ]; then
+    echo "Update successful - restarting..."
+    nohup "{current_path}" > /dev/null 2>&1 &
+fi
+rm -f "{tmp_file}"
+rm -f "$0"
+"""
+            sh_file = os.path.join(tmp_dir, "system_scanner_update.sh")
+            with open(sh_file, "w") as f:
+                f.write(sh_content)
+            os.chmod(sh_file, 0o755)
+            P(f"  [{now}] [UPDATE] Applying update and restarting...")
+            subprocess.Popen(["bash", sh_file])
+
+        # Exit current process
+        if is_mandatory:
+            P(f"  [{now}] [UPDATE] Mandatory update applied - restarting now.")
+        else:
+            P(f"  [{now}] [UPDATE] Update applied - restarting.")
+        sys.exit(0)
+
+    except Exception as e:
+        P(f"  [{now}] [UPDATE] Update failed: {e}")
+        return False
+
+
 def heartbeat_loop(comm, key, hostname, fingerprint):
     global _global_comm, _global_key
     _global_comm = comm
@@ -359,6 +477,8 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
     monitoring_agent_id = None
     monitoring_secret = None
     approval_ok = True
+    _heartbeat_count = 0
+    _last_update_check = 0
     threading.Thread(target=listen_admin_broadcast, args=(comm,), daemon=True).start()
 
     while True:
@@ -382,9 +502,6 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
             backoff = 5
 
             if resp.get("approved") is False:
-                # Admin deleted/revoked approval: the row was re-surfaced as
-                # pending. Tell the user and re-register so the admin can
-                # approve again, instead of pretending everything is fine.
                 if approval_ok:
                     P("  [WAITING] Approval removed by admin - waiting for re-approval...")
                     approval_ok = False
@@ -403,6 +520,19 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                 if sent:
                     now = datetime.now().strftime('%H:%M:%S')
                     P(f"  [{now}] Flushed {sent} queued events")
+
+            _heartbeat_count += 1
+            if resp.get("update_available") and _heartbeat_count - _last_update_check >= 10:
+                _last_update_check = _heartbeat_count
+                download_url = resp.get("download_url", "")
+                if download_url:
+                    now = datetime.now().strftime('%H:%M:%S')
+                    latest = resp.get("latest_version", "")
+                    P(f"  [{now}] [UPDATE] New version available: v{latest}")
+                    _perform_self_update(
+                        download_url, latest,
+                        is_mandatory=resp.get("is_mandatory", False),
+                    )
 
             if collect_metrics:
                 metrics = collect_metrics()
@@ -424,7 +554,6 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
 
                 if monitoring_registered and monitoring_agent_id and monitoring_secret:
                     try:
-                        # Use public HTTP heartbeat (no secret needed)
                         comm.monitor_heartbeat_public(key, metrics)
                     except Exception as e:
                         logger.debug("Public heartbeat send failed: %s", e)
@@ -457,8 +586,8 @@ def heartbeat_loop(comm, key, hostname, fingerprint):
                     backoff = 5
                 else:
                     P(f"  [{datetime.now().strftime('%H:%M:%S')}] Discovery failed, will keep retrying")
-        time.sleep(5)
-        backoff = 5
+        time.sleep(3)
+        backoff = 3
 
 
 class HeartbeatWatchdog:
@@ -1195,10 +1324,12 @@ def main():
         if _spawn_background():
             P("  Connected to admin server. Moving to background...")
             _log_crash("OK: spawned background agent; closing terminal")
-            try:
-                comm.ping(key, hostname, VERSION, fingerprint)
-            except Exception:
-                pass
+            for _ in range(5):
+                try:
+                    comm.ping(key, hostname, VERSION, fingerprint)
+                except Exception:
+                    pass
+                time.sleep(1)
             return
         _silent_output()
         _detach_console()

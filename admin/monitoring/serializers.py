@@ -27,9 +27,9 @@ class DeviceMonitoringInfoSerializer(serializers.ModelSerializer):
         if not obj.last_heartbeat:
             return False
         try:
-            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+            timeout = int(Setting.get("stale_threshold_seconds", "300"))
         except (TypeError, ValueError):
-            timeout = 120
+            timeout = 300
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_heartbeat >= cutoff
 
@@ -79,9 +79,9 @@ class DeviceMonitoringInfoListSerializer(serializers.ModelSerializer):
         if not obj.last_heartbeat:
             return False
         try:
-            timeout = int(Setting.get("stale_threshold_seconds", "120"))
+            timeout = int(Setting.get("stale_threshold_seconds", "300"))
         except (TypeError, ValueError):
-            timeout = 120
+            timeout = 300
         cutoff = timezone.now() - timedelta(seconds=timeout)
         return obj.last_heartbeat >= cutoff
 

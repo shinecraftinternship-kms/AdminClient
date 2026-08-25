@@ -129,4 +129,7 @@ urlpatterns = [
     # Executive Dashboard
     path("executive-analytics", views.ExecutiveAnalyticsView.as_view(), name="api-executive-analytics"),
     path("global-search", views.GlobalSearchView.as_view(), name="api-global-search"),
+
+    # ── Client Auto-Update ────────────────────────────────────────────────
+    path("client/download", views.ClientDownloadView.as_view(), name="api-client-download"),
 ]

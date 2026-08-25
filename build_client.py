@@ -33,6 +33,24 @@ else:
     OUTPUT_NAME = "client_scanner-linux"
 
 
+def _read_client_version():
+    """Read VERSION string from client/main.py."""
+    main_path = os.path.join(CLIENT_DIR, "main.py")
+    try:
+        with open(main_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip().startswith("VERSION"):
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        return parts[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return "1.7.0"
+
+
+CLIENT_VERSION = _read_client_version()
+
+
 def check_pyinstaller():
     try:
         import PyInstaller  # noqa: F401
@@ -171,7 +189,7 @@ def package_linux_deb(binary_path):
     with open(os.path.join(deb_dir, "control"), "w", newline="\n") as fh:
         fh.write(
             f"Package: {pkg_name}\n"
-            "Version: 1.7.0\n"
+            f"Version: {CLIENT_VERSION}\n"
             "Section: utils\n"
             "Priority: optional\n"
             "Architecture: amd64\n"
@@ -192,7 +210,7 @@ def package_linux_deb(binary_path):
                  "fi\n")
     os.chmod(os.path.join(deb_dir, "postinst"), 0o755)
 
-    deb_path = os.path.join(DIST_DIR, f"{pkg_name}_1.7.0_amd64.deb")
+    deb_path = os.path.join(DIST_DIR, f"{pkg_name}_{CLIENT_VERSION}_amd64.deb")
     result = subprocess.run(
         ["dpkg-deb", "--build", "--root-owner-group", stage, deb_path],
         capture_output=True, text=True,
@@ -227,9 +245,9 @@ def package_macos_app(binary_path):
     <key>CFBundleIdentifier</key>
     <string>local.systemscanner.client</string>
     <key>CFBundleVersion</key>
-    <string>1.7.0</string>
+    <string>{CLIENT_VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.7.0</string>
+    <string>{CLIENT_VERSION}</string>
     <key>CFBundleExecutable</key>
     <string>{exe_name}</string>
     <key>CFBundlePackageType</key>

@@ -130,7 +130,8 @@ def _get_processor():
 
 
 def _get_ram():
-    r = {"manufacturer": "", "capacity_gb": "", "serial": "", "frequency_mhz": 0, "slot": ""}
+    sticks = []
+    total_gb = 0.0
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
@@ -138,16 +139,25 @@ def _get_ram():
             )
             if stdout and stdout not in ("", "null"):
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
-                if items:
-                    item = items[0] if isinstance(items, list) else items
-                    r["manufacturer"] = item.get("Manufacturer") or ""
+                if not isinstance(items, list):
+                    items = [items]
+                for item in items:
+                    s = {"manufacturer": "", "capacity_gb": "", "serial": "", "frequency_mhz": 0, "slot": ""}
+                    s["manufacturer"] = item.get("Manufacturer") or ""
                     cap = item.get("Capacity", 0)
                     if cap:
-                        cap_gb = cap / (1024**3) if isinstance(cap, (int, float)) and cap > 1000 else float(cap)
-                        r["capacity_gb"] = f"{cap_gb:.2f} GB"
-                    r["serial"] = item.get("SerialNumber") or ""
-                    r["frequency_mhz"] = item.get("Speed") or 0
-                    r["slot"] = item.get("DeviceLocator") or ""
+                        try:
+                            cap_gb = cap / (1024**3) if isinstance(cap, (int, float)) and cap > 1000 else float(cap)
+                            s["capacity_gb"] = f"{cap_gb:.2f} GB"
+                            total_gb += cap_gb
+                        except (ValueError, TypeError):
+                            pass
+                    serial = item.get("SerialNumber") or ""
+                    if serial and serial not in ("00000000", "To Be Filled By O.E.M.", "0000000000", ""):
+                        s["serial"] = serial.strip()
+                    s["frequency_mhz"] = item.get("Speed") or 0
+                    s["slot"] = item.get("DeviceLocator") or ""
+                    sticks.append(s)
         elif sys.platform == "linux":
             meminfo = read_file("/proc/meminfo")
             for line in meminfo.splitlines():
@@ -156,46 +166,81 @@ def _get_ram():
                     if len(parts) >= 2:
                         try:
                             kb = int(parts[1])
-                            r["capacity_gb"] = f"{kb / (1024**2):.2f} GB"
+                            total_gb = kb / (1024**2)
                         except ValueError:
                             pass
             stdout, _, _ = run_command(
-                "dmidecode -t memory 2>/dev/null | grep -E 'Manufacturer:|Speed:|Serial Number:|Part Number:|Locator:' | head -10",
+                "dmidecode -t memory 2>/dev/null | grep -A5 -i 'Memory Device'",
                 shell=True, timeout=15,
             )
+            current = {}
             for line in stdout.splitlines():
+                line = line.strip()
+                if not line or line == "--":
+                    if current:
+                        sticks.append(current)
+                        current = {}
+                    continue
                 if ":" in line:
                     k, v = line.split(":", 1)
                     k, v = k.strip(), v.strip()
-                    if k == "Manufacturer" and not r["manufacturer"]:
-                        r["manufacturer"] = v
-                    if k == "Speed" and not r["frequency_mhz"]:
+                    if k == "Manufacturer":
+                        current["manufacturer"] = v
+                    elif k == "Size" and v != "No Module Installed":
+                        current["capacity_gb"] = v
+                    elif k == "Speed":
                         try:
-                            r["frequency_mhz"] = int(v.replace("MHz", "").strip())
-                        except ValueError:
+                            current["frequency_mhz"] = int(v.replace("MHz", "").strip())
+                        except (ValueError, TypeError):
                             pass
-                    if k == "Serial Number" and not r["serial"]:
-                        r["serial"] = v
-                    if k == "Locator" and not r["slot"]:
-                        r["slot"] = v
+                    elif k == "Serial Number":
+                        current["serial"] = v if v else ""
+                    elif k == "Locator":
+                        current["slot"] = v
+            if current and current.get("manufacturer"):
+                sticks.append(current)
+            if not sticks:
+                s = {"manufacturer": "", "capacity_gb": f"{total_gb:.2f} GB" if total_gb else "", "serial": "", "frequency_mhz": 0, "slot": ""}
+                sticks.append(s)
         elif sys.platform == "darwin":
             stdout, _, _ = run_command(["system_profiler", "SPMemoryDataType"], timeout=30)
+            current = {}
             for line in stdout.splitlines():
                 if ":" in line:
                     k, v = line.split(":", 1)
                     k, v = k.strip(), v.strip()
                     if "Size" in k:
-                        r["capacity_gb"] = v
+                        if current:
+                            sticks.append(current)
+                        current = {"manufacturer": "", "capacity_gb": v, "serial": "", "frequency_mhz": 0, "slot": ""}
                     elif "Speed" in k:
                         try:
-                            r["frequency_mhz"] = int(v.replace("MHz", "").strip())
-                        except ValueError:
+                            current["frequency_mhz"] = int(v.replace("MHz", "").strip())
+                        except (ValueError, TypeError):
                             pass
                     elif "Serial Number" in k:
-                        r["serial"] = v
+                        current["serial"] = v
+                    elif "Vendor" in k:
+                        current["manufacturer"] = v
+            if current and current.get("capacity_gb"):
+                sticks.append(current)
     except Exception as e:
-        r["_error"] = str(e)
-    return r
+        pass
+
+    if not sticks:
+        sticks = [{"manufacturer": "", "capacity_gb": "", "serial": "", "frequency_mhz": 0, "slot": ""}]
+    first = sticks[0]
+    total_str = f"{total_gb:.2f} GB" if total_gb > 0 else first.get("capacity_gb", "")
+    return {
+        "manufacturer": first.get("manufacturer", ""),
+        "capacity_gb": total_str,
+        "total_capacity_gb": total_str,
+        "serial": first.get("serial", ""),
+        "frequency_mhz": first.get("frequency_mhz", 0),
+        "slot": first.get("slot", ""),
+        "sticks": sticks,
+        "stick_count": len(sticks),
+    }
 
 
 def _get_storage():
@@ -494,17 +539,40 @@ def _get_accounts():
 
 def _get_software():
     sw = []
+    seen = set()
     try:
         if sys.platform == "win32":
+            registry_paths = [
+                "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+                "HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+                "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
+            ]
+            for reg_path in registry_paths:
+                stdout, _, _ = run_powershell(
+                    f"Get-ItemProperty '{reg_path}' 2>$null | Select-Object DisplayName,DisplayVersion,Publisher | ConvertTo-Json"
+                )
+                if stdout and stdout not in ("", "null", "[]"):
+                    items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
+                    if not isinstance(items, list):
+                        items = [items]
+                    for item in items:
+                        name = (item.get("DisplayName") or "").strip()
+                        if name and name not in seen:
+                            seen.add(name)
+                            sw.append({"name": name, "version": item.get("DisplayVersion", "") or "", "publisher": item.get("Publisher") or ""})
+            # MS Store / UWP apps
             stdout, _, _ = run_powershell(
-                "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* 2>$null | Select-Object DisplayName,DisplayVersion,Publisher | ConvertTo-Json"
+                "Get-AppxPackage -AllUsers 2>$null | Select-Object Name,Version,Author | ConvertTo-Json"
             )
             if stdout and stdout not in ("", "null", "[]"):
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
-                for item in items if isinstance(items, list) else [items]:
-                    name = item.get("DisplayName") or ""
-                    if name:
-                        sw.append({"name": name, "version": item.get("DisplayVersion", "") or "", "publisher": item.get("Publisher") or ""})
+                if not isinstance(items, list):
+                    items = [items]
+                for item in items:
+                    name = (item.get("Name") or "").strip()
+                    if name and name not in seen:
+                        seen.add(name)
+                        sw.append({"name": name, "version": item.get("Version", "") or "", "publisher": item.get("Author") or "", "source": "msstore"})
     except Exception as e:
         print(f"  [WARN] Software scan failed: {e}")
     return sw
@@ -527,7 +595,7 @@ def _get_updates():
 
 
 def _get_peripherals():
-    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": [], "storage": [], "other_usb": []}
+    per = {"keyboard": [], "mouse": [], "audio": [], "webcam": [], "printers": [], "storage": [], "other_usb": [], "monitors": []}
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
@@ -562,6 +630,69 @@ def _get_peripherals():
                         per["printers"].append(entry)
                     elif is_usb and pnp not in ("usb", "system", "computer", "hdc", "diskdrive"):
                         per["other_usb"].append(entry)
+            # Monitor detection using multiple methods
+            try:
+                stdout_mon2, _, _ = run_powershell(
+                    "Get-CimInstance -Namespace root\\wmi WmiMonitorID 2>$null | Select-Object ManufacturerName,ProductCodeID,SerialNumberID,UserFriendlyName,VideoInputType | ConvertTo-Json"
+                )
+                if stdout_mon2 and stdout_mon2 not in ("", "null", "[]"):
+                    mon_items2 = json.loads(stdout_mon2) if stdout_mon2.startswith("[") else [json.loads(stdout_mon2)]
+                    if not isinstance(mon_items2, list):
+                        mon_items2 = [mon_items2]
+                    for mon in mon_items2:
+                        def _decode_wmi_str(arr):
+                            if isinstance(arr, list):
+                                return "".join(chr(c) for c in arr if c != 0).strip()
+                            return ""
+                        mfr = _decode_wmi_str(mon.get("ManufacturerName") or [])
+                        model = _decode_wmi_str(mon.get("UserFriendlyName") or [])
+                        serial_arr = mon.get("SerialNumberID") or []
+                        serial = _decode_wmi_str(serial_arr) if isinstance(serial_arr, list) else str(serial_arr)
+                        per["monitors"].append({
+                            "name": model or "Monitor", "manufacturer": mfr,
+                            "model": model or "Monitor", "serial": serial,
+                            "status": "OK", "usb": False
+                        })
+                stdout_mon, _, _ = run_powershell(
+                    "Get-CimInstance Win32_DesktopMonitor | Select-Object Name,Manufacturer,ScreenWidth,ScreenHeight,PNPDeviceID | ConvertTo-Json"
+                )
+                if stdout_mon and stdout_mon not in ("", "null", "[]"):
+                    mon_items = json.loads(stdout_mon) if stdout_mon.startswith("[") else [json.loads(stdout_mon)]
+                    if not isinstance(mon_items, list):
+                        mon_items = [mon_items]
+                    for idx, mon in enumerate(mon_items):
+                        name = (mon.get("Name") or "Monitor").strip()
+                        mfr = (mon.get("Manufacturer") or "").strip()
+                        width = mon.get("ScreenWidth") or ""
+                        height = mon.get("ScreenHeight") or ""
+                        resolution = f"{width}x{height}" if width and height else ""
+                        if idx < len(per["monitors"]):
+                            if resolution:
+                                per["monitors"][idx]["resolution"] = resolution
+                            if not per["monitors"][idx].get("manufacturer") and mfr:
+                                per["monitors"][idx]["manufacturer"] = mfr
+                        else:
+                            per["monitors"].append({
+                                "name": name, "manufacturer": mfr, "model": name,
+                                "resolution": resolution, "status": "OK", "usb": False
+                            })
+                if not per["monitors"]:
+                    stdout_pnp, _, _ = run_powershell(
+                        "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Monitor' -or $_.ClassGuid -eq '{4d36e96e-e325-11ce-bfc1-08002be10318}' } | Select-Object Name,Manufacturer,DeviceID | ConvertTo-Json"
+                    )
+                    if stdout_pnp and stdout_pnp not in ("", "null", "[]"):
+                        pnp_items = json.loads(stdout_pnp) if stdout_pnp.startswith("[") else [json.loads(stdout_pnp)]
+                        if not isinstance(pnp_items, list):
+                            pnp_items = [pnp_items]
+                        for mon in pnp_items:
+                            name = (mon.get("Name") or "Monitor").strip()
+                            mfr = (mon.get("Manufacturer") or "").strip()
+                            per["monitors"].append({
+                                "name": name, "manufacturer": mfr, "model": name,
+                                "status": "OK", "usb": False
+                            })
+            except Exception:
+                pass
             stdout, _, _ = run_powershell(
                 "Get-CimInstance Win32_DiskDrive | Where-Object {$_.InterfaceType -eq 'USB'} | Select-Object Model,Manufacturer,SerialNumber,Size | ConvertTo-Json -Depth 3"
             )

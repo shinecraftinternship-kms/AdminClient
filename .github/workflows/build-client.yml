@@ -1,84 +1,141 @@
 name: Build Client Binaries
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "client/**"
-      - "build_client.py"
-      - ".github/workflows/build-client.yml"
-
-permissions:
-  contents: write
+      - 'client/**'
+      - 'build_client.py'
+      - 'client_scanner.spec'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
     strategy:
-      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             platform: windows
+            artifact_name: client_scanner
+            artifact_ext: .exe
           - os: ubuntu-latest
             platform: linux
+            artifact_name: client_scanner-linux
+            artifact_ext: ""
           - os: macos-latest
             platform: macos
+            artifact_name: client_scanner-macos
+            artifact_ext: ""
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller psutil requests websockets watchdog netifaces
+          pip install pyinstaller psutil wmi
 
-      - name: Build binary
+      - name: Build client binary
         run: python build_client.py
 
-      # Commit each platform's binary into admin/data so the admin panel's
-      # /download-client/ endpoint serves every OS automatically (the Vercel
-      # deployment ships files straight from the repo). Three matrix jobs
-      # push concurrently, so retry the rebase/push a few times.
-      - name: Commit binaries for download endpoint
-        if: github.ref == 'refs/heads/main'
+      - name: Verify output
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            ls -lh admin/data/client_scanner.exe
+            ls -lh admin/data/client_scanner.zip
+          elif [ "${{ matrix.platform }}" = "linux" ]; then
+            ls -lh admin/data/client_scanner-linux
+            ls -lh admin/data/client_scanner-linux.zip
+            ls -lh admin/data/system-scanner_*.deb || echo "No .deb (dpkg-deb not on runner)"
+          else
+            ls -lh admin/data/client_scanner-macos
+            ls -lh admin/data/client_scanner-macos.zip
+          fi
+
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-windows
+          path: |
+            admin/data/client_scanner.exe
+            admin/data/client_scanner.zip
+          retention-days: 90
+
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-linux
+          path: |
+            admin/data/client_scanner-linux
+            admin/data/client_scanner-linux.zip
+            admin/data/system-scanner_*.deb
+          retention-days: 90
+
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-macos
+          path: |
+            admin/data/client_scanner-macos
+            admin/data/client_scanner-macos.zip
+          retention-days: 90
+
+  commit-binaries:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Copy binaries to admin/data
+        run: |
+          mkdir -p admin/data
+          # Windows
+          cp -f artifacts/client-windows/client_scanner.exe admin/data/ 2>/dev/null || true
+          cp -f artifacts/client-windows/client_scanner.zip admin/data/ 2>/dev/null || true
+          # Linux
+          cp -f artifacts/client-linux/client_scanner-linux admin/data/ 2>/dev/null || true
+          cp -f artifacts/client-linux/client_scanner-linux.zip admin/data/ 2>/dev/null || true
+          cp -f artifacts/client-linux/system-scanner_*.deb admin/data/ 2>/dev/null || true
+          # macOS
+          cp -f artifacts/client-macos/client_scanner-macos admin/data/ 2>/dev/null || true
+          cp -f artifacts/client-macos/client_scanner-macos.zip admin/data/ 2>/dev/null || true
+          echo "Binaries in admin/data:"
+          ls -lh admin/data/
+
+      - name: Commit updated binaries
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add admin/data/
-          if git diff --cached --quiet; then
+          CHANGED=$(git diff --cached --name-only)
+          if [ -n "$CHANGED" ]; then
+            VERSION=$(python -c "import re; print(re.search(r'VERSION\s*=\s*[\"'\''](.*?)[\"'\'']', open('client/main.py').read()).group(1))")
+            git commit -m "build: update client binaries v${VERSION} [skip ci]"
+            git push
+          else
             echo "No binary changes to commit"
-            exit 0
           fi
-          git commit -m "build: refresh ${{ matrix.platform }} client binary [skip ci]"
-          for i in 1 2 3 4 5; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
-              echo "Pushed on attempt $i"
-              exit 0
-            fi
-            echo "Push conflict (attempt $i), retrying..."
-            git rebase --abort 2>/dev/null || true
-            git fetch origin main
-            git reset --hard origin/main
-            git cherry-pick main --no-commit 2>/dev/null || true
-            sleep $((i * 5))
-          done
-          exit 1
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: client_scanner-${{ matrix.platform }}
-          path: |
-            dist/client_scanner*
-            dist/system-scanner*.deb
-            admin/data/client_scanner*
-            admin/data/system-scanner*.deb
-          if-no-files-found: error

@@ -499,6 +499,22 @@ class PingClientView(APIView):
         resp = {"status": "ok", "approved": client.approved, "deleted": client.deleted}
         if trigger:
             resp["trigger_scan"] = True
+
+        # Check for client update
+        try:
+            from monitoring.models import AgentVersion
+            latest = AgentVersion.objects.filter(is_active=True).order_by("-created_at").first()
+            if latest and client.client_version and client.client_version != latest.version:
+                resp["update_available"] = True
+                resp["latest_version"] = latest.version
+                resp["is_mandatory"] = latest.is_mandatory
+                resp["release_notes"] = latest.release_notes
+                # Default to the API download endpoint if no custom URL set
+                dl_url = latest.download_url or f"{request.scheme}://{request.get_host()}/api/client/download"
+                resp["download_url"] = dl_url
+        except Exception:
+            pass
+
         return Response(resp)
 
 
@@ -857,7 +873,7 @@ class SettingsView(APIView):
         company = get_user_company(request)
         return Response({
             "auto_approve": Setting.get("auto_approve", "false", company=company).lower() == "true",
-            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "120", company=company)),
+            "stale_threshold_seconds": int(Setting.get("stale_threshold_seconds", "300", company=company)),
             "scan_all_interval": int(Setting.get("scan_all_interval", "86400", company=company)),
             "admin_client_key": Setting.get("admin_client_key", ""),
         })
@@ -4125,3 +4141,61 @@ class SupabaseRegisterView(APIView):
             return Response({"status": "ok", "message": f"Registered {hostname} in Supabase"})
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class ClientDownloadView(APIView):
+    """Serve the latest client binary for auto-update.
+
+    Query params:
+      platform: windows | linux | macos  (default: auto-detect from User-Agent)
+    """
+
+    def get(self, request):
+        from django.http import FileResponse, Http404
+        import hashlib
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_dir = os.path.join(base_dir, "data")
+
+        platform_name = request.query_params.get("platform", "").lower()
+        if not platform_name:
+            ua = (request.META.get("HTTP_USER_AGENT", "") or "").lower()
+            if "win" in ua:
+                platform_name = "windows"
+            elif "mac" in ua or "darwin" in ua:
+                platform_name = "macos"
+            else:
+                platform_name = "linux"
+
+        file_map = {
+            "windows": [
+                ("client_scanner.exe", "client_scanner.exe", "application/vnd.microsoft.portable-executable"),
+                ("client_scanner.zip", "client_scanner.zip", "application/zip"),
+            ],
+            "linux": [
+                ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip"),
+                ("client_scanner-linux", "client_scanner-linux", "application/octet-stream"),
+            ],
+            "macos": [
+                ("client_scanner-macos.zip", "client_scanner-macos.zip", "application/zip"),
+                ("client_scanner-macos", "client_scanner-macos", "application/octet-stream"),
+            ],
+        }
+
+        candidates = [data_dir, os.path.join(os.getcwd(), "admin", "data")]
+        for fname, out_name, ctype in file_map.get(platform_name, []):
+            for d in candidates:
+                path = os.path.join(d, fname)
+                if os.path.exists(path):
+                    sha256 = hashlib.sha256()
+                    with open(path, "rb") as f:
+                        for chunk in iter(lambda: f.read(65536), b""):
+                            sha256.update(chunk)
+                    resp = FileResponse(open(path, "rb"), content_type=ctype)
+                    resp["Content-Disposition"] = f'attachment; filename="{out_name}"'
+                    resp["X-File-Hash"] = sha256.hexdigest()
+                    resp["X-File-Size"] = str(os.path.getsize(path))
+                    return resp
+
+        raise Http404("Client binary not found for this platform")

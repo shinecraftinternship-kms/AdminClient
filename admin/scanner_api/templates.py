@@ -435,13 +435,18 @@ def download_client_view(request):
         else:
             # Debian/Ubuntu: install with `sudo dpkg -i` or double-click in
             # Ubuntu Software. Falls back to the zip for other distros.
+            # Find the latest .deb file by name pattern
+            import glob as _glob
+            deb_pattern = os.path.join(data_dir, "system-scanner_*_amd64.deb")
+            deb_matches = sorted(_glob.glob(deb_pattern), reverse=True)
+            deb_name = os.path.basename(deb_matches[0]) if deb_matches else "system-scanner_1.7.0_amd64.deb"
             primary = (
-                "system-scanner_1.7.0_amd64.deb",
-                "system-scanner_1.7.0_amd64.deb",
+                deb_name,
+                deb_name,
                 "application/vnd.debian.binary-package",
             )
         fallbacks = [
-            ("system-scanner_1.7.0_amd64.deb", "system-scanner_1.7.0_amd64.deb", "application/vnd.debian.binary-package"),
+            primary,
             ("client_scanner-linux.zip", "client_scanner-linux.zip", "application/zip"),
             ("client_scanner-linux", "client_scanner-linux", "application/octet-stream"),
         ]
