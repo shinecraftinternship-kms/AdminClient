@@ -776,6 +776,53 @@ function filterSoftware() {
     document.getElementById('softwareCount').textContent = `Showing ${filtered.length} of ${window._softwareData.length} applications`;
 }
 
+function downloadClientJSON() {
+    if (!clientData) return showToast('No client data loaded', 'warning');
+    const clean = JSON.parse(JSON.stringify(clientData));
+    delete clean.scans;
+    delete clean.addons;
+    const sd = latestScan ? (latestScan.scan_data || {}) : {};
+    const cleaned = cleanScanData(sd);
+    clean.latest_scan = cleaned;
+    clean.scan_date = latestScan ? latestScan.created_at : null;
+    const blob = new Blob([JSON.stringify(clean, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${clean.hostname || 'client'}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('JSON exported!', 'success');
+}
+
+function cleanScanData(sd) {
+    if (!sd || typeof sd !== 'object') return sd;
+    const c = Object.assign({}, sd);
+    const raw = c.software || c.installed_software_list || [];
+    if (raw.length > 0) {
+        const seen = new Set();
+        c.software = raw.map(s => {
+            const e = { name: s.name || s.displayName || '', version: s.version || '', publisher: s.publisher || s.vendor || '', source: s.source || 'registry' };
+            const k = (e.name + '|' + e.version + '|' + e.source).toLowerCase();
+            if (seen.has(k)) return null;
+            seen.add(k);
+            return e;
+        }).filter(Boolean);
+    }
+    delete c.installed_software_list;
+    if (c['Asset Details']) delete c['Asset Details'];
+    if (c['Hard Disk Details']) delete c['Hard Disk Details'];
+    if (c['logical devices']) delete c['logical devices'];
+    if (c['Montitor Details']) delete c['Montitor Details'];
+    if (c['RAM Details']) delete c['RAM Details'];
+    if (c['system accounts']) delete c['system accounts'];
+    if (c.installed_updates) delete c.installed_updates;
+    if (c.network && c.network.dhcp) delete c.network.dhcp;
+    if (c.network && c.network.firewall) delete c.network.firewall;
+    if (c.network && c.network.geo) delete c.network.geo;
+    return c;
+}
+
 function renderScanConfig() {
     if (scanConfigTouched) return;
     fetch(`/api/clients/${CLIENT_KEY}/scan-config`).then(r => r.json()).then(config => {

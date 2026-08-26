@@ -231,4 +231,19 @@ function exportBackup() {
     });
 }
 
+function exportClientDetailJSON(key) {
+    fetch('/api/clients/' + key).then(r => r.json()).then(data => {
+        const sd = (data.scans && data.scans.length > 0) ? (data.scans[0].scan_data || {}) : {};
+        const cleaned = JSON.parse(JSON.stringify(data));
+        cleaned.latest_scan = sd;
+        delete cleaned.scans;
+        delete cleaned.addons;
+        const blob = new Blob([JSON.stringify(cleaned, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = (cleaned.hostname || 'client') + '_' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+        URL.revokeObjectURL(url);
+        showToast('Client JSON exported!', 'success');
+    });
+}
+
 loadSettings();

@@ -161,6 +161,52 @@ function cleanScanData(scanData) {
         cleaned.software = normalizeSoftwareList(cleaned.installed_software_list);
         delete cleaned.installed_software_list;
     }
+    if (cleaned['RAM Details']) {
+        const rd = cleaned['RAM Details'];
+        cleaned.ram = cleaned.ram || {
+            capacity_gb: rd.capacity_gb || '',
+            manufacturer: rd.Manufacturer || '',
+            serial: rd['serial number'] || '',
+            frequency_mhz: rd.frequency_mhz || 0,
+            slot: rd.port_slot || '',
+        };
+        delete cleaned['RAM Details'];
+    }
+    if (cleaned['Hard Disk Details'] && cleaned.storage) {
+        delete cleaned['Hard Disk Details'];
+    }
+    if (cleaned['logical devices'] && cleaned.storage) {
+        delete cleaned['logical devices'];
+    }
+    if (cleaned['Montitor Details']) {
+        delete cleaned['Montitor Details'];
+    }
+    if (cleaned['system accounts']) {
+        const sa = cleaned['system accounts'];
+        if (sa['accounts names'] && !cleaned.accounts) {
+            cleaned.accounts = (sa['accounts names'] || []).map(a => ({
+                name: a['Account Name'],
+                disabled: a['Status'] === 'Disabled',
+                sid: a['SID'],
+                description: a['Description'] || '',
+            }));
+        }
+        delete cleaned['system accounts'];
+    }
+    if (cleaned.network) {
+        const n = cleaned.network;
+        if (n.dhcp) delete n.dhcp;
+        if (n.firewall) delete n.firewall;
+        if (n.geo) delete n.geo;
+        if (n.public_ip) delete n.public_ip;
+        if (n.private_ip) delete n.private_ip;
+    }
+    if (cleaned.installed_updates) {
+        cleaned.updates = (cleaned.installed_updates.updates || []).map(u => ({
+            kb: u.kb, description: u.description, installed_on: u.installed_on || ''
+        }));
+        delete cleaned.installed_updates;
+    }
     return cleaned;
 }
 
