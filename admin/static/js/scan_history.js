@@ -108,7 +108,7 @@ function renderScanDetail(scan) {
     const gpuList = data.gpu || [];
     const network = data.network || {};
     const peripherals = data.peripherals || {};
-    const software = data.software || [];
+    const software = data.software || data.installed_software_list || [];
     const accounts = data.accounts || [];
     const updates = data.updates || [];
     const antivirus = data.antivirus || {};
@@ -170,7 +170,20 @@ function renderScanDetail(scan) {
 
     const sourceLabels = { registry: 'Registry', msstore: 'MS Store', winget: 'Winget', npm: 'npm', pip: 'pip', snap: 'Snap', flatpak: 'Flatpak', brew: 'Homebrew', mas: 'Mac App Store', 'macos-apps': 'macOS Apps', dpkg: 'dpkg' };
     const sourceBadge = (src) => `<span class="badge bg-secondary" style="font-size:0.65rem;">${sourceLabels[src] || src || 'Unknown'}</span>`;
-    const softwareItems = Array.isArray(software) ? software : [];
+    const rawSw = Array.isArray(software) ? software : [];
+    const seenSw = new Set();
+    const softwareItems = rawSw.map(s => {
+        const entry = {
+            name: s.name || s.displayName || '',
+            version: s.version || '',
+            publisher: s.publisher || s.vendor || '',
+            source: s.source || 'registry',
+        };
+        const key = (entry.name + '|' + entry.version + '|' + entry.source).toLowerCase();
+        if (seenSw.has(key)) return null;
+        seenSw.add(key);
+        return entry;
+    }).filter(Boolean);
     const swRows = softwareItems.map(s => [
         escapeHtml(s.name || s.displayName || ''),
         s.version || '',

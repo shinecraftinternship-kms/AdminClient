@@ -216,9 +216,26 @@ function getPeripherals(sd) {
 }
 
 function getSoftware(sd) {
-    if (sd && sd.software && sd.software.length > 0 && sd.software[0].name !== undefined) return sd.software;
-    if (sd && sd.installed_software_list && sd.installed_software_list.length > 0) return sd.installed_software_list;
-    return [];
+    let items = [];
+    if (sd && sd.software && sd.software.length > 0 && sd.software[0].name !== undefined) {
+        items = sd.software;
+    } else if (sd && sd.installed_software_list && sd.installed_software_list.length > 0) {
+        items = sd.installed_software_list;
+    }
+    if (items.length === 0) return [];
+    const seen = new Set();
+    return items.map(s => {
+        const entry = {
+            name: s.name || s.displayName || '',
+            version: s.version || '',
+            publisher: s.publisher || s.vendor || '',
+            source: s.source || 'registry',
+        };
+        const key = (entry.name + '|' + entry.version + '|' + entry.source).toLowerCase();
+        if (seen.has(key)) return null;
+        seen.add(key);
+        return entry;
+    }).filter(Boolean);
 }
 
 function getAccounts(sd) {

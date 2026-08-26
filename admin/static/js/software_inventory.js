@@ -8,7 +8,21 @@ function loadSoftware() {
     fetch('/api/software/inventory')
         .then(r => r.json())
         .then(data => {
-            allSoftware = data.software || [];
+            const raw = data.software || [];
+            const seen = new Set();
+            allSoftware = raw.map(s => {
+                const entry = {
+                    name: s.name || '',
+                    version: s.version || '',
+                    publisher: s.publisher || '',
+                    source: s.source || 'registry',
+                    installed_on: s.installed_on || [],
+                };
+                const key = (entry.name + '|' + entry.version + '|' + entry.source).toLowerCase();
+                if (seen.has(key)) return null;
+                seen.add(key);
+                return entry;
+            }).filter(Boolean);
             updateStats(data);
             populateFilters();
             filterSoftware();

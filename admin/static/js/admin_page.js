@@ -136,6 +136,34 @@ function refreshAdminPage() {
     loadAdminData();
 }
 
+function normalizeSoftwareList(items) {
+    if (!Array.isArray(items)) return [];
+    const seen = new Set();
+    return items.map(s => {
+        const entry = {
+            name: s.name || s.displayName || '',
+            version: s.version || '',
+            publisher: s.publisher || s.vendor || '',
+            source: s.source || 'registry',
+        };
+        const key = (entry.name + '|' + entry.version + '|' + entry.source).toLowerCase();
+        if (seen.has(key)) return null;
+        seen.add(key);
+        return entry;
+    }).filter(Boolean);
+}
+
+function cleanScanData(scanData) {
+    if (!scanData || typeof scanData !== 'object') return scanData;
+    const cleaned = Object.assign({}, scanData);
+    if (cleaned.software) cleaned.software = normalizeSoftwareList(cleaned.software);
+    if (cleaned.installed_software_list) {
+        cleaned.software = normalizeSoftwareList(cleaned.installed_software_list);
+        delete cleaned.installed_software_list;
+    }
+    return cleaned;
+}
+
 function exportBackup() {
     showToast('Preparing backup...', 'info');
     Promise.all([

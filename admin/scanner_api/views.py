@@ -4220,6 +4220,8 @@ class SoftwareInventoryView(APIView):
                 continue
             sw_list = latest.scan_data.get("software", [])
             if not sw_list:
+                sw_list = latest.scan_data.get("installed_software_list", [])
+            if not sw_list:
                 continue
             client_hostname = client.hostname or client.registration_key
             for item in sw_list:

@@ -132,6 +132,9 @@ class ClientListSerializer(serializers.ModelSerializer):
             sw = scan.scan_data.get("software", [])
             if sw:
                 return len(sw)
+            sw_old = scan.scan_data.get("installed_software_list", [])
+            if sw_old:
+                return len(sw_old)
         return 0
 
     def get_monitors(self, obj):
