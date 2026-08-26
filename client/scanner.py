@@ -136,14 +136,14 @@ def _get_ram():
     try:
         if sys.platform == "win32":
             stdout, _, _ = run_powershell(
-                "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,SerialNumber,DeviceLocator,PartNumber | ConvertTo-Json"
+                "Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,SerialNumber,DeviceLocator,PartNumber,ConfiguredClockSpeed | ConvertTo-Json"
             )
             if stdout and stdout not in ("", "null"):
                 items = json.loads(stdout) if stdout.startswith("[") else [json.loads(stdout)]
                 if not isinstance(items, list):
                     items = [items]
                 for item in items:
-                    s = {"manufacturer": "", "capacity_gb": "", "serial": "", "frequency_mhz": 0, "slot": ""}
+                    s = {"manufacturer": "", "capacity_gb": "", "serial": "", "frequency_mhz": 0, "slot": "", "part_number": ""}
                     s["manufacturer"] = item.get("Manufacturer") or ""
                     cap = item.get("Capacity", 0)
                     if cap:
@@ -154,33 +154,69 @@ def _get_ram():
                         except (ValueError, TypeError):
                             pass
                     serial = item.get("SerialNumber") or ""
-                    if serial and serial not in ("00000000", "To Be Filled By O.E.M.", "0000000000", ""):
+                    if serial and serial not in ("00000000", "To Be Filled By O.E.M.", "0000000000", "0000", ""):
                         s["serial"] = serial.strip()
-                    s["frequency_mhz"] = item.get("Speed") or 0
+                    s["frequency_mhz"] = item.get("ConfiguredClockSpeed") or item.get("Speed") or 0
                     s["slot"] = item.get("DeviceLocator") or ""
+                    s["part_number"] = (item.get("PartNumber") or "").strip()
                     sticks.append(s)
-            # Fallback: try wmic for serial numbers if missing
-            if sticks:
-                for s in sticks:
-                    if not s["serial"] or s["serial"] in ("00000000", "0000"):
-                        try:
-                            stdout2, _, _ = run_command(
-                                ["wmic", "memorychip", "get", "SerialNumber", "/value"],
-                                timeout=10,
-                            )
-                            wmic_serials = []
-                            for line in stdout2.splitlines():
-                                if "SerialNumber=" in line:
-                                    val = line.split("=", 1)[1].strip()
-                                    if val and val not in ("00000000", "To Be Filled By O.E.M.", ""):
-                                        wmic_serials.append(val)
-                            if wmic_serials:
-                                for idx, ws in enumerate(wmic_serials):
-                                    if idx < len(sticks) and (not sticks[idx]["serial"] or sticks[idx]["serial"] in ("00000000", "0000")):
-                                        sticks[idx]["serial"] = ws
-                        except Exception:
-                            pass
-                        break
+            # Fallback 1: Get-WmiObject (older WMI, sometimes returns serial when CIM doesn't)
+            if sticks and all(not s["serial"] for s in sticks):
+                try:
+                    stdout_wmi, _, _ = run_powershell(
+                        "Get-WmiObject Win32_PhysicalMemory | Select-Object SerialNumber,PartNumber | ConvertTo-Json"
+                    )
+                    if stdout_wmi and stdout_wmi not in ("", "null"):
+                        wmi_items = json.loads(stdout_wmi) if stdout_wmi.startswith("[") else [json.loads(stdout_wmi)]
+                        if not isinstance(wmi_items, list):
+                            wmi_items = [wmi_items]
+                        for idx, wi in enumerate(wmi_items):
+                            if idx < len(sticks):
+                                wserial = wi.get("SerialNumber") or ""
+                                if wserial and wserial not in ("00000000", "To Be Filled By O.E.M.", "0000", ""):
+                                    sticks[idx]["serial"] = wserial.strip()
+                                elif not sticks[idx]["serial"] and wi.get("PartNumber"):
+                                    sticks[idx]["part_number"] = (wi["PartNumber"] or "").strip()
+                except Exception:
+                    pass
+            # Fallback 2: wmic memorychip (legacy, different WMI path)
+            if sticks and all(not s["serial"] for s in sticks):
+                try:
+                    stdout2, _, _ = run_command(
+                        ["wmic", "memorychip", "get", "SerialNumber", "/value"],
+                        timeout=10,
+                    )
+                    wmic_serials = []
+                    for line in stdout2.splitlines():
+                        if "SerialNumber=" in line:
+                            val = line.split("=", 1)[1].strip()
+                            if val and val not in ("00000000", "To Be Filled By O.E.M.", "0000", ""):
+                                wmic_serials.append(val)
+                    if wmic_serials:
+                        for idx, ws in enumerate(wmic_serials):
+                            if idx < len(sticks) and not sticks[idx]["serial"]:
+                                sticks[idx]["serial"] = ws
+                except Exception:
+                    pass
+            # Fallback 3: SMBus direct read via PowerShell I2C
+            if sticks and all(not s["serial"] for s in sticks):
+                try:
+                    for i in range(len(sticks)):
+                        slot_addr = 0x50 + i
+                        stdout_spd, _, _ = run_powershell(
+                            f"$b = Get-I2CDevice -Address {slot_addr} -ErrorAction SilentlyContinue; "
+                            f"if ($b) {{ $raw = $b.Read(0, 128); "
+                            f"$bytes = $raw[64..71]; "
+                            "$serial = ''; "
+                            "foreach ($byte in $bytes) { $serial += '{0:X2}' -f $byte }; "
+                            "Write-Output $serial }} else {{ Write-Output '' }}"
+                        )
+                        if stdout_spd and stdout_spd.strip():
+                            spd_serial = stdout_spd.strip()
+                            if spd_serial and spd_serial != "0000000000000000" and not all(c == '0' or c == 'F' for c in spd_serial):
+                                sticks[i]["serial"] = spd_serial
+                except Exception:
+                    pass
         elif sys.platform == "linux":
             meminfo = read_file("/proc/meminfo")
             for line in meminfo.splitlines():
@@ -261,6 +297,7 @@ def _get_ram():
         "serial": first.get("serial", ""),
         "frequency_mhz": first.get("frequency_mhz", 0),
         "slot": first.get("slot", ""),
+        "part_number": first.get("part_number", ""),
         "sticks": sticks,
         "stick_count": len(sticks),
     }

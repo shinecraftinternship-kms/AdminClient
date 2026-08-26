@@ -433,8 +433,8 @@ function renderSystem() {
                         <td><code>${escapeHtml(s.slot || s.DeviceLocator || '-')}</code></td>
                         <td>${escapeHtml(s.manufacturer || s.Manufacturer || '-')}</td>
                         <td>${escapeHtml(s.capacity_gb || '-')}</td>
-                        <td>${s.frequency_mhz || s.Speed || 0} MHz</td>
-                        <td><code>${escapeHtml(s.serial || s.SerialNumber || '-')}</code></td>
+                        <td>${s.frequency_mhz || s.ConfiguredClockSpeed || s.Speed || 0} MHz</td>
+                        <td><code>${escapeHtml(s.serial || s.SerialNumber || s.part_number || '-')}</code></td>
                     </tr>`).join('')}
                     </tbody>
                 </table></div>`;
