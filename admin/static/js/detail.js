@@ -98,25 +98,37 @@ function getProcessor(sd) {
 }
 
 function getRAM(sd) {
-    if (sd && sd.ram && sd.ram.capacity_gb !== undefined) return sd.ram;
+    if (sd && sd.ram && sd.ram.capacity_gb !== undefined) {
+        const r = Object.assign({}, sd.ram);
+        r._sticks = sd.ram.sticks || [];
+        r._stick_count = sd.ram.stick_count || r._sticks.length || 0;
+        if (r._sticks.length === 0 && r.capacity_gb) {
+            r._sticks = [{ manufacturer: r.manufacturer, capacity_gb: r.capacity_gb, serial: r.serial, frequency_mhz: r.frequency_mhz, slot: r.slot }];
+        }
+        return r;
+    }
     if (sd && sd['RAM Details']) {
         const r = sd['RAM Details'];
+        const sticks = Array.isArray(r) ? r : [r];
         return {
-            manufacturer: r.Manufacturer, capacity_gb: r.capacity_gb,
-            serial: r['serial number'], frequency_mhz: r.frequency_mhz, slot: r.port_slot
+            manufacturer: sticks[0].Manufacturer || '', capacity_gb: sticks[0].capacity_gb || '',
+            serial: sticks[0]['serial number'] || '', frequency_mhz: sticks[0].frequency_mhz || 0,
+            slot: sticks[0].port_slot || '',
+            _sticks: sticks.map(s => ({ manufacturer: s.Manufacturer || '', capacity_gb: s.capacity_gb || '', serial: s['serial number'] || '', frequency_mhz: s.frequency_mhz || 0, slot: s.port_slot || '' })),
+            _stick_count: sticks.length,
         };
     }
     const cs = getComputerSystem(sd);
     if (cs && cs.ram) {
-        const deets = (cs.ram.details && cs.ram.details.length > 0) ? cs.ram.details[0] : null;
-        if (deets) {
-            return {
-                manufacturer: deets.Manufacturer, capacity_gb: cs.ram.total,
-                serial: deets['Serial Number'], frequency_mhz: deets['Frequency MHz'],
-                slot: deets['Port / Slot']
-            };
+        const deets = (cs.ram.details && cs.ram.details.length > 0) ? cs.ram.details : [];
+        const sticks = deets.map(d => ({
+            manufacturer: d.Manufacturer || '', capacity_gb: cs.ram.total || '',
+            serial: d['Serial Number'] || '', frequency_mhz: d['Frequency MHz'] || 0, slot: d['Port / Slot'] || '',
+        }));
+        if (sticks.length > 0) {
+            return { capacity_gb: cs.ram.total, available: cs.ram.available, _sticks: sticks, _stick_count: sticks.length };
         }
-        return { capacity_gb: cs.ram.total, available: cs.ram.available };
+        return { capacity_gb: cs.ram.total, available: cs.ram.available, _sticks: [], _stick_count: 0 };
     }
     return null;
 }
@@ -401,17 +413,35 @@ function renderSystem() {
 
     // ── Memory ──
     if (ram) {
-        html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
-            <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-memory me-1"></i>Memory</h6>
+        const sticks = ram._sticks || [];
+        const stickCount = sticks.length || ram._stick_count || 0;
+        let ramContent = `
             <table class="table table-sm table-borderless">
-                <tr><td class="text-secondary">Capacity</td><td>${escapeHtml(ram.capacity_gb || '-')}</td></tr>
-                <tr><td class="text-secondary">Manufacturer</td><td>${escapeHtml(ram.manufacturer || '-')}</td></tr>
-                <tr><td class="text-secondary">Serial</td><td><code>${escapeHtml(ram.serial || '-')}</code></td></tr>
-                <tr><td class="text-secondary">Frequency</td><td>${ram.frequency_mhz || 0} MHz</td></tr>
-                <tr><td class="text-secondary">Slot</td><td>${escapeHtml(ram.slot || '-')}</td></tr>
+                <tr><td class="text-secondary">Total Capacity</td><td>${escapeHtml(ram.capacity_gb || '-')}</td></tr>
                 ${ram.available ? `<tr><td class="text-secondary">Available</td><td>${escapeHtml(ram.available)}</td></tr>` : ''}
                 ${ram.percent_used ? `<tr><td class="text-secondary">Used</td><td>${escapeHtml(ram['percent_used'] || ram.percent_used)}</td></tr>` : ''}
-            </table>
+                ${stickCount > 1 ? `<tr><td class="text-secondary">DIMM Slots Used</td><td>${stickCount}</td></tr>` : ''}
+            </table>`;
+        if (sticks.length > 0) {
+            ramContent += `
+                <h6 class="text-secondary mt-2 mb-1" style="font-size:0.8rem;"><i class="bi bi-memory me-1"></i>Memory Modules (${sticks.length})</h6>
+                <div class="table-responsive">
+                <table class="table table-dark table-sm table-hover mb-0">
+                    <thead><tr><th>Slot</th><th>Manufacturer</th><th>Capacity</th><th>Speed</th><th>Serial</th></tr></thead>
+                    <tbody>
+                    ${sticks.map(s => `<tr>
+                        <td><code>${escapeHtml(s.slot || s.DeviceLocator || '-')}</code></td>
+                        <td>${escapeHtml(s.manufacturer || s.Manufacturer || '-')}</td>
+                        <td>${escapeHtml(s.capacity_gb || '-')}</td>
+                        <td>${s.frequency_mhz || s.Speed || 0} MHz</td>
+                        <td><code>${escapeHtml(s.serial || s.SerialNumber || '-')}</code></td>
+                    </tr>`).join('')}
+                    </tbody>
+                </table></div>`;
+        }
+        html += `<div class="col-md-6 mb-3"><div class="card h-100"><div class="card-body">
+            <h6 class="card-subtitle mb-2 text-secondary"><i class="bi bi-memory me-1"></i>Memory</h6>
+            ${ramContent}
         </div></div></div>`;
     }
 
