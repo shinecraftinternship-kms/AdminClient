@@ -39,6 +39,14 @@
                         <span>{{ user.last_login|date:"Y-m-d H:i"|default:"Never" }}</span>
                     </div>
                 </div>
+                <div class="mt-3 p-3 bg-dark rounded border border-info">
+                    <label class="form-label fw-semibold text-info small mb-2"><i class="bi bi-link-45deg me-1"></i>Client Connect Link</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="connectUrl" class="form-control bg-dark border-secondary text-info" readonly value="Loading..." style="font-size:0.8rem;">
+                        <button class="btn btn-outline-info" onclick="copyConnectLink()" title="Copy connect link"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                    <div class="form-text">Share this link with clients to connect to your admin panel.</div>
+                </div>
             </div>
         </div>
     </div>

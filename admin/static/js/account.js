@@ -26,6 +26,28 @@ function loadProfile() {
             const display = document.getElementById('avatarDisplay');
             display.innerHTML = '<img src="' + escapeHtml(p.profile_picture_url) + '" alt="Avatar" style="width:5rem;height:5rem;border-radius:50%;object-fit:cover;">';
         }
+
+        var uname = u.username;
+        if (uname) {
+            var slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            var base = window.location.origin;
+            document.getElementById('connectUrl').value = base + '/connect/' + uname + '/' + slug + '/';
+        } else {
+            document.getElementById('connectUrl').value = 'Not available';
+        }
+    });
+}
+
+function copyConnectLink() {
+    var val = document.getElementById('connectUrl').value;
+    if (!val || val === 'Loading...' || val.includes('Not available')) {
+        showToast('Connect link not ready yet', 'warning');
+        return;
+    }
+    navigator.clipboard.writeText(val).then(() => {
+        showToast('Connect link copied! Share with clients.', 'success');
+    }).catch(() => {
+        showToast('Copy failed - select and copy manually', 'warning');
     });
 }
 
