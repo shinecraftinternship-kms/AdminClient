@@ -161,7 +161,7 @@ def _get_ram():
                     s["part_number"] = (item.get("PartNumber") or "").strip()
                     sticks.append(s)
             # Fallback 1: Get-WmiObject (older WMI, sometimes returns serial when CIM doesn't)
-            if sticks and all(not s["serial"] for s in sticks):
+            if sticks and any(not s["serial"] for s in sticks):
                 try:
                     stdout_wmi, _, _ = run_powershell(
                         "Get-WmiObject Win32_PhysicalMemory | Select-Object SerialNumber,PartNumber | ConvertTo-Json"
@@ -180,7 +180,7 @@ def _get_ram():
                 except Exception:
                     pass
             # Fallback 2: wmic memorychip (legacy, different WMI path)
-            if sticks and all(not s["serial"] for s in sticks):
+            if sticks and any(not s["serial"] for s in sticks):
                 try:
                     stdout2, _, _ = run_command(
                         ["wmic", "memorychip", "get", "SerialNumber", "/value"],
@@ -198,23 +198,66 @@ def _get_ram():
                                 sticks[idx]["serial"] = ws
                 except Exception:
                     pass
-            # Fallback 3: SMBus direct read via PowerShell I2C
-            if sticks and all(not s["serial"] for s in sticks):
+            # Fallback 3: Read raw SMBIOS table via GetSystemFirmwareTable API
+            # This is the key fallback for desktops/PCs where WMI doesn't expose serial
+            if sticks and any(not s["serial"] for s in sticks):
                 try:
-                    for i in range(len(sticks)):
-                        slot_addr = 0x50 + i
-                        stdout_spd, _, _ = run_powershell(
-                            f"$b = Get-I2CDevice -Address {slot_addr} -ErrorAction SilentlyContinue; "
-                            f"if ($b) {{ $raw = $b.Read(0, 128); "
-                            f"$bytes = $raw[64..71]; "
-                            "$serial = ''; "
-                            "foreach ($byte in $bytes) { $serial += '{0:X2}' -f $byte }; "
-                            "Write-Output $serial }} else {{ Write-Output '' }}"
-                        )
-                        if stdout_spd and stdout_spd.strip():
-                            spd_serial = stdout_spd.strip()
-                            if spd_serial and spd_serial != "0000000000000000" and not all(c == '0' or c == 'F' for c in spd_serial):
-                                sticks[i]["serial"] = spd_serial
+                    import ctypes
+                    import struct as _struct
+                    kernel32 = ctypes.windll.kernel32
+                    RSMB = 0x52534D42
+                    buf_size = kernel32.GetSystemFirmwareTable(RSMB, 0, None, 0)
+                    if buf_size > 0:
+                        buf = ctypes.create_string_buffer(buf_size)
+                        got = kernel32.GetSystemFirmwareTable(RSMB, 0, buf, buf_size)
+                        if got > 0:
+                            raw = buf.raw[:got]
+                            if len(raw) >= 8:
+                                major_ver = raw[1]
+                                table_len = _struct.unpack_from('<I', raw, 4)[0] if major_ver >= 2 else _struct.unpack_from('<H', raw, 4)[0]
+                                smbios = raw[8:8 + table_len]
+                                pos = 0
+                                while pos + 1 < len(smbios):
+                                    rec_type = smbios[pos]
+                                    rec_len = smbios[pos + 1]
+                                    if rec_type == 0:
+                                        break
+                                    if rec_type == 17 and rec_len >= 0x16:
+                                        str_idx = smbios[pos + 0x15]
+                                        if str_idx > 0:
+                                            str_start = pos + rec_len
+                                            str_count = 0
+                                            sp = str_start
+                                            while sp < len(smbios):
+                                                if smbios[sp] == 0:
+                                                    str_count += 1
+                                                    if str_count == str_idx:
+                                                        sp += 1
+                                                        break
+                                                sp += 1
+                                            if sp < len(smbios):
+                                                end = smbios.index(0, sp) if 0 in smbios[sp:sp + 64] else sp + 64
+                                                serial = smbios[sp:end].decode('ascii', errors='replace').strip()
+                                                serial = ''.join(c for c in serial if c.isalnum() or c in '-_ ')
+                                                if serial and len(serial) >= 4 and serial not in ('Not Specified', 'Not Available', 'To Be Filled By O.E.M.', '00000000', '0000000000000000', 'FFFFFFFF'):
+                                                    for s in sticks:
+                                                        if not s["serial"]:
+                                                            s["serial"] = serial
+                                                            break
+                                    str_start = pos + rec_len
+                                    null_count = 0
+                                    sp2 = str_start
+                                    while sp2 < len(smbios):
+                                        if smbios[sp2] == 0:
+                                            null_count += 1
+                                            if null_count >= 2:
+                                                pos = sp2 + 1
+                                                break
+                                        else:
+                                            null_count = 0
+                                        sp2 += 1
+                                    else:
+                                        break
                 except Exception:
                     pass
         elif sys.platform == "linux":
