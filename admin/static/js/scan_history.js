@@ -168,11 +168,14 @@ function renderScanDetail(scan) {
         p.manufacturer || p.vendor || '',
     ]) : [];
 
+    const sourceLabels = { registry: 'Registry', msstore: 'MS Store', winget: 'Winget', npm: 'npm', pip: 'pip', snap: 'Snap', flatpak: 'Flatpak', brew: 'Homebrew', mas: 'Mac App Store', 'macos-apps': 'macOS Apps', dpkg: 'dpkg' };
+    const sourceBadge = (src) => `<span class="badge bg-secondary" style="font-size:0.65rem;">${sourceLabels[src] || src || 'Unknown'}</span>`;
     const softwareItems = Array.isArray(software) ? software : [];
     const swRows = softwareItems.map(s => [
         escapeHtml(s.name || s.displayName || ''),
         s.version || '',
         s.publisher || s.vendor || '',
+        sourceBadge(s.source || ''),
     ]);
 
     const accountItems = Array.isArray(accounts) ? accounts : [];
@@ -229,7 +232,7 @@ function renderScanDetail(scan) {
                 ${section('GPU', gpuList.length ? table(['Name', 'Vendor', 'Memory'], gpuRows) : '')}
                 ${section('Network', netIfs.length ? table(['Interface', 'MAC', 'IPv4', 'Status'], netRows) : '')}
                 ${section('Peripherals', periphRows.length ? table(['Name', 'Type', 'Manufacturer'], periphRows) : '')}
-                ${section('Software', swRows.length ? `<div class="table-responsive" style="max-height:300px;overflow-y:auto;">${table(['Name', 'Version', 'Publisher'], swRows)}</div>` : '')}
+                ${section('Software', swRows.length ? `<div class="table-responsive" style="max-height:300px;overflow-y:auto;">${table(['Name', 'Version', 'Publisher', 'Source'], swRows)}</div>` : '')}
                 ${section('User Accounts', accountItems.length ? listItems(accountItems, 'name', 'type') : '')}
                 ${section('Pending Updates', updateItems.length ? listItems(updateItems, 'title', 'severity') : '')}
                 ${section('Antivirus', antivirus.name ? kv('Product', `${antivirus.name} ${antivirus.version || ''}`) : '')}

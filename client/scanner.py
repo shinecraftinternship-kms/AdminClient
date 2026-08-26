@@ -563,8 +563,16 @@ def _get_accounts():
 def _get_software():
     sw = []
     seen = set()
+
+    def _add(name, version="", publisher="", source=""):
+        name = (name or "").strip()
+        if name and name not in seen:
+            seen.add(name)
+            sw.append({"name": name, "version": (version or "").strip(), "publisher": (publisher or "").strip(), "source": source})
+
     try:
         if sys.platform == "win32":
+            # Windows Registry (classic desktop apps)
             registry_paths = [
                 "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
                 "HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",
@@ -579,10 +587,8 @@ def _get_software():
                     if not isinstance(items, list):
                         items = [items]
                     for item in items:
-                        name = (item.get("DisplayName") or "").strip()
-                        if name and name not in seen:
-                            seen.add(name)
-                            sw.append({"name": name, "version": item.get("DisplayVersion", "") or "", "publisher": item.get("Publisher") or ""})
+                        _add(item.get("DisplayName"), item.get("DisplayVersion"), item.get("Publisher"), "registry")
+
             # MS Store / UWP apps
             stdout, _, _ = run_powershell(
                 "Get-AppxPackage -AllUsers 2>$null | Select-Object Name,Version,Author | ConvertTo-Json"
@@ -592,10 +598,120 @@ def _get_software():
                 if not isinstance(items, list):
                     items = [items]
                 for item in items:
-                    name = (item.get("Name") or "").strip()
-                    if name and name not in seen:
-                        seen.add(name)
-                        sw.append({"name": name, "version": item.get("Version", "") or "", "publisher": item.get("Author") or "", "source": "msstore"})
+                    _add(item.get("Name"), item.get("Version"), item.get("Author"), "msstore")
+
+            # Winget packages
+            stdout, _, rc = run_command(
+                ["winget", "list", "--accept-source-agreements", "--disable-interactivity"],
+                timeout=60
+            )
+            if rc == 0 and stdout:
+                lines = stdout.splitlines()
+                header_idx = -1
+                for i, line in enumerate(lines):
+                    if line.strip().startswith("Name") and "Id" in line and "Version" in line:
+                        header_idx = i
+                        break
+                if header_idx >= 0:
+                    separator_line = lines[header_idx + 1] if header_idx + 1 < len(lines) else ""
+                    col_positions = [m.start() for m in __import__("re").finditer(r"\S", separator_line)]
+                    for line in lines[header_idx + 2:]:
+                        line = line.strip()
+                        if not line or line.startswith("---") or line.startswith("Name"):
+                            continue
+                        parts = []
+                        for ci in range(len(col_positions)):
+                            start = col_positions[ci]
+                            end = col_positions[ci + 1] if ci + 1 < len(col_positions) else len(line)
+                            parts.append(line[start:end].strip())
+                        if len(parts) >= 3:
+                            _add(parts[0], parts[2], "", "winget")
+
+            # npm global packages
+            stdout, _, rc = run_command(["npm", "list", "-g", "--depth=0", "--json"], timeout=30)
+            if rc == 0 and stdout:
+                try:
+                    npm_data = json.loads(stdout)
+                    deps = npm_data.get("dependencies", {})
+                    for pkg_name, info in deps.items():
+                        if isinstance(info, dict):
+                            _add(pkg_name, info.get("version", ""), "", "npm")
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+            # pip packages
+            stdout, _, rc = run_command(["pip", "list", "--format=json"], timeout=30)
+            if rc == 0 and stdout:
+                try:
+                    pip_data = json.loads(stdout)
+                    if isinstance(pip_data, list):
+                        for pkg in pip_data:
+                            if isinstance(pkg, dict):
+                                _add(pkg.get("name"), pkg.get("version"), pkg.get("author") or pkg.get("home-page", ""), "pip")
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+        elif sys.platform == "linux":
+            # dpkg (Debian/Ubuntu)
+            stdout, _, rc = run_command(["dpkg", "-l"], timeout=30)
+            if rc == 0 and stdout:
+                for line in stdout.splitlines():
+                    if line.startswith("ii"):
+                        parts = line.split(None, 2)
+                        if len(parts) >= 3:
+                            _add(parts[1], parts[2].split()[0] if parts[2] else "", "", "dpkg")
+
+            # snap packages
+            stdout, _, rc = run_command(["snap", "list"], timeout=30)
+            if rc == 0 and stdout:
+                lines = stdout.splitlines()
+                for line in lines[1:]:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        _add(parts[0], parts[1] if len(parts) > 1 else "", parts[3] if len(parts) > 3 else "", "snap")
+
+            # flatpak packages
+            stdout, _, rc = run_command(
+                ["flatpak", "list", "--columns=application,version,origin"], timeout=30
+            )
+            if rc == 0 and stdout:
+                for line in stdout.splitlines()[1:]:
+                    parts = line.split("\t")
+                    if len(parts) >= 2:
+                        _add(parts[0], parts[1] if len(parts) > 1 else "", parts[2] if len(parts) > 2 else "", "flatpak")
+
+        elif sys.platform == "darwin":
+            # /Applications/*.app bundles
+            stdout, _, rc = run_command(
+                ["find", "/Applications", "-maxdepth", "2", "-name", "*.app", "-type", "d"], timeout=15
+            )
+            if rc == 0 and stdout:
+                for app_path in stdout.splitlines():
+                    app_name = app_path.rsplit("/", 1)[-1].replace(".app", "")
+                    _add(app_name, "", "", "macos-apps")
+
+            # Homebrew formulae
+            stdout, _, rc = run_command(["brew", "list", "--formula", "--json"], timeout=30)
+            if rc == 0 and stdout:
+                try:
+                    brew_data = json.loads(stdout)
+                    if isinstance(brew_data, list):
+                        for pkg in brew_data:
+                            if isinstance(pkg, dict):
+                                _add(pkg.get("full_name") or pkg.get("name"), pkg.get("versions", {}).get("stable", ""), "", "brew")
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+            # Mac App Store (mas)
+            stdout, _, rc = run_command(["mas", "list"], timeout=30)
+            if rc == 0 and stdout:
+                for line in stdout.splitlines():
+                    parts = line.split(None, 2)
+                    if len(parts) >= 2:
+                        name = parts[1] if len(parts) > 1 else ""
+                        version = parts[2].split(" (")[0] if len(parts) > 2 else ""
+                        _add(name, version, "", "mas")
+
     except Exception as e:
         print(f"  [WARN] Software scan failed: {e}")
     return sw

@@ -132,4 +132,5 @@ urlpatterns = [
 
     # ── Client Auto-Update ────────────────────────────────────────────────
     path("client/download", views.ClientDownloadView.as_view(), name="api-client-download"),
+    path("software/inventory", views.SoftwareInventoryView.as_view(), name="api-software-inventory"),
 ]

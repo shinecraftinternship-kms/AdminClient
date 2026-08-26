@@ -52,6 +52,7 @@ urlpatterns = [
     path("assets/", templates.assets_page, name="assets"),
     path("assets/<uuid:key>/", templates.asset_detail_page, name="asset-detail"),
     path("asset-dashboard/", templates.asset_dashboard_page, name="asset-dashboard"),
+    path("software/", templates.software_inventory_page, name="software-inventory"),
     path("monitoring/", mon_templates.monitoring_page, name="monitoring"),
     path("intelligence/", intel_templates.intelligence_dashboard_page, name="intel-dashboard-page"),
     path("intelligence/alerts/", intel_templates.alerts_page, name="intel-alerts-page"),

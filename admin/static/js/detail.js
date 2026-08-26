@@ -693,22 +693,38 @@ function renderPeripherals() {
 function renderSoftware() {
     const software = getSoftware(latestScan?.scan_data);
     if (software.length === 0) {
-        document.getElementById('softwareTableBody').innerHTML = '<tr><td colspan="3" class="text-center text-secondary">No software data</td></tr>';
+        document.getElementById('softwareTableBody').innerHTML = '<tr><td colspan="4" class="text-center text-secondary">No software data</td></tr>';
         document.getElementById('softwareCount').textContent = '';
         return;
     }
     window._softwareData = software;
-    document.getElementById('softwareCount').textContent = `Showing ${software.length} applications`;
+    const sources = [...new Set(software.map(s => s.source || '').filter(Boolean))].sort();
+    const sourceFilter = document.getElementById('softwareSourceFilter');
+    sourceFilter.innerHTML = '<option value="">All Sources</option>' + sources.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(sourceLabel(s))}</option>`).join('');
     filterSoftware();
+}
+
+function sourceLabel(src) {
+    const labels = { registry: 'Registry', msstore: 'MS Store', winget: 'Winget', npm: 'npm', pip: 'pip', snap: 'Snap', flatpak: 'Flatpak', brew: 'Homebrew', mas: 'Mac App Store', 'macos-apps': 'macOS Apps', dpkg: 'dpkg' };
+    return labels[src] || src;
+}
+
+function sourceBadgeClass(src) {
+    const classes = { registry: 'bg-primary', msstore: 'bg-info', winget: 'bg-success', npm: 'bg-danger', pip: 'bg-warning text-dark', snap: 'bg-purple', flatpak: 'bg-dark', brew: 'bg-warning text-dark', mas: 'bg-info', 'macos-apps': 'bg-secondary', dpkg: 'bg-danger' };
+    return classes[src] || 'bg-secondary';
 }
 
 function filterSoftware() {
     const query = (document.getElementById('softwareSearch').value || '').toLowerCase();
-    const filtered = (window._softwareData || []).filter(s =>
-        (s.name || '').toLowerCase().includes(query) || (s.publisher || '').toLowerCase().includes(query)
-    );
+    const sourceVal = document.getElementById('softwareSourceFilter').value;
+    const filtered = (window._softwareData || []).filter(s => {
+        const matchesQuery = !query || (s.name || '').toLowerCase().includes(query) || (s.publisher || '').toLowerCase().includes(query) || (s.version || '').toLowerCase().includes(query);
+        const matchesSource = !sourceVal || (s.source || '') === sourceVal;
+        return matchesQuery && matchesSource;
+    });
     document.getElementById('softwareTableBody').innerHTML = filtered.map(s => `<tr>
         <td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.version || '')}</td><td>${escapeHtml(s.publisher || '')}</td>
+        <td><span class="badge ${sourceBadgeClass(s.source || '')}">${escapeHtml(sourceLabel(s.source || ''))}</span></td>
     </tr>`).join('');
     document.getElementById('softwareCount').textContent = `Showing ${filtered.length} of ${window._softwareData.length} applications`;
 }

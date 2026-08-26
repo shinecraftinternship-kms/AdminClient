@@ -150,6 +150,11 @@ def asset_dashboard_page(request):
     return render(request, "asset_dashboard.html")
 
 
+@login_required
+def software_inventory_page(request):
+    return render(request, "software_inventory.html")
+
+
 def connect_page(request, username, company_slug):
     """Public-facing connect page for a specific admin.
 

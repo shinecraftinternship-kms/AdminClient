@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load url_prefix_tags %}
+{% block title %}Software Inventory - Scanner Pro{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-app-indicator me-2"></i>Software Inventory</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadSoftware()" title="Refresh">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="exportSoftwareCSV()" title="Export CSV">
+            <i class="bi bi-download"></i> Export
+        </button>
+    </div>
+</div>
+
+<div class="row mb-3" id="statsRow">
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Total Unique Apps</div>
+                        <div class="stat-value text-white" id="totalApps">0</div>
+                    </div>
+                    <i class="bi bi-box-seam fs-1 text-secondary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Desktop Apps</div>
+                        <div class="stat-value text-white" id="desktopApps">0</div>
+                    </div>
+                    <i class="bi bi-pc-display fs-1" style="color:#22c55e;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Package Manager</div>
+                        <div class="stat-value text-white" id="pkgApps">0</div>
+                    </div>
+                    <i class="bi bi-terminal fs-1" style="color:#eab308;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-gradient-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <div class="stat-label">Sources</div>
+                        <div class="stat-value text-white" id="totalSources">0</div>
+                    </div>
+                    <i class="bi bi-diagram-3 fs-1" style="color:#0ea5e9;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4 mb-2 mb-md-0">
+        <div class="input-group">
+            <span class="input-group-text bg-transparent border-secondary"><i class="bi bi-search text-secondary"></i></span>
+            <input type="text" class="form-control" id="softwareSearch" placeholder="Search by name, publisher, version..." oninput="filterSoftware()">
+        </div>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="sourceFilter" onchange="filterSoftware()">
+            <option value="">All Sources</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="clientFilter" onchange="filterSoftware()">
+            <option value="">All Clients</option>
+        </select>
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" id="sortBy" onchange="filterSoftware()">
+            <option value="name">Sort by Name</option>
+            <option value="version">Sort by Version</option>
+            <option value="publisher">Sort by Publisher</option>
+            <option value="source">Sort by Source</option>
+        </select>
+    </div>
+    <div class="col-md-2 text-end">
+        <span class="text-secondary small" id="softwareCount"></span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+            <table class="table table-dark table-hover table-sm mb-0">
+                <thead class="sticky-top" style="z-index:1;">
+                    <tr>
+                        <th style="cursor:pointer;" onclick="toggleSort('name')">Name <i class="bi bi-arrow-down-up small"></i></th>
+                        <th style="cursor:pointer;" onclick="toggleSort('version')">Version <i class="bi bi-arrow-down-up small"></i></th>
+                        <th style="cursor:pointer;" onclick="toggleSort('publisher')">Publisher <i class="bi bi-arrow-down-up small"></i></th>
+                        <th style="cursor:pointer;" onclick="toggleSort('source')">Source <i class="bi bi-arrow-down-up small"></i></th>
+                        <th>Installed On</th>
+                    </tr>
+                </thead>
+                <tbody id="softwareTableBody">
+                    <tr><td colspan="5" class="text-center text-secondary py-4">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading software inventory...
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/software_inventory.js"></script>
+{% endblock %}

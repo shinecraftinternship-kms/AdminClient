@@ -4199,3 +4199,63 @@ class ClientDownloadView(APIView):
                     return resp
 
         raise Http404("Client binary not found for this platform")
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class SoftwareInventoryView(APIView):
+    """Aggregate ALL software across ALL visible clients into a single list."""
+
+    def get(self, request):
+        from collections import defaultdict
+
+        clients = get_admin_owned_clients(request).filter(deleted=False)
+        all_software = []
+        seen = set()
+        source_counts = defaultdict(int)
+        client_counts = defaultdict(int)
+
+        for client in clients:
+            latest = client.scans.order_by("-created_at").first()
+            if not latest or not latest.scan_data:
+                continue
+            sw_list = latest.scan_data.get("software", [])
+            if not sw_list:
+                continue
+            client_hostname = client.hostname or client.registration_key
+            for item in sw_list:
+                name = (item.get("name") or "").strip()
+                if not name:
+                    continue
+                version = (item.get("version") or "").strip()
+                publisher = (item.get("publisher") or "").strip()
+                source = (item.get("source") or "").strip()
+                key = f"{name}|{version}|{publisher}".lower()
+                if key in seen:
+                    # Update existing entry to add this client
+                    for sw in all_software:
+                        if f"{sw['name']}|{sw['version']}|{sw['publisher']}".lower() == key:
+                            if client_hostname not in sw["installed_on"]:
+                                sw["installed_on"].append(client_hostname)
+                            break
+                    continue
+                seen.add(key)
+                all_software.append({
+                    "name": name,
+                    "version": version,
+                    "publisher": publisher,
+                    "source": source,
+                    "installed_on": [client_hostname],
+                })
+                if source:
+                    source_counts[source] += 1
+                client_counts[client_hostname] += 1
+
+        # Sort by name
+        all_software.sort(key=lambda s: s["name"].lower())
+
+        return Response({
+            "software": all_software,
+            "total": len(all_software),
+            "sources": dict(source_counts),
+            "client_counts": dict(client_counts),
+        })
