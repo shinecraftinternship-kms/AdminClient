@@ -142,17 +142,14 @@ DB_BOOT_DIAG["raw_url"] = True if DATABASE_URL else False
 # Every admin server uses its OWN database so client data, keys and approval
 # status never sync between different admin servers. Cloud deployments
 # (Vercel) use the shared Supabase instance. Non-cloud servers (local panel,
-# VPS) ALWAYS use their own local SQLite — never a shared DATABASE_URL — so
-# the local panel stays fully independent from the cloud panel.
-if not IS_VERCEL:
-    database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.path.join(database_dir, "scanner.db"),
-        }
-    }
-elif DATABASE_URL:
+# VPS) keep their own local SQLite — never a shared DATABASE_URL — so the
+# local panel stays fully independent from the cloud panel.
+# A VPS that is taking over as the production admin can adopt the existing
+# Supabase/PostgreSQL database by setting USE_POSTGRES=1 (keeps the same live
+# data when replacing Vercel). Local/dev panels leave USE_POSTGRES unset.
+USE_POSTGRES = os.getenv("USE_POSTGRES", "0").lower() in ("1", "true", "yes")
+
+if (IS_VERCEL or USE_POSTGRES) and DATABASE_URL:
     from urllib.parse import urlsplit, urlunsplit
     _dbu = urlsplit(DATABASE_URL)
     DB_BOOT_DIAG["hostname"] = _dbu.hostname
@@ -210,7 +207,7 @@ elif DATABASE_URL:
         "keepalives_count": 5,
         "sslmode": "require",
     })
-else:
+elif IS_VERCEL:
     # IS_VERCEL without DATABASE_URL → warn loudly (SQLite /tmp is ephemeral!)
     import warnings
     warnings.warn(
@@ -223,6 +220,15 @@ else:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": _vdb,
+        }
+    }
+else:
+    # Non-cloud server (local panel / VPS without USE_POSTGRES): own SQLite.
+    database_dir = get_data_dir(os.environ.get("SCANNER_DATA_DIR"), str(BASE_DIR / "data"))
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.path.join(database_dir, "scanner.db"),
         }
     }
 
